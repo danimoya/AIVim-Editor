@@ -54,6 +54,9 @@ class Editor:
         self.ai_processing = False
         self.ai_thread = None
         self.thread_lock = threading.RLock()
+        self.current_ai_model = "openai"  # Default AI model
+        self.pending_ai_action = None     # For storing AI suggestions awaiting confirmation
+        self.chat_history = []            # For storing chat conversation history
         
         # Load file if specified
         if filename:
@@ -948,7 +951,15 @@ class Editor:
                 
                 # Update status
                 self.ai_processing = False
-                self.set_status_message("Review code improvement")
+                
+                # Store the improvement for confirmation
+                self.pending_ai_action = {
+                    "type": "improve",
+                    "start_line": start_line,
+                    "end_line": end_line,
+                    "new_code": improved_code,
+                    "metadata": metadata
+                }
                 
                 # If there's an explanation, show it in a separate dialog
                 if improvement != improved_code:
@@ -957,46 +968,15 @@ class Editor:
                     if explanation_lines:
                         self.display.show_dialog("Code Improvement Explanation", explanation_lines)
                 
-                # Show the diff and ask for confirmation
-                confirmation_msg = [
-                    "The AI has suggested the following improvements:",
-                    "",
-                    f"- Original: {len(code.splitlines())} lines",
-                    f"- Improved: {len(improved_lines)} lines",
-                    "",
-                    "Would you like to apply these changes? (y/n)",
-                    "A backup of the original file will be created."
-                ]
-                
-                # Show diff in a dialog first
+                # Show diff in a dialog
                 if self.display:
                     self.display.show_diff_dialog("Code Improvement Diff", diff_lines)
                 
-                # Check if user wants to apply changes
-                if self.display and self.display.show_confirmation_dialog("Apply Changes?", confirmation_msg):
-                    # Create backup if we have a filename
-                    if self.filename:
-                        backup_path = create_backup_file(self.filename)
-                        if backup_path:
-                            self.set_status_message(f"Backup created: {backup_path}")
-                    
-                    # Store current version in history
-                    self.history.add_version(self.buffer.get_lines())
-                    
-                    # Replace the lines
-                    lines = self.buffer.get_lines()
-                    del lines[start_line:end_line+1]
-                    for i, line in enumerate(improved_lines):
-                        lines.insert(start_line + i, line)
-                    self.buffer.set_lines(lines)
-                    
-                    # Add the new version to history with metadata
-                    self.history.add_version(self.buffer.get_lines(), metadata)
-                    
-                    # Update status
-                    self.set_status_message(f"Improved {len(improved_lines)} lines of code")
-                else:
-                    self.set_status_message("Code improvement cancelled")
+                # Set status message to prompt user for confirmation
+                self.set_status_message(f"Review changes and use :y to accept or :n to reject ({len(improved_lines)} lines)")
+                
+                # Note: The actual application of changes will happen when the user
+                # confirms with :y command, which will call confirm_ai_action(True)
         
         except Exception as e:
             with self.thread_lock:
@@ -1083,3 +1063,145 @@ class Editor:
             return
         
         self.should_quit = True
+        
+    def start_ai_chat(self) -> None:
+        """Start an interactive chat with the AI"""
+        # We need to ensure we're not already processing an AI request
+        if self.ai_processing:
+            self.set_status_message("Already processing an AI request")
+            return
+        
+        # Create a new thread for the chat
+        with self.thread_lock:
+            self.ai_processing = True
+            
+        # Get some context from the current buffer
+        context = self.buffer.get_content()
+            
+        # Start the chat in a new thread
+        metadata = {"operation": "chat"}
+        self.ai_thread = threading.Thread(
+            target=self._ai_chat_thread,
+            args=(context, metadata)
+        )
+        self.ai_thread.daemon = True
+        self.ai_thread.start()
+        
+    def _ai_chat_thread(self, context: str, metadata: Dict[str, Any]) -> None:
+        """Thread function for AI chat"""
+        try:
+            # Start loading animation if display is available
+            if self.display:
+                self.display.start_loading_animation("Starting AI chat...")
+                
+            # Display initial chat interface
+            chat_lines = ["Welcome to AIVim Chat", ""]
+            if self.chat_history:
+                # Add existing chat history
+                for i, (role, message) in enumerate(self.chat_history):
+                    prefix = "You: " if role == "user" else "AI: "
+                    # Split long messages
+                    lines = message.split('\n')
+                    for line in lines:
+                        chat_lines.append(f"{prefix}{line}")
+                    chat_lines.append("")  # Empty line between messages
+            
+            chat_lines.append("(Type your message and press Enter to send, Escape to exit)")
+            
+            # Stop loading animation and show the chat dialog
+            with self.thread_lock:
+                if self.display:
+                    self.display.stop_loading_animation()
+                self.ai_processing = False
+                
+                # Show the chat dialog
+                self.display.show_dialog("AI Chat", chat_lines)
+            
+        except Exception as e:
+            logging.error(f"Error in AI chat thread: {str(e)}")
+            with self.thread_lock:
+                if self.display:
+                    self.display.stop_loading_animation()
+                self.ai_processing = False
+            self.set_status_message(f"Error starting chat: {str(e)}")
+            
+    def set_ai_model(self, model_name: str) -> None:
+        """
+        Set the AI model to use
+        
+        Args:
+            model_name: Name of the model ('openai', 'claude', 'local')
+        """
+        model_name = model_name.lower()
+        if model_name in ["openai", "claude", "local"]:
+            # Update the AI service to use the selected model
+            if self.ai_service.set_model(model_name):
+                self.current_ai_model = model_name
+                self.set_status_message(f"AI model set to: {model_name}")
+            else:
+                self.set_status_message(f"Failed to set AI model to {model_name}. Check logs for details.")
+        else:
+            self.set_status_message(f"Unknown model: {model_name}. Valid options: openai, claude, local")
+            
+    def confirm_ai_action(self, confirmed: bool) -> None:
+        """
+        Confirm or reject a pending AI action
+        
+        Args:
+            confirmed: True to confirm, False to reject
+        """
+        if not self.pending_ai_action:
+            self.set_status_message("No pending AI action to confirm")
+            return
+            
+        if confirmed:
+            try:
+                # Extract the action details
+                action_type = self.pending_ai_action.get("type")
+                
+                if action_type == "improve":
+                    # Apply the improved code
+                    start_line = self.pending_ai_action.get("start_line")
+                    end_line = self.pending_ai_action.get("end_line")
+                    new_code = self.pending_ai_action.get("new_code")
+                    
+                    if start_line is not None and end_line is not None and new_code:
+                        # Create backup if we have a filename
+                        if self.filename:
+                            from aivim.utils import create_backup_file
+                            backup_path = create_backup_file(self.filename)
+                            if backup_path:
+                                self.set_status_message(f"Backup created: {backup_path}")
+                        
+                        # Save current buffer state to history
+                        self.history.add_version(self.buffer.get_lines())
+                        
+                        # Replace the code
+                        new_lines = new_code.split("\n")
+                        
+                        # Delete the old lines
+                        for _ in range(end_line - start_line + 1):
+                            self.buffer.delete_line(start_line)
+                            
+                        # Insert the new lines
+                        for i, line in enumerate(new_lines):
+                            self.buffer.insert_line(start_line + i, line)
+                            
+                        # Save the updated state in history
+                        metadata = self.pending_ai_action.get("metadata", {})
+                        self.history.add_version(self.buffer.get_lines(), metadata)
+                        self.set_status_message(f"AI improvement applied ({len(new_lines)} lines)")
+                    else:
+                        self.set_status_message("Invalid AI action data")
+                else:
+                    self.set_status_message(f"Unknown AI action type: {action_type}")
+                    
+            except Exception as e:
+                self.set_status_message(f"Error applying AI action: {str(e)}")
+                logging.error(f"Error applying AI action: {str(e)}")
+        else:
+            # User rejected the action
+            self.set_status_message("AI action rejected")
+            
+        # Clear the pending action
+        self.pending_ai_action = None

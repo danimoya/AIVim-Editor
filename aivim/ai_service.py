@@ -18,25 +18,64 @@ class AIService:
     """
     def __init__(self):
         """Initialize AI service"""
-        self.api_key = os.environ.get("OPENAI_API_KEY")
+        # OpenAI setup
+        self.openai_api_key = os.environ.get("OPENAI_API_KEY")
+        self.openai_client = None
         
-        if not OPENAI_AVAILABLE:
-            logging.warning("OpenAI package not installed. AI features will not work.")
-            self.client = None
-        elif not self.api_key:
-            logging.warning("OPENAI_API_KEY environment variable not set. AI features will not work.")
-            self.client = None
+        # Anthropic setup
+        self.anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY")
+        self.anthropic_client = None
+        
+        # Default model provider
+        self.current_model = "openai"  # Options: "openai", "claude", "local"
+        
+        # Initialize available clients
+        self._initialize_clients()
+        
+    def _initialize_clients(self):
+        """Initialize available AI clients based on API keys"""
+        # Initialize OpenAI
+        if OPENAI_AVAILABLE:
+            if self.openai_api_key:
+                try:
+                    self.openai_client = OpenAI(api_key=self.openai_api_key)
+                    logging.info("OpenAI client initialized successfully")
+                except Exception as e:
+                    logging.error(f"Error initializing OpenAI client: {str(e)}")
+            else:
+                logging.warning("OPENAI_API_KEY environment variable not set. OpenAI features will not work.")
         else:
-            try:
-                self.client = OpenAI(api_key=self.api_key)
-                logging.info("OpenAI client initialized successfully")
-            except Exception as e:
-                logging.error(f"Failed to initialize OpenAI client: {str(e)}")
-                self.client = None
+            logging.warning("OpenAI package not installed. OpenAI features will not work.")
+            
+    def set_model(self, model_name: str) -> bool:
+        """
+        Set the AI model provider to use
+        
+        Args:
+            model_name: Model provider name ("openai", "claude", "local")
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        model_name = model_name.lower()
+        
+        if model_name == "openai" and not self.openai_client:
+            logging.error("OpenAI client not available. Check API key and package installation.")
+            return False
+        elif model_name == "claude" and not self.anthropic_client:
+            logging.error("Claude client not available. Check API key and package installation.")
+            return False
+        elif model_name not in ["openai", "claude", "local"]:
+            logging.error(f"Unknown model: {model_name}")
+            return False
+            
+        self.current_model = model_name
+        logging.info(f"AI model set to: {model_name}")
+        return True
     
     def _create_completion(self, system_prompt: str, user_prompt: str) -> Optional[str]:
         """
-        Create an AI completion using OpenAI
+        Create an AI completion using the selected model provider
         
         Args:
             system_prompt: System instructions
@@ -45,17 +84,29 @@ class AIService:
         Returns:
             Generated text or None if the request failed
         """
+        # Check which model is currently selected
+        if self.current_model == "openai":
+            return self._openai_completion(system_prompt, user_prompt)
+        elif self.current_model == "claude":
+            return self._anthropic_completion(system_prompt, user_prompt)
+        elif self.current_model == "local":
+            return self._local_completion(system_prompt, user_prompt)
+        else:
+            return f"Unknown model type: {self.current_model}"
+    
+    def _openai_completion(self, system_prompt: str, user_prompt: str) -> Optional[str]:
+        """Create a completion using OpenAI"""
         if not OPENAI_AVAILABLE:
             return "OpenAI package not installed. Please install it with 'pip install openai'."
         
-        if not self.client:
-            return "AI services unavailable. Please set OPENAI_API_KEY environment variable."
+        if not self.openai_client:
+            return "OpenAI API unavailable. Please set OPENAI_API_KEY environment variable."
         
         try:
             # Use the gpt-4o model released after the knowledge cutoff
             # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
             # do not change this unless explicitly requested by the user
-            response = self.client.chat.completions.create(
+            response = self.openai_client.chat.completions.create(
                 model="gpt-4o",
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -68,6 +119,21 @@ class AIService:
         except Exception as e:
             logging.error(f"OpenAI API error: {str(e)}")
             return f"Error: {str(e)}"
+            
+    def _anthropic_completion(self, system_prompt: str, user_prompt: str) -> Optional[str]:
+        """Create a completion using Anthropic Claude"""
+        if not self.anthropic_client:
+            return "Anthropic Claude API unavailable. Please set ANTHROPIC_API_KEY environment variable."
+        
+        # This is a placeholder for actual Claude implementation
+        # The newest Anthropic model is "claude-3-5-sonnet-20241022" which was released October 22, 2024.
+        return "Claude API support coming soon. Please use OpenAI or local models for now."
+        
+    def _local_completion(self, system_prompt: str, user_prompt: str) -> Optional[str]:
+        """Create a completion using a local model"""
+        # This is a simplified placeholder. In a real implementation, this would 
+        # connect to a local model server or library like llama.cpp
+        return f"Local AI response to: {user_prompt[:30]}... (Local AI not yet implemented)"
     
     def get_explanation(self, code: str, context: str) -> str:
         """

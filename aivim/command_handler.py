@@ -39,6 +39,9 @@ class CommandHandler:
             r'^generate\s+(\d+)\s+(.+)$': self._cmd_generate,
             r'^ai\s+(.+)$': self._cmd_ai_query,
             r'^set\s+(.+)$': self._cmd_set_option,
+            r'^chat$': self._cmd_chat,
+            r'^y$': self._cmd_confirm_yes,
+            r'^n$': self._cmd_confirm_no,
             r'^help$': self._cmd_help,
         }
         
@@ -222,9 +225,63 @@ class CommandHandler:
         Returns:
             True if successful, False otherwise
         """
-        # Not yet implemented
-        self.editor.set_status_message(f"Option setting not implemented: {option}")
-        return False
+        # Handle AI model selection
+        if option.lower() in ["openai", "claude", "local"]:
+            try:
+                self.editor.set_ai_model(option.lower())
+                self.editor.set_status_message(f"AI model set to: {option}")
+                return True
+            except Exception as e:
+                self.editor.set_status_message(f"Error setting AI model: {str(e)}")
+                return False
+        else:
+            self.editor.set_status_message(f"Unknown option: {option}")
+            return False
+            
+    def _cmd_chat(self) -> bool:
+        """
+        Handle the chat command (:chat).
+        Opens an interactive chat dialog with the AI.
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            self.editor.start_ai_chat()
+            return True
+        except Exception as e:
+            self.editor.set_status_message(f"Error starting chat: {str(e)}")
+            return False
+            
+    def _cmd_confirm_yes(self) -> bool:
+        """
+        Handle the confirm yes command (:y).
+        Used to confirm AI improvement suggestions.
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            self.editor.confirm_ai_action(True)
+            return True
+        except Exception as e:
+            self.editor.set_status_message(f"Error handling confirmation: {str(e)}")
+            return False
+            
+    def _cmd_confirm_no(self) -> bool:
+        """
+        Handle the confirm no command (:n).
+        Used to reject AI improvement suggestions.
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            self.editor.confirm_ai_action(False)
+            return True
+        except Exception as e:
+            self.editor.set_status_message(f"Error handling rejection: {str(e)}")
+            return False
     
     def _cmd_help(self) -> bool:
         """
@@ -248,6 +305,10 @@ class CommandHandler:
             "  :improve s e   - Improve code from lines s through e",
             "  :generate l d  - Generate code at line l based on description d",
             "  :ai query      - Ask AI about the current code",
+            "  :chat          - Start an interactive chat with AI",
+            "  :set model     - Set AI model (openai, claude, local)",
+            "  :y             - Confirm AI suggestion",
+            "  :n             - Reject AI suggestion",
             "",
             "Navigation:",
             "  Arrow keys     - Move cursor (primary method)",
