@@ -1,462 +1,413 @@
 """
-Display handling for AIVim using curses
+Display handling for AIVim
 """
 import curses
-import logging
 from typing import List, Optional, Tuple
 
-from aivim.modes import Mode
-from aivim.utils import get_color_pair
+from aivim.utils import split_diff_line
 
 
 class Display:
     """
-    Handles the display and rendering for AIVim
+    Handles all display-related operations
     """
     def __init__(self, stdscr):
         """
         Initialize the display
         
         Args:
-            stdscr: Curses standard screen
+            stdscr: The curses standard screen
         """
         self.stdscr = stdscr
         self.height, self.width = stdscr.getmaxyx()
-        self.scroll_offset_y = 0
-        self.scroll_offset_x = 0
-        self.status_line_height = 2  # Status line + command line
-        self.max_visible_lines = self.height - self.status_line_height
-    
-    def setup(self) -> None:
-        """Initialize the display settings"""
-        # Set up colors
+        
+        # Colors
         curses.start_color()
         curses.use_default_colors()
         
-        # Define color pairs
-        # Default colors
-        curses.init_pair(1, curses.COLOR_WHITE, -1)  # Normal text
-        curses.init_pair(2, curses.COLOR_BLACK, curses.COLOR_WHITE)  # Status line
-        curses.init_pair(3, curses.COLOR_YELLOW, -1)  # Command line
-        curses.init_pair(4, curses.COLOR_CYAN, -1)  # Highlighted text
-        curses.init_pair(5, curses.COLOR_GREEN, -1)  # Comments
-        curses.init_pair(6, curses.COLOR_RED, -1)  # Keywords
-        curses.init_pair(7, curses.COLOR_MAGENTA, -1)  # Selected text
-        curses.init_pair(8, curses.COLOR_BLUE, -1)  # Line numbers
+        # Normal text
+        curses.init_pair(1, curses.COLOR_WHITE, -1)
+        # Status line
+        curses.init_pair(2, curses.COLOR_BLACK, curses.COLOR_WHITE)
+        # Message line
+        curses.init_pair(3, curses.COLOR_WHITE, curses.COLOR_BLUE)
+        # Line numbers
+        curses.init_pair(4, curses.COLOR_CYAN, -1)
+        # Selected text
+        curses.init_pair(5, curses.COLOR_BLACK, curses.COLOR_CYAN)
+        # Dialog
+        curses.init_pair(6, curses.COLOR_WHITE, curses.COLOR_BLUE)
+        # Dialog title
+        curses.init_pair(7, curses.COLOR_YELLOW, curses.COLOR_BLUE)
+        # Diff - added
+        curses.init_pair(8, curses.COLOR_GREEN, -1)
+        # Diff - removed
+        curses.init_pair(9, curses.COLOR_RED, -1)
+        # Diff - header
+        curses.init_pair(10, curses.COLOR_MAGENTA, -1)
         
-        # Hide cursor
-        curses.curs_set(0)
+        # Define colors
+        self.COLOR_NORMAL = curses.color_pair(1)
+        self.COLOR_STATUS = curses.color_pair(2)
+        self.COLOR_MESSAGE = curses.color_pair(3)
+        self.COLOR_LINENO = curses.color_pair(4)
+        self.COLOR_SELECTION = curses.color_pair(5)
+        self.COLOR_DIALOG = curses.color_pair(6)
+        self.COLOR_DIALOG_TITLE = curses.color_pair(7)
+        self.COLOR_DIFF_ADDED = curses.color_pair(8)
+        self.COLOR_DIFF_REMOVED = curses.color_pair(9)
+        self.COLOR_DIFF_HEADER = curses.color_pair(10)
         
-        # Enable keypad mode
+        # Line number gutter width
+        self.gutter_width = 4
+        
+        # Calculate usable text area
+        self.max_text_height = self.height - 2  # account for status and message lines
+        self.max_text_width = self.width - self.gutter_width
+        
+        # Create windows
+        self.text_win = curses.newwin(
+            self.max_text_height, 
+            self.width, 
+            0, 
+            0
+        )
+        self.status_win = curses.newwin(1, self.width, self.height - 2, 0)
+        self.command_win = curses.newwin(1, self.width, self.height - 1, 0)
+        
+        # For dialog
+        self.dialog_win = None
+        self.dialog_content = []
+        
+        # Enable special keys
         self.stdscr.keypad(True)
         
-        # No delay on getch()
-        self.stdscr.nodelay(False)
+        # Don't echo typed characters
+        curses.noecho()
+        
+        # Don't wait for Enter
+        curses.cbreak()
+        
+        # Hide cursor initially
+        curses.curs_set(0)
     
-    def refresh(self, 
-               lines: List[str], 
-               cursor_y: int, 
-               cursor_x: int, 
-               mode: Mode, 
-               command_line: str,
-               status_message: str,
-               ai_processing: bool,
-               selection: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None) -> None:
+    def resize(self) -> None:
+        """Handle terminal resize"""
+        self.height, self.width = self.stdscr.getmaxyx()
+        
+        # Recalculate usable text area
+        self.max_text_height = self.height - 2
+        self.max_text_width = self.width - self.gutter_width
+        
+        # Resize windows
+        self.text_win.resize(self.max_text_height, self.width)
+        self.status_win.resize(1, self.width)
+        self.status_win.mvwin(self.height - 2, 0)
+        self.command_win.resize(1, self.width)
+        self.command_win.mvwin(self.height - 1, 0)
+        
+        # If dialog is open, resize it too
+        if self.dialog_win:
+            self._setup_dialog_window()
+    
+    def update_text(self, lines: List[str], cursor_y: int, cursor_x: int, 
+                    scroll_y: int, selection: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None) -> None:
         """
-        Refresh the display with current content
+        Update the text display
         
         Args:
-            lines: The lines of text to display
-            cursor_y: Current cursor Y position
-            cursor_x: Current cursor X position
-            mode: Current editor mode
-            command_line: Content of the command line
-            status_message: Status message to display
-            ai_processing: Whether AI is currently processing
-            selection: Current selection (start_pos, end_pos) or None
+            lines: Text lines to display
+            cursor_y: Cursor y position (line number)
+            cursor_x: Cursor x position (column)
+            scroll_y: First visible line number
+            selection: Optional tuple of ((start_y, start_x), (end_y, end_x)) for selection
         """
-        try:
-            # Clear screen
-            self.stdscr.clear()
+        if self.is_dialog_open():
+            return
+        
+        self.text_win.clear()
+        self.text_win.bkgd(' ', self.COLOR_NORMAL)
+        
+        # Number of lines to display
+        display_lines = min(self.max_text_height, len(lines) - scroll_y)
+        
+        # Process selection
+        selection_start = None
+        selection_end = None
+        
+        if selection and selection[0] and selection[1]:
+            start_y, start_x = selection[0]
+            end_y, end_x = selection[1]
             
-            # Update dimensions
-            self.height, self.width = self.stdscr.getmaxyx()
-            self.max_visible_lines = self.height - self.status_line_height
+            # Ensure start is before end
+            if (start_y > end_y) or (start_y == end_y and start_x > end_x):
+                start_y, start_x, end_y, end_x = end_y, end_x, start_y, start_x
+                
+            selection_start = (start_y, start_x)
+            selection_end = (end_y, end_x)
+        
+        # Display lines
+        for i in range(display_lines):
+            line_num = scroll_y + i
+            line = lines[line_num]
             
-            # Adjust scroll if cursor is outside visible area
-            self._adjust_scroll(cursor_y, cursor_x, lines)
+            # Display line number
+            gutter = f"{line_num+1:3d} "
+            self.text_win.addstr(i, 0, gutter, self.COLOR_LINENO)
             
-            # Draw text lines
-            visible_lines = min(self.max_visible_lines, len(lines))
-            for i in range(visible_lines):
-                line_idx = i + self.scroll_offset_y
-                if line_idx < len(lines):
-                    # Line number margin (3 chars wide plus 1 space)
-                    line_num = str(line_idx + 1).rjust(3)
-                    self.stdscr.addstr(i, 0, line_num, curses.color_pair(8))
-                    self.stdscr.addstr(i, 4, " ")
-                    
-                    # Draw the actual line content with highlighting
-                    self._draw_line_with_highlighting(
-                        i, 5, lines[line_idx], cursor_y, cursor_x, mode, line_idx, selection
-                    )
-            
-            # Draw status line and command line
-            self._draw_status_line(mode, ai_processing, status_message)
-            self._draw_command_line(command_line)
-            
-            # Position cursor
-            if cursor_y - self.scroll_offset_y < self.max_visible_lines and cursor_y >= self.scroll_offset_y:
-                # Make cursor visible
-                curses.curs_set(1)
-                self.stdscr.move(cursor_y - self.scroll_offset_y, cursor_x - self.scroll_offset_x + 5)
+            # Display line content
+            if not selection_start or not selection_end:
+                # No selection, simple display
+                self.text_win.addstr(i, self.gutter_width, line)
             else:
-                # Hide cursor when it's outside visible area
-                curses.curs_set(0)
-            
-            # Refresh the screen
-            self.stdscr.refresh()
-            
-        except Exception as e:
-            logging.error(f"Display refresh error: {str(e)}")
-    
-    def _adjust_scroll(self, cursor_y: int, cursor_x: int, lines: List[str]) -> None:
-        """
-        Adjust scroll offsets based on cursor position
-        
-        Args:
-            cursor_y: Cursor Y position
-            cursor_x: Cursor X position
-            lines: Text lines
-        """
-        # Vertical scrolling
-        if cursor_y < self.scroll_offset_y:
-            # Cursor above visible area - scroll up
-            self.scroll_offset_y = cursor_y
-        elif cursor_y >= self.scroll_offset_y + self.max_visible_lines:
-            # Cursor below visible area - scroll down
-            self.scroll_offset_y = cursor_y - self.max_visible_lines + 1
-        
-        # Horizontal scrolling (handle long lines)
-        content_width = self.width - 5  # Account for line number margin
-        if cursor_x < self.scroll_offset_x:
-            # Cursor left of visible area - scroll left
-            self.scroll_offset_x = cursor_x
-        elif cursor_x >= self.scroll_offset_x + content_width:
-            # Cursor right of visible area - scroll right
-            self.scroll_offset_x = cursor_x - content_width + 1
-    
-    def _draw_line_with_highlighting(self, 
-                                   screen_y: int, 
-                                   start_x: int, 
-                                   line: str,
-                                   cursor_y: int,
-                                   cursor_x: int,
-                                   mode: Mode,
-                                   line_idx: int,
-                                   selection: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None) -> None:
-        """
-        Draw a single line with syntax highlighting
-        
-        Args:
-            screen_y: Screen Y position to draw at
-            start_x: Screen X position to start drawing
-            line: Line content to draw
-            cursor_y: Current cursor Y position
-            cursor_x: Current cursor X position
-            mode: Current editor mode
-            line_idx: Index of the line being drawn
-            selection: Current selection as ((start_y, start_x), (end_y, end_x)) or None
-        """
-        # Apply horizontal scrolling
-        if self.scroll_offset_x < len(line):
-            line_to_draw = line[self.scroll_offset_x:self.scroll_offset_x + self.width - start_x]
-        else:
-            line_to_draw = ""
-        
-        # Draw the line
-        try:
-            # Handle selection highlighting
-            if selection:
-                start_pos, end_pos = selection
-                start_y, start_x = start_pos
-                end_y, end_x = end_pos
-                
-                # Ensure start position is before end position
-                if start_y > end_y or (start_y == end_y and start_x > end_x):
-                    start_y, start_x, end_y, end_x = end_y, end_x, start_y, start_x
-                
-                # Check if this line is in the selection
-                if start_y <= line_idx <= end_y:
-                    # Draw the line with selection highlighting
-                    x_pos = start_x
+                # Handle display with selection
+                if line_num < selection_start[0] or line_num > selection_end[0]:
+                    # Line is outside selection
+                    self.text_win.addstr(i, self.gutter_width, line)
+                elif line_num == selection_start[0] and line_num == selection_end[0]:
+                    # Selection starts and ends on this line
+                    if selection_start[1] < len(line):
+                        self.text_win.addstr(i, self.gutter_width, line[:selection_start[1]])
                     
-                    # Handle single line selection
-                    if start_y == end_y:
-                        # Draw before selection
-                        if x_pos > self.scroll_offset_x:
-                            before_selection = line_to_draw[:min(x_pos - self.scroll_offset_x, len(line_to_draw))]
-                            self.stdscr.addstr(screen_y, start_x, before_selection, curses.color_pair(1))
-                        
-                        # Draw selection
-                        selection_start = max(0, start_x - self.scroll_offset_x)
-                        selection_end = min(len(line_to_draw), end_x - self.scroll_offset_x)
-                        
-                        if selection_end > selection_start:
-                            selection_text = line_to_draw[selection_start:selection_end]
-                            self.stdscr.addstr(
-                                screen_y, 
-                                start_x + selection_start, 
-                                selection_text, 
-                                curses.color_pair(7)
-                            )
-                        
-                        # Draw after selection
-                        if end_x - self.scroll_offset_x < len(line_to_draw):
-                            after_selection = line_to_draw[end_x - self.scroll_offset_x:]
-                            self.stdscr.addstr(
-                                screen_y, 
-                                start_x + end_x - self.scroll_offset_x, 
-                                after_selection, 
-                                curses.color_pair(1)
-                            )
+                    selected_text = line[selection_start[1]:selection_end[1]]
+                    if selected_text:
+                        self.text_win.addstr(i, self.gutter_width + selection_start[1], 
+                                           selected_text, self.COLOR_SELECTION)
                     
-                    # Handle multi-line selection
-                    else:
-                        if line_idx == start_y:
-                            # First line of selection
-                            if start_x > self.scroll_offset_x:
-                                before_selection = line_to_draw[:start_x - self.scroll_offset_x]
-                                self.stdscr.addstr(screen_y, start_x, before_selection, curses.color_pair(1))
-                            
-                            # Selection part
-                            selection_text = line_to_draw[max(0, start_x - self.scroll_offset_x):]
-                            if selection_text:
-                                self.stdscr.addstr(
-                                    screen_y, 
-                                    start_x + max(0, start_x - self.scroll_offset_x), 
-                                    selection_text, 
-                                    curses.color_pair(7)
-                                )
-                        
-                        elif line_idx == end_y:
-                            # Last line of selection
-                            selection_text = line_to_draw[:min(len(line_to_draw), end_x - self.scroll_offset_x)]
-                            if selection_text:
-                                self.stdscr.addstr(
-                                    screen_y, 
-                                    start_x, 
-                                    selection_text, 
-                                    curses.color_pair(7)
-                                )
-                            
-                            # After selection
-                            if end_x - self.scroll_offset_x < len(line_to_draw):
-                                after_selection = line_to_draw[end_x - self.scroll_offset_x:]
-                                self.stdscr.addstr(
-                                    screen_y, 
-                                    start_x + end_x - self.scroll_offset_x, 
-                                    after_selection, 
-                                    curses.color_pair(1)
-                                )
-                        
-                        else:
-                            # Middle line - fully selected
-                            self.stdscr.addstr(screen_y, start_x, line_to_draw, curses.color_pair(7))
+                    if selection_end[1] < len(line):
+                        self.text_win.addstr(i, self.gutter_width + selection_end[1], 
+                                           line[selection_end[1]:])
+                elif line_num == selection_start[0]:
+                    # Selection starts on this line
+                    if selection_start[1] < len(line):
+                        self.text_win.addstr(i, self.gutter_width, line[:selection_start[1]])
+                        self.text_win.addstr(i, self.gutter_width + selection_start[1], 
+                                           line[selection_start[1]:], self.COLOR_SELECTION)
+                elif line_num == selection_end[0]:
+                    # Selection ends on this line
+                    if selection_end[1] > 0:
+                        self.text_win.addstr(i, self.gutter_width, line[:selection_end[1]], 
+                                           self.COLOR_SELECTION)
                     
-                    return
-            
-            # If no selection or line not in selection, draw normally with syntax highlighting
-            self.stdscr.addstr(screen_y, start_x, line_to_draw, curses.color_pair(1))
-                
-        except Exception as e:
-            logging.error(f"Error drawing line: {str(e)}")
-    
-    def _draw_status_line(self, mode: Mode, ai_processing: bool, status_message: str) -> None:
-        """
-        Draw the status line at the bottom of the screen
-        
-        Args:
-            mode: Current editor mode
-            ai_processing: Whether AI is currently processing
-            status_message: Status message to display
-        """
-        try:
-            status_y = self.height - 2
-            
-            # Clear status line
-            self.stdscr.move(status_y, 0)
-            self.stdscr.clrtoeol()
-            
-            # Create status line content
-            mode_display = f" {mode.name} "
-            ai_status = " AI:PROCESSING " if ai_processing else ""
-            
-            # Draw mode indicator
-            self.stdscr.addstr(status_y, 0, mode_display, curses.color_pair(2))
-            
-            # Draw AI processing indicator if active
-            if ai_processing:
-                self.stdscr.addstr(status_y, len(mode_display), ai_status, curses.color_pair(6))
-            
-            # Draw status message (truncated if needed)
-            message_start = len(mode_display) + len(ai_status)
-            max_message_len = self.width - message_start - 1
-            
-            if status_message and max_message_len > 0:
-                if len(status_message) > max_message_len:
-                    display_message = status_message[:max_message_len - 3] + "..."
+                    if selection_end[1] < len(line):
+                        self.text_win.addstr(i, self.gutter_width + selection_end[1], 
+                                           line[selection_end[1]:])
                 else:
-                    display_message = status_message
-                
-                self.stdscr.addstr(status_y, message_start, display_message, curses.color_pair(1))
+                    # Line is fully selected
+                    self.text_win.addstr(i, self.gutter_width, line, self.COLOR_SELECTION)
         
-        except Exception as e:
-            logging.error(f"Error drawing status line: {str(e)}")
+        # Position cursor
+        if cursor_y >= scroll_y and cursor_y < scroll_y + self.max_text_height:
+            curses.curs_set(1)  # Show cursor
+            self.text_win.move(cursor_y - scroll_y, self.gutter_width + cursor_x)
+        else:
+            curses.curs_set(0)  # Hide cursor
+        
+        # Refresh display
+        self.text_win.refresh()
     
-    def _draw_command_line(self, command_line: str) -> None:
+    def update_status(self, status: str) -> None:
         """
-        Draw the command line
+        Update status line
         
         Args:
-            command_line: Current command line content
+            status: Status text
         """
-        try:
-            command_y = self.height - 1
-            
-            # Clear command line
-            self.stdscr.move(command_y, 0)
-            self.stdscr.clrtoeol()
-            
-            # Draw command line
-            if command_line:
-                # Ensure command line fits in the available width
-                if len(command_line) > self.width - 1:
-                    command_line = command_line[:self.width - 4] + "..."
-                
-                self.stdscr.addstr(command_y, 0, command_line, curses.color_pair(3))
+        self.status_win.clear()
+        self.status_win.bkgd(' ', self.COLOR_STATUS)
         
-        except Exception as e:
-            logging.error(f"Error drawing command line: {str(e)}")
+        # Truncate status if too long
+        if len(status) > self.width - 1:
+            status = status[:self.width - 4] + "..."
+        
+        self.status_win.addstr(0, 0, status)
+        self.status_win.move(0, min(len(status), self.width - 1))
+        
+        self.status_win.refresh()
     
-    def show_dialog(self, title: str, content: List[str], wait_for_key: bool = True) -> None:
+    def update_mode(self, mode: str) -> None:
         """
-        Show a dialog box with content
+        Update the display to show the current mode
+        
+        Args:
+            mode: Current editor mode
+        """
+        # Add mode to the right side of the status line
+        mode_text = f" {mode} "
+        self.status_win.addstr(0, self.width - len(mode_text) - 1, mode_text)
+        self.status_win.refresh()
+    
+    def update_command_line(self, command: str, cursor_pos: int) -> None:
+        """
+        Update command line
+        
+        Args:
+            command: Command text
+            cursor_pos: Cursor position in the command
+        """
+        self.command_win.clear()
+        self.command_win.bkgd(' ', self.COLOR_MESSAGE)
+        
+        # Truncate command if too long
+        if len(command) > self.width - 1:
+            visible_start = max(0, cursor_pos - (self.width // 2))
+            visible_end = min(len(command), visible_start + self.width - 1)
+            visible_command = command[visible_start:visible_end]
+            
+            # Adjust cursor position for the visible portion
+            cursor_pos -= visible_start
+        else:
+            visible_command = command
+        
+        self.command_win.addstr(0, 0, visible_command)
+        self.command_win.move(0, min(cursor_pos, self.width - 1))
+        
+        self.command_win.refresh()
+    
+    def show_dialog(self, title: str, content: List[str]) -> None:
+        """
+        Show a dialog box
         
         Args:
             title: Dialog title
             content: List of content lines
-            wait_for_key: Whether to wait for a key press before returning
         """
-        try:
-            # Calculate dialog size
-            max_content_width = max(len(line) for line in content) if content else 0
-            dialog_width = max(max_content_width + 4, len(title) + 4)
-            dialog_height = len(content) + 4  # Title + borders + padding
-            
-            # Calculate dialog position
-            dialog_y = max(0, (self.height - dialog_height) // 2)
-            dialog_x = max(0, (self.width - dialog_width) // 2)
-            
-            # Create dialog window
-            dialog = curses.newwin(dialog_height, dialog_width, dialog_y, dialog_x)
-            dialog.box()
-            
-            # Draw title
-            dialog.addstr(0, (dialog_width - len(title)) // 2, title, curses.A_BOLD)
-            
-            # Draw content
-            for i, line in enumerate(content):
-                dialog.addstr(2 + i, 2, line[:dialog_width - 4])
-            
-            # Draw footer
-            if wait_for_key:
-                footer = "Press any key to continue"
-                dialog.addstr(dialog_height - 1, (dialog_width - len(footer)) // 2, footer)
-            
-            # Show dialog
-            dialog.refresh()
-            
-            # Wait for key if required
-            if wait_for_key:
-                dialog.getch()
-        
-        except Exception as e:
-            logging.error(f"Error showing dialog: {str(e)}")
+        self.dialog_content = content
+        self._setup_dialog_window()
+        self._draw_dialog(title)
     
-    def ask_input(self, prompt: str, default: str = "") -> str:
+    def _setup_dialog_window(self) -> None:
+        """Set up the dialog window dimensions"""
+        # Calculate dialog dimensions
+        dialog_height = min(len(self.dialog_content) + 4, self.height - 4)
+        dialog_width = min(max(max(len(line) for line in self.dialog_content) + 4, len("Press 'd' to close") + 4, 40), 
+                          self.width - 4)
+        
+        # Center the dialog
+        dialog_y = (self.height - dialog_height) // 2
+        dialog_x = (self.width - dialog_width) // 2
+        
+        # Create or resize the dialog window
+        if self.dialog_win:
+            self.dialog_win.resize(dialog_height, dialog_width)
+            self.dialog_win.mvwin(dialog_y, dialog_x)
+        else:
+            self.dialog_win = curses.newwin(dialog_height, dialog_width, dialog_y, dialog_x)
+    
+    def _draw_dialog(self, title: str) -> None:
+        """Draw the dialog content"""
+        self.dialog_win.clear()
+        self.dialog_win.bkgd(' ', self.COLOR_DIALOG)
+        
+        # Draw border
+        self.dialog_win.box()
+        
+        # Draw title
+        title = f" {title} "
+        title_x = (self.dialog_win.getmaxyx()[1] - len(title)) // 2
+        self.dialog_win.addstr(0, title_x, title, self.COLOR_DIALOG_TITLE)
+        
+        # Draw content
+        max_content_width = self.dialog_win.getmaxyx()[1] - 4
+        visible_lines = min(len(self.dialog_content), self.dialog_win.getmaxyx()[0] - 4)
+        
+        for i in range(visible_lines):
+            line = self.dialog_content[i]
+            if len(line) > max_content_width:
+                line = line[:max_content_width-3] + "..."
+            self.dialog_win.addstr(i + 1, 2, line)
+        
+        # Draw close instruction
+        close_text = "Press 'd' to close"
+        self.dialog_win.addstr(self.dialog_win.getmaxyx()[0] - 2, 
+                             (self.dialog_win.getmaxyx()[1] - len(close_text)) // 2,
+                             close_text)
+        
+        self.dialog_win.refresh()
+    
+    def close_dialog(self) -> None:
+        """Close the dialog"""
+        self.dialog_win = None
+        self.dialog_content = []
+        
+        # Refresh main windows
+        self.stdscr.touchwin()
+        self.stdscr.refresh()
+        self.text_win.touchwin()
+        self.text_win.refresh()
+        self.status_win.touchwin()
+        self.status_win.refresh()
+        self.command_win.touchwin()
+        self.command_win.refresh()
+    
+    def is_dialog_open(self) -> bool:
+        """Check if a dialog is currently open"""
+        return self.dialog_win is not None
+        
+    def show_diff_dialog(self, title: str, diff_lines: List[str]) -> None:
         """
-        Ask for user input
+        Show a dialog box with diff content
         
         Args:
-            prompt: Prompt text
-            default: Default value
-            
-        Returns:
-            User input string
+            title: Dialog title
+            diff_lines: List of formatted diff lines (from utils.create_diff)
         """
-        try:
-            input_y = self.height - 1
+        # Convert diff lines to colorized format for display
+        colorized_content = []
+        for line in diff_lines:
+            diff_type, content = split_diff_line(line)
+            colorized_content.append((diff_type, content))
             
-            # Clear input line
-            self.stdscr.move(input_y, 0)
-            self.stdscr.clrtoeol()
-            
-            # Show prompt
-            self.stdscr.addstr(input_y, 0, prompt, curses.color_pair(3))
-            
-            # Show default value
-            if default:
-                self.stdscr.addstr(input_y, len(prompt), default, curses.color_pair(3))
-                current_value = default
-            else:
-                current_value = ""
-            
-            cursor_x = len(prompt) + len(current_value)
-            self.stdscr.move(input_y, cursor_x)
-            
-            # Make cursor visible
-            curses.curs_set(1)
-            
-            # Enable echo and get input
-            curses.echo()
-            
-            # Process input
-            result = current_value
-            while True:
-                key = self.stdscr.getch()
-                
-                if key == curses.KEY_ENTER or key == 10 or key == 13:
-                    # Enter - confirm input
-                    break
-                elif key == 27:
-                    # Escape - cancel
-                    result = ""
-                    break
-                elif key == curses.KEY_BACKSPACE or key == 127 or key == 8:
-                    # Backspace - delete character
-                    if result:
-                        result = result[:-1]
-                        self.stdscr.move(input_y, 0)
-                        self.stdscr.clrtoeol()
-                        self.stdscr.addstr(input_y, 0, prompt, curses.color_pair(3))
-                        self.stdscr.addstr(input_y, len(prompt), result, curses.color_pair(3))
-                        cursor_x = len(prompt) + len(result)
-                        self.stdscr.move(input_y, cursor_x)
-                else:
-                    # Add character
-                    char = chr(key)
-                    result += char
-                    self.stdscr.addstr(input_y, cursor_x, char, curses.color_pair(3))
-                    cursor_x += 1
-                    self.stdscr.move(input_y, cursor_x)
-            
-            # Reset terminal settings
-            curses.noecho()
-            curses.curs_set(0)
-            
-            return result
+        self.dialog_content = [content for _, content in colorized_content]
+        self._setup_dialog_window()
+        self._draw_diff_dialog(title, colorized_content)
+    
+    def _draw_diff_dialog(self, title: str, colorized_content: List[Tuple[str, str]]) -> None:
+        """
+        Draw the dialog with diff content
         
-        except Exception as e:
-            logging.error(f"Error getting input: {str(e)}")
-            return ""
+        Args:
+            title: Dialog title
+            colorized_content: List of (diff_type, content) tuples
+        """
+        self.dialog_win.clear()
+        self.dialog_win.bkgd(' ', self.COLOR_DIALOG)
+        
+        # Draw border
+        self.dialog_win.box()
+        
+        # Draw title
+        title = f" {title} "
+        title_x = (self.dialog_win.getmaxyx()[1] - len(title)) // 2
+        self.dialog_win.addstr(0, title_x, title, self.COLOR_DIALOG_TITLE)
+        
+        # Draw content
+        max_content_width = self.dialog_win.getmaxyx()[1] - 4
+        visible_lines = min(len(colorized_content), self.dialog_win.getmaxyx()[0] - 4)
+        
+        for i in range(visible_lines):
+            diff_type, line = colorized_content[i]
+            
+            # Truncate if needed
+            if len(line) > max_content_width:
+                line = line[:max_content_width-3] + "..."
+            
+            # Choose color based on diff type
+            if diff_type == "ADDED":
+                color = self.COLOR_DIFF_ADDED
+            elif diff_type == "REMOVED":
+                color = self.COLOR_DIFF_REMOVED
+            elif diff_type == "HEADER":
+                color = self.COLOR_DIFF_HEADER
+            else:
+                color = self.COLOR_NORMAL
+                
+            self.dialog_win.addstr(i + 1, 2, line, color)
+        
+        # Draw close instruction
+        close_text = "Press 'd' to close"
+        self.dialog_win.addstr(self.dialog_win.getmaxyx()[0] - 2, 
+                            (self.dialog_win.getmaxyx()[1] - len(close_text)) // 2,
+                            close_text)
+        
+        self.dialog_win.refresh()

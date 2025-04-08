@@ -5,7 +5,11 @@ import logging
 import os
 from typing import Optional
 
-from openai import OpenAI
+try:
+    from openai import OpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
 
 
 class AIService:
@@ -16,7 +20,10 @@ class AIService:
         """Initialize AI service"""
         self.api_key = os.environ.get("OPENAI_API_KEY")
         
-        if not self.api_key:
+        if not OPENAI_AVAILABLE:
+            logging.warning("OpenAI package not installed. AI features will not work.")
+            self.client = None
+        elif not self.api_key:
             logging.warning("OPENAI_API_KEY environment variable not set. AI features will not work.")
             self.client = None
         else:
@@ -38,6 +45,9 @@ class AIService:
         Returns:
             Generated text or None if the request failed
         """
+        if not OPENAI_AVAILABLE:
+            return "OpenAI package not installed. Please install it with 'pip install openai'."
+        
         if not self.client:
             return "AI services unavailable. Please set OPENAI_API_KEY environment variable."
         

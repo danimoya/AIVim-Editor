@@ -1,68 +1,18 @@
 #!/usr/bin/env python3
 """
 AIVim - An AI-enhanced version of Vim implemented in Python
-Web interface for launching the editor from a browser
+Command-line interface and embeddable API
 """
 import argparse
 import curses
 import logging
 import os
-import subprocess
 import sys
-import threading
 from typing import Optional
-
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 
 from aivim.editor import Editor
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
 
-# Create Flask app
-app = Flask(__name__)
-app.secret_key = os.environ.get("SESSION_SECRET", "aivim-development-key")
-
-
-# Routes for web interface
-@app.route('/')
-def index():
-    """Home page"""
-    return render_template('index.html')
-
-
-@app.route('/launch', methods=['POST'])
-def launch():
-    """Launch AIVim with a specified file"""
-    filename = request.form.get('filename')
-    if not filename:
-        flash('Please specify a filename', 'error')
-        return redirect(url_for('index'))
-    
-    # Launch AIVim in a terminal window
-    try:
-        cmd = [sys.executable, 'run_editor.py', filename]
-        subprocess.Popen(cmd)
-        flash(f'AIVim launched with file: {filename}', 'success')
-    except Exception as e:
-        flash(f'Error launching AIVim: {str(e)}', 'error')
-    
-    return redirect(url_for('index'))
-
-
-@app.route('/api/check-openai-key')
-def check_openai_key():
-    """Check if OpenAI API key is configured"""
-    api_key_exists = bool(os.environ.get("OPENAI_API_KEY"))
-    return jsonify({
-        'api_key_exists': api_key_exists
-    })
-
-
-# Command-line interface functions
 def parse_arguments():
     """Parse command line arguments"""
     parser = argparse.ArgumentParser(
@@ -109,13 +59,12 @@ def embed_editor(filename: Optional[str] = None):
     curses.wrapper(start_editor, filename)
 
 
-def cli_main():
-    """Main entry point for AIVim from command line"""
+def main():
+    """Main entry point for AIVim"""
     args = parse_arguments()
     check_environment()
     curses.wrapper(start_editor, args.filename)
 
 
 if __name__ == "__main__":
-    # Run the web app when executed directly
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    main()

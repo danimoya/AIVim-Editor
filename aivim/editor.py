@@ -6,15 +6,13 @@ import logging
 import os
 import threading
 import time
-from typing import List, Optional, Tuple, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 
-from aivim.ai_service import AIService
-from aivim.buffer import Buffer
-from aivim.commands import CommandProcessor
-from aivim.display import Display
-from aivim.history import VersionHistory
-from aivim.modes import Mode
-from aivim.utils import clamp
+from .buffer import Buffer
+from .display import Display
+from .command_handler import CommandHandler
+from .ai_service import AIService
+from .history import History
 
 
 class Editor:
@@ -28,24 +26,34 @@ class Editor:
         Args:
             filename: Optional file to edit
         """
-        self.filename = filename
         self.buffer = Buffer()
-        self.history = VersionHistory()
+        self.display = None  # Will be initialized in start()
+        self.command_handler = None  # Will be initialized in start()
         self.ai_service = AIService()
-        self.command_processor = CommandProcessor(self)
+        self.history = History()
         
-        self.mode = Mode.NORMAL
-        self.cursor_y = 0
+        # Editor state
+        self.filename = filename
         self.cursor_x = 0
-        self.preferred_x = 0  # For maintaining horizontal position during vertical movement
-        self.command_line = ""
+        self.cursor_y = 0
+        self.scroll_y = 0
+        self.preferred_x = 0  # For maintaining horizontal position when moving vertically
         self.status_message = ""
-        self.ai_processing = False
+        self.command_buffer = ""
+        self.command_cursor = 0
+        self.clipboard = []
         self.should_quit = False
         
-        # Threading objects
+        # Mode (NORMAL, INSERT, VISUAL, COMMAND)
+        self.mode = "NORMAL"
+        
+        # For handling terminal resize events
+        self.resize_timer = None
+        
+        # For AI operations
+        self.ai_processing = False
         self.ai_thread = None
-        self.thread_lock = threading.Lock()
+        self.thread_lock = threading.RLock()
         
         # Load file if specified
         if filename:
@@ -54,221 +62,340 @@ class Editor:
     def load_file(self, filename: str) -> None:
         """Load content from a file into the buffer"""
         try:
-            self.filename = filename
-            if os.path.isfile(filename):
+            if os.path.exists(filename):
                 with open(filename, 'r') as f:
                     content = f.read()
-                self.buffer.set_content(content)
-                self.buffer.mark_as_saved()
-                self.history.add_version(self.buffer.get_lines())
-                self.set_status_message(f"Loaded {filename}")
+                    self.buffer.set_content(content)
+                    self.buffer.mark_as_saved()
+                    self.filename = filename
+                    logging.info(f"Loaded file: {filename}")
+                    if self.display:
+                        self.set_status_message(f"Loaded: {filename}")
             else:
-                self.buffer.set_content("")
-                self.buffer.mark_as_saved()
-                self.history.add_version(self.buffer.get_lines())
-                self.set_status_message(f"New file: {filename}")
+                # New file
+                self.buffer = Buffer()
+                self.filename = filename
+                logging.info(f"New file: {filename}")
+                if self.display:
+                    self.set_status_message(f"New file: {filename}")
         except Exception as e:
-            self.set_status_message(f"Error loading file: {str(e)}")
-            logging.error(f"Error loading file {filename}: {str(e)}")
+            logging.error(f"Error loading file: {str(e)}")
+            if self.display:
+                self.set_status_message(f"Error loading file: {str(e)}")
     
     def save_file(self, filename: Optional[str] = None) -> None:
         """Save buffer content to a file"""
-        if filename:
-            self.filename = filename
+        save_filename = filename or self.filename
         
-        if not self.filename:
-            self.set_status_message("No filename specified")
+        if not save_filename:
+            self.set_status_message("No filename specified (use :w filename)")
             return
         
         try:
-            with open(self.filename, 'w') as f:
-                f.write(self.buffer.get_content())
+            content = self.buffer.get_content()
+            with open(save_filename, 'w') as f:
+                f.write(content)
+            
             self.buffer.mark_as_saved()
-            self.set_status_message(f"Saved {self.filename}")
+            self.filename = save_filename
+            
+            self.set_status_message(f"Saved: {save_filename} ({len(content)} bytes)")
+            logging.info(f"Saved file: {save_filename}")
         except Exception as e:
             self.set_status_message(f"Error saving file: {str(e)}")
-            logging.error(f"Error saving file {self.filename}: {str(e)}")
+            logging.error(f"Error saving file: {str(e)}")
     
     def start(self, stdscr) -> None:
         """Initialize and start the editor with curses"""
+        # Initialize display
         self.display = Display(stdscr)
-        self.display.setup()
         
+        # Initialize command handler
+        self.command_handler = CommandHandler(self)
+        
+        # Setup initial screen
+        curses.curs_set(1)  # Show cursor
+        
+        # Set up resize handler
+        # curses.signal(curses.SIGWINCH, self._handle_resize)
+
+        self._initialize_editor(stdscr)
+        
+        # Main editor loop
         while not self.should_quit:
-            # Get selection for display
-            start_pos, end_pos = self.buffer.get_selection()
-            selection = None
-            if start_pos and end_pos:
-                selection = (start_pos, end_pos)
+            # Update display
+            self._update_display()
             
-            # Refresh display
-            self.display.refresh(
-                self.buffer.get_lines(),
-                self.cursor_y,
-                self.cursor_x,
-                self.mode,
-                self.command_line,
-                self.status_message,
-                self.ai_processing,
-                selection
-            )
-            
-            # Handle input
+            # Get input
             try:
                 key = stdscr.getch()
                 self.handle_input(key)
-            except Exception as e:
-                self.set_status_message(f"Error: {str(e)}")
-                logging.error(f"Error handling input: {str(e)}")
+            except KeyboardInterrupt:
+                # Handle Ctrl+C more gracefully
+                if self.mode != "NORMAL":
+                    self.mode = "NORMAL"
+                    self.set_status_message("Switched to NORMAL mode")
+                else:
+                    # In normal mode, treat as Escape
+                    self.set_status_message("")
     
     def handle_input(self, key: int) -> None:
         """Process user input based on current mode"""
-        # Clear status message when user starts typing
-        if self.status_message and key != curses.KEY_RESIZE:
-            self.status_message = ""
+        if key == curses.KEY_RESIZE:
+            # Terminal was resized
+            self._handle_resize()
+            return
         
-        # Handle mode-specific input
-        if self.mode == Mode.NORMAL:
+        # Handle input based on current mode
+        if self.mode == "NORMAL":
             self._handle_normal_mode(key)
-        elif self.mode == Mode.INSERT:
+        elif self.mode == "INSERT":
             self._handle_insert_mode(key)
-        elif self.mode == Mode.VISUAL:
+        elif self.mode == "VISUAL":
             self._handle_visual_mode(key)
-        elif self.mode == Mode.COMMAND:
+        elif self.mode == "COMMAND":
             self._handle_command_mode(key)
     
     def _handle_normal_mode(self, key: int) -> None:
         """Handle keypresses in normal mode"""
-        lines = self.buffer.get_lines()
+        if key == ord('i'):
+            # Enter insert mode
+            self.mode = "INSERT"
+            self.set_status_message("-- INSERT --")
         
-        # Global shortcuts
-        if key == 5:  # Ctrl+E - Next version
-            if self.history.next_version():
-                self.buffer.set_lines(self.history.get_current_version())
-                self.set_status_message("Moved to next version")
-            else:
-                self.set_status_message("Already at newest version")
-            return
-        elif key == 23:  # Ctrl+W - Previous version
-            if self.history.previous_version():
-                self.buffer.set_lines(self.history.get_current_version())
-                self.set_status_message("Moved to previous version")
-            else:
-                self.set_status_message("Already at oldest version")
-            return
+        elif key == ord(':'):
+            # Enter command mode
+            self.mode = "COMMAND"
+            self.command_buffer = ":"
+            self.command_cursor = 1
         
-        # Navigation
-        if key == ord('h') or key == curses.KEY_LEFT:
-            self.cursor_x = max(0, self.cursor_x - 1)
-            self.preferred_x = self.cursor_x
+        elif key == ord('v'):
+            # Enter visual mode
+            self.mode = "VISUAL"
+            self.buffer.start_selection(self.cursor_y, self.cursor_x)
+            self.set_status_message("-- VISUAL --")
+        
+        elif key == ord('h') or key == curses.KEY_LEFT:
+            # Move cursor left
+            if self.cursor_x > 0:
+                self.cursor_x -= 1
+                self.preferred_x = self.cursor_x
+        
         elif key == ord('j') or key == curses.KEY_DOWN:
-            if self.cursor_y < len(lines) - 1:
+            # Move cursor down
+            if self.cursor_y < len(self.buffer.get_lines()) - 1:
                 self.cursor_y += 1
                 self._adjust_cursor_x()
+                
+                # Scroll if needed
+                if self.cursor_y >= self.scroll_y + self.display.max_text_height:
+                    self.scroll_y = self.cursor_y - self.display.max_text_height + 1
+        
         elif key == ord('k') or key == curses.KEY_UP:
+            # Move cursor up
             if self.cursor_y > 0:
                 self.cursor_y -= 1
                 self._adjust_cursor_x()
+                
+                # Scroll if needed
+                if self.cursor_y < self.scroll_y:
+                    self.scroll_y = self.cursor_y
+        
         elif key == ord('l') or key == curses.KEY_RIGHT:
-            if self.cursor_y < len(lines) and self.cursor_x < len(lines[self.cursor_y]):
+            # Move cursor right
+            line = self.buffer.get_line(self.cursor_y)
+            if self.cursor_x < len(line):
                 self.cursor_x += 1
                 self.preferred_x = self.cursor_x
         
-        # Mode changing
-        elif key == ord('i'):
-            self.mode = Mode.INSERT
-        elif key == ord('v'):
-            self.mode = Mode.VISUAL
-            self.buffer.start_selection(self.cursor_y, self.cursor_x)
-        elif key == ord(':'):
-            self.mode = Mode.COMMAND
-            self.command_line = ":"
+        elif key == ord('d') and self.display.is_dialog_open():
+            # Close dialog with 'd' key
+            self.display.close_dialog()
         
-        # Line operations
-        elif key == ord('o'):
-            # Open line below
-            self.buffer.insert_line(self.cursor_y + 1, "")
-            self.cursor_y += 1
-            self.cursor_x = 0
-            self.preferred_x = 0
-            self.mode = Mode.INSERT
-        elif key == ord('O'):
-            # Open line above
-            self.buffer.insert_line(self.cursor_y, "")
-            self.cursor_x = 0
-            self.preferred_x = 0
-            self.mode = Mode.INSERT
-        elif key == ord('d') and self.cursor_y < len(lines):
-            # Delete line (dd)
+        elif key == ord('d'):
+            # Delete operation - need another 'd' for line delete
             next_key = self.display.stdscr.getch()
             if next_key == ord('d'):
+                # Delete current line
                 self.buffer.delete_line(self.cursor_y)
+                # Adjust cursor position if needed
                 if self.cursor_y >= len(self.buffer.get_lines()):
                     self.cursor_y = max(0, len(self.buffer.get_lines()) - 1)
                 self._adjust_cursor_x()
+                # Add to history
+                self.history.add_version(self.buffer.get_lines())
+                self.set_status_message("Line deleted")
+        
+        elif key == ord('u'):
+            # Undo
+            if self.history.can_undo():
+                lines, metadata = self.history.undo()
+                if lines:
+                    self.buffer.set_lines(lines)
+                    self.set_status_message("Undo")
+            else:
+                self.set_status_message("Nothing to undo")
+        
+        elif key == ord('r') and (curses.keyname(key).decode("utf-8").startswith("^")):
+            # Redo (Ctrl+r)
+            if self.history.can_redo():
+                lines, metadata = self.history.redo()
+                if lines:
+                    self.buffer.set_lines(lines)
+                    self.set_status_message("Redo")
+            else:
+                self.set_status_message("Nothing to redo")
+        
+        elif key == ord('p'):
+            # Paste
+            if self.clipboard:
+                # Store current version in history before paste
+                self.history.add_version(self.buffer.get_lines())
+                
+                # Insert clipboard lines
+                for i, line in enumerate(self.clipboard):
+                    self.buffer.insert_line(self.cursor_y + i + 1, line)
+                
+                # Move cursor to the last inserted line
+                self.cursor_y += len(self.clipboard)
+                self._adjust_cursor_x()
+                
+                # Store updated version in history
+                self.history.add_version(self.buffer.get_lines())
+                self.set_status_message(f"Pasted {len(self.clipboard)} lines")
     
     def _handle_insert_mode(self, key: int) -> None:
         """Handle keypresses in insert mode"""
-        if key == 27:  # ESC
-            self.mode = Mode.NORMAL
-            # Move cursor back if at end of line
-            if self.cursor_x > 0 and self.cursor_y < len(self.buffer.get_lines()):
-                line = self.buffer.get_line(self.cursor_y)
-                if self.cursor_x >= len(line):
-                    self.cursor_x = max(0, len(line) - 1)
+        if key == 27:  # Escape key
+            # Return to normal mode
+            self.mode = "NORMAL"
+            # Add current buffer state to history
+            self.history.add_version(self.buffer.get_lines())
+            self.set_status_message("")
         
-        elif key == curses.KEY_BACKSPACE:
-            # Delete character before cursor
+        elif key == curses.KEY_BACKSPACE or key == 127:
+            # Backspace
+            line = self.buffer.get_line(self.cursor_y)
             if self.cursor_x > 0:
-                line = self.buffer.get_line(self.cursor_y)
+                # Remove character from current line
                 new_line = line[:self.cursor_x-1] + line[self.cursor_x:]
                 self.buffer.set_line(self.cursor_y, new_line)
                 self.cursor_x -= 1
                 self.preferred_x = self.cursor_x
             elif self.cursor_y > 0:
-                # At start of line, join with previous line
+                # Merge with previous line
                 prev_line = self.buffer.get_line(self.cursor_y - 1)
-                curr_line = self.buffer.get_line(self.cursor_y)
-                self.cursor_x = len(prev_line)
-                self.preferred_x = self.cursor_x
-                self.buffer.set_line(self.cursor_y - 1, prev_line + curr_line)
+                new_cursor_x = len(prev_line)
+                self.buffer.set_line(self.cursor_y - 1, prev_line + line)
                 self.buffer.delete_line(self.cursor_y)
                 self.cursor_y -= 1
+                self.cursor_x = new_cursor_x
+                self.preferred_x = self.cursor_x
+                
+                # Adjust scroll if needed
+                if self.cursor_y < self.scroll_y:
+                    self.scroll_y = self.cursor_y
         
-        elif key == 10:  # Enter
-            # Split line at cursor
+        elif key == curses.KEY_DC:
+            # Delete key
             line = self.buffer.get_line(self.cursor_y)
-            self.buffer.set_line(self.cursor_y, line[:self.cursor_x])
-            self.buffer.insert_line(self.cursor_y + 1, line[self.cursor_x:])
-            self.cursor_y += 1
-            self.cursor_x = 0
-            self.preferred_x = 0
+            if self.cursor_x < len(line):
+                # Remove character after cursor
+                new_line = line[:self.cursor_x] + line[self.cursor_x+1:]
+                self.buffer.set_line(self.cursor_y, new_line)
+            elif self.cursor_y < len(self.buffer.get_lines()) - 1:
+                # Merge with next line
+                next_line = self.buffer.get_line(self.cursor_y + 1)
+                self.buffer.set_line(self.cursor_y, line + next_line)
+                self.buffer.delete_line(self.cursor_y + 1)
         
         elif key == curses.KEY_LEFT:
+            # Move cursor left
             if self.cursor_x > 0:
                 self.cursor_x -= 1
                 self.preferred_x = self.cursor_x
         
         elif key == curses.KEY_RIGHT:
+            # Move cursor right
             line = self.buffer.get_line(self.cursor_y)
             if self.cursor_x < len(line):
                 self.cursor_x += 1
                 self.preferred_x = self.cursor_x
         
         elif key == curses.KEY_UP:
+            # Move cursor up
             if self.cursor_y > 0:
                 self.cursor_y -= 1
                 self._adjust_cursor_x()
+                
+                # Scroll if needed
+                if self.cursor_y < self.scroll_y:
+                    self.scroll_y = self.cursor_y
         
         elif key == curses.KEY_DOWN:
+            # Move cursor down
             if self.cursor_y < len(self.buffer.get_lines()) - 1:
                 self.cursor_y += 1
                 self._adjust_cursor_x()
+                
+                # Scroll if needed
+                if self.cursor_y >= self.scroll_y + self.display.max_text_height:
+                    self.scroll_y = self.cursor_y - self.display.max_text_height + 1
         
-        elif 32 <= key <= 126:  # Printable ASCII
-            # Insert character at cursor
-            char = chr(key)
+        elif key == ord('\n') or key == curses.KEY_ENTER:
+            # Enter key - split line
             line = self.buffer.get_line(self.cursor_y)
+            self.buffer.set_line(self.cursor_y, line[:self.cursor_x])
+            self.buffer.insert_line(self.cursor_y + 1, line[self.cursor_x:])
+            self.cursor_y += 1
+            self.cursor_x = 0
+            self.preferred_x = 0
+            
+            # Scroll if needed
+            if self.cursor_y >= self.scroll_y + self.display.max_text_height:
+                self.scroll_y = self.cursor_y - self.display.max_text_height + 1
+        
+        elif key == curses.KEY_HOME:
+            # Move to beginning of line
+            self.cursor_x = 0
+            self.preferred_x = 0
+        
+        elif key == curses.KEY_END:
+            # Move to end of line
+            line = self.buffer.get_line(self.cursor_y)
+            self.cursor_x = len(line)
+            self.preferred_x = self.cursor_x
+        
+        elif key == curses.KEY_PPAGE:  # Page Up
+            # Move up a page
+            self.cursor_y = max(0, self.cursor_y - self.display.max_text_height)
+            self.scroll_y = max(0, self.scroll_y - self.display.max_text_height)
+            self._adjust_cursor_x()
+        
+        elif key == curses.KEY_NPAGE:  # Page Down
+            # Move down a page
+            max_y = len(self.buffer.get_lines()) - 1
+            self.cursor_y = min(max_y, self.cursor_y + self.display.max_text_height)
+            self.scroll_y = min(max_y - self.display.max_text_height + 1, 
+                               self.scroll_y + self.display.max_text_height)
+            self.scroll_y = max(0, self.scroll_y)
+            self._adjust_cursor_x()
+        
+        elif key == 9:  # Tab key
+            # Insert 4 spaces for tab
+            self.buffer.set_line(
+                self.cursor_y,
+                self.buffer.get_line(self.cursor_y)[:self.cursor_x] + 
+                "    " + 
+                self.buffer.get_line(self.cursor_y)[self.cursor_x:]
+            )
+            self.cursor_x += 4
+            self.preferred_x = self.cursor_x
+        
+        elif 32 <= key <= 126:  # Printable ASCII characters
+            # Insert character at current position
+            line = self.buffer.get_line(self.cursor_y)
+            char = chr(key)
             new_line = line[:self.cursor_x] + char + line[self.cursor_x:]
             self.buffer.set_line(self.cursor_y, new_line)
             self.cursor_x += 1
@@ -276,75 +403,259 @@ class Editor:
     
     def _handle_visual_mode(self, key: int) -> None:
         """Handle keypresses in visual mode"""
-        if key == 27:  # ESC
-            self.mode = Mode.NORMAL
+        if key == 27:  # Escape key
+            # Return to normal mode
+            self.mode = "NORMAL"
             self.buffer.end_selection()
+            self.set_status_message("")
         
-        # Navigation (update selection end)
         elif key == ord('h') or key == curses.KEY_LEFT:
-            self.cursor_x = max(0, self.cursor_x - 1)
-            self.preferred_x = self.cursor_x
-            self.buffer.update_selection(self.cursor_y, self.cursor_x)
+            # Move cursor left
+            if self.cursor_x > 0:
+                self.cursor_x -= 1
+                self.preferred_x = self.cursor_x
+                self.buffer.update_selection(self.cursor_y, self.cursor_x)
         
         elif key == ord('j') or key == curses.KEY_DOWN:
+            # Move cursor down
             if self.cursor_y < len(self.buffer.get_lines()) - 1:
                 self.cursor_y += 1
                 self._adjust_cursor_x()
                 self.buffer.update_selection(self.cursor_y, self.cursor_x)
+                
+                # Scroll if needed
+                if self.cursor_y >= self.scroll_y + self.display.max_text_height:
+                    self.scroll_y = self.cursor_y - self.display.max_text_height + 1
         
         elif key == ord('k') or key == curses.KEY_UP:
+            # Move cursor up
             if self.cursor_y > 0:
                 self.cursor_y -= 1
                 self._adjust_cursor_x()
                 self.buffer.update_selection(self.cursor_y, self.cursor_x)
+                
+                # Scroll if needed
+                if self.cursor_y < self.scroll_y:
+                    self.scroll_y = self.cursor_y
         
         elif key == ord('l') or key == curses.KEY_RIGHT:
-            if self.cursor_y < len(self.buffer.get_lines()) and self.cursor_x < len(self.buffer.get_line(self.cursor_y)):
+            # Move cursor right
+            line = self.buffer.get_line(self.cursor_y)
+            if self.cursor_x < len(line):
                 self.cursor_x += 1
                 self.preferred_x = self.cursor_x
                 self.buffer.update_selection(self.cursor_y, self.cursor_x)
+        
+        elif key == ord('y'):
+            # Yank (copy) selection
+            selection_text = self.buffer.get_selection_text()
+            self.clipboard = selection_text.split('\n')
+            
+            # Return to normal mode
+            self.mode = "NORMAL"
+            self.buffer.end_selection()
+            self.set_status_message(f"Yanked {len(self.clipboard)} lines")
+        
+        elif key == ord('d'):
+            # Delete selection
+            # Store current version in history
+            self.history.add_version(self.buffer.get_lines())
+            
+            # Get selection bounds
+            selection = self.buffer.get_selection()
+            if selection[0] and selection[1]:
+                start_y, start_x = selection[0]
+                end_y, end_x = selection[1]
+                
+                # Ensure start is before end
+                if (start_y > end_y) or (start_y == end_y and start_x > end_x):
+                    start_y, start_x, end_y, end_x = end_y, end_x, start_y, start_x
+                
+                # Delete the selection
+                if start_y == end_y:
+                    # Single line selection
+                    line = self.buffer.get_line(start_y)
+                    new_line = line[:start_x] + line[end_x:]
+                    self.buffer.set_line(start_y, new_line)
+                    self.cursor_y = start_y
+                    self.cursor_x = start_x
+                else:
+                    # Multi-line selection
+                    # First line (partial)
+                    first_line = self.buffer.get_line(start_y)
+                    first_line_start = first_line[:start_x]
+                    
+                    # Last line (partial)
+                    last_line = self.buffer.get_line(end_y)
+                    last_line_end = last_line[end_x:]
+                    
+                    # Delete all lines in between
+                    for _ in range(end_y - start_y):
+                        self.buffer.delete_line(start_y + 1)
+                    
+                    # Replace first line
+                    self.buffer.set_line(start_y, first_line_start + last_line_end)
+                    
+                    # Set cursor position
+                    self.cursor_y = start_y
+                    self.cursor_x = start_x
+                
+                # Add updated version to history
+                self.history.add_version(self.buffer.get_lines())
+            
+            # Return to normal mode
+            self.mode = "NORMAL"
+            self.buffer.end_selection()
+            self.set_status_message("Selection deleted")
     
     def _handle_command_mode(self, key: int) -> None:
         """Handle keypresses in command mode"""
-        if key == 27:  # ESC
-            self.mode = Mode.NORMAL
-            self.command_line = ""
+        if key == 27:  # Escape key
+            # Return to normal mode
+            self.mode = "NORMAL"
+            self.command_buffer = ""
+            self.command_cursor = 0
+            self.set_status_message("")
         
-        elif key == 10:  # Enter
+        elif key == curses.KEY_BACKSPACE or key == 127:
+            # Backspace
+            if self.command_cursor > 1:  # Keep the initial ':'
+                self.command_buffer = (
+                    self.command_buffer[:self.command_cursor-1] + 
+                    self.command_buffer[self.command_cursor:]
+                )
+                self.command_cursor -= 1
+        
+        elif key == curses.KEY_LEFT:
+            # Move cursor left
+            if self.command_cursor > 1:  # Don't move past the initial ':'
+                self.command_cursor -= 1
+        
+        elif key == curses.KEY_RIGHT:
+            # Move cursor right
+            if self.command_cursor < len(self.command_buffer):
+                self.command_cursor += 1
+        
+        elif key == curses.KEY_HOME:
+            # Move to beginning of command (after :)
+            self.command_cursor = 1
+        
+        elif key == curses.KEY_END:
+            # Move to end of command
+            self.command_cursor = len(self.command_buffer)
+        
+        elif key == ord('\n') or key == curses.KEY_ENTER:
+            # Execute command
             self._process_command()
-            self.mode = Mode.NORMAL
-            self.command_line = ""
         
-        elif key == curses.KEY_BACKSPACE:
-            if len(self.command_line) > 1:  # Keep the ':'
-                self.command_line = self.command_line[:-1]
-            else:
-                self.mode = Mode.NORMAL
-                self.command_line = ""
-        
-        elif 32 <= key <= 126:  # Printable ASCII
-            self.command_line += chr(key)
+        elif 32 <= key <= 126:  # Printable ASCII characters
+            # Insert character at current position
+            char = chr(key)
+            self.command_buffer = (
+                self.command_buffer[:self.command_cursor] + 
+                char + 
+                self.command_buffer[self.command_cursor:]
+            )
+            self.command_cursor += 1
     
     def _process_command(self) -> None:
         """Process entered command"""
-        if not self.command_line or len(self.command_line) <= 1:
+        # Execute command
+        result = self.command_handler.execute(self.command_buffer)
+        
+        # Return to normal mode
+        self.mode = "NORMAL"
+        self.command_buffer = ""
+        self.command_cursor = 0
+        
+        if not result:
+            self.set_status_message(f"Invalid command")
+    
+    def _update_display(self) -> None:
+        """Update the display with current buffer content"""
+        # Only update if display is initialized
+        if not self.display:
             return
         
-        command = self.command_line[1:]  # Remove the initial ':'
-        self.command_processor.process(command)
+        # Check if we're in a dialog
+        if self.display.is_dialog_open():
+            # Only handle dialog close key
+            return
+        
+        # Update status line
+        self.display.update_status(
+            f"{self.filename or '[No Name]'} "
+            f"{'[+]' if self.buffer.is_modified() else ''} "
+            f"Line {self.cursor_y+1}/{len(self.buffer.get_lines())} "
+            f"Col {self.cursor_x+1} "
+            f"{self.status_message}"
+        )
+        
+        # Update mode indicator
+        self.display.update_mode(self.mode)
+        
+        # Update text content
+        self.display.update_text(
+            self.buffer.get_lines(),
+            self.cursor_y,
+            self.cursor_x,
+            self.scroll_y,
+            self.buffer.get_selection()
+        )
+        
+        # Update command line if in command mode
+        if self.mode == "COMMAND":
+            self.display.update_command_line(
+                self.command_buffer,
+                self.command_cursor
+            )
+    
+    def _handle_resize(self, *args) -> None:
+        """Handle terminal resize event"""
+        # Debounce resize events
+        if self.resize_timer:
+            self.resize_timer.cancel()
+        
+        self.resize_timer = threading.Timer(0.1, self._do_resize)
+        self.resize_timer.start()
+    
+    def _do_resize(self) -> None:
+        """Actually perform the resize operation"""
+        with self.thread_lock:
+            self.display.resize()
+            self._update_display()
     
     def _adjust_cursor_x(self) -> None:
         """Adjust cursor x position when moving vertically"""
-        if self.cursor_y < len(self.buffer.get_lines()):
-            line_length = len(self.buffer.get_line(self.cursor_y))
-            self.cursor_x = min(self.preferred_x, line_length)
-        else:
-            self.cursor_x = 0
+        line = self.buffer.get_line(self.cursor_y)
+        self.cursor_x = min(self.preferred_x, len(line))
     
     def set_status_message(self, message: str) -> None:
         """Set the status message"""
         self.status_message = message
         logging.info(f"Status: {message}")
+        
+    def show_dialog(self, title: str, content: List[str]) -> None:
+        """
+        Show a dialog box
+        
+        Args:
+            title: Dialog title
+            content: Dialog content lines
+        """
+        if self.display:
+            self.display.show_dialog(title, content)
+            
+    def show_diff_dialog(self, title: str, diff_lines: List[str]) -> None:
+        """
+        Show a diff dialog box
+        
+        Args:
+            title: Dialog title
+            diff_lines: List of formatted diff lines
+        """
+        if self.display:
+            self.display.show_diff_dialog(title, diff_lines)
     
     def run_ai_command(self, command: str, args: List[str]) -> None:
         """Run an AI-related command in a separate thread"""
@@ -579,10 +890,20 @@ class Editor:
                 self.ai_processing = False
                 self.set_status_message(f"Improved {len(improved_lines)} lines of code")
                 
-                # Show the explanation in a dialog if there's more than just code
+                # Create a diff between original and improved code
+                from aivim.utils import create_diff
+                diff_lines = create_diff(code, improved_code)
+                
+                # Show diff in a dialog
+                if self.display:
+                    self.display.show_diff_dialog("Code Improvement Diff", diff_lines)
+                
+                # If there's an explanation, show it in a separate dialog
                 if improvement != improved_code:
-                    explanation_lines = improvement.split("\n")
-                    self.display.show_dialog("Code Improvement", explanation_lines)
+                    explanation_lines = [line for line in improvement.split("\n") 
+                                       if not line.strip().startswith("```")]
+                    if explanation_lines:
+                        self.display.show_dialog("Code Improvement Explanation", explanation_lines)
         
         except Exception as e:
             with self.thread_lock:

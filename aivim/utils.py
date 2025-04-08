@@ -1,125 +1,121 @@
 """
 Utility functions for AIVim
 """
-import curses
-from typing import List, Dict, Any, Optional
+import difflib
+import re
+from typing import List, Tuple, Optional
 
 
-def clamp(value: int, min_val: int, max_val: int) -> int:
+def create_diff(old_text: str, new_text: str) -> List[str]:
     """
-    Clamp a value between a minimum and maximum
+    Create a diff between old and new text
     
     Args:
-        value: The value to clamp
-        min_val: The minimum allowed value
-        max_val: The maximum allowed value
+        old_text: Original text
+        new_text: Modified text
         
     Returns:
-        The clamped value
+        List of formatted diff lines
     """
-    return max(min_val, min(value, max_val))
+    # Split into lines
+    old_lines = old_text.splitlines()
+    new_lines = new_text.splitlines()
+    
+    # Get diff
+    diff = list(difflib.unified_diff(
+        old_lines,
+        new_lines,
+        lineterm='',
+        n=2  # Context lines
+    ))
+    
+    # If there's no diff, return a message
+    if not diff:
+        return ["No differences found."]
+    
+    # Create colorized diff lines
+    colorized_diff = []
+    for line in diff:
+        if line.startswith('+++') or line.startswith('---') or line.startswith('@@'):
+            # Header lines
+            colorized_diff.append(f"HEADER|{line}")
+        elif line.startswith('+'):
+            # Added lines
+            colorized_diff.append(f"ADDED|{line}")
+        elif line.startswith('-'):
+            # Removed lines
+            colorized_diff.append(f"REMOVED|{line}")
+        else:
+            # Context lines
+            colorized_diff.append(f"CONTEXT|{line}")
+            
+    return colorized_diff
 
 
-def merge_dicts(dict1: Dict[str, Any], dict2: Dict[str, Any]) -> Dict[str, Any]:
+def split_diff_line(line: str) -> Tuple[str, str]:
     """
-    Merge two dictionaries with dict2 taking precedence
+    Split a colorized diff line into type and content
     
     Args:
-        dict1: First dictionary
-        dict2: Second dictionary (will override dict1 values)
+        line: Colorized diff line with format "TYPE|content"
         
     Returns:
-        Merged dictionary
+        Tuple of (type, content)
     """
-    result = dict1.copy()
-    result.update(dict2)
-    return result
-
-
-def get_color_pair(fg_color: int, bg_color: int) -> int:
-    """
-    Get or create a curses color pair
-    
-    Args:
-        fg_color: Foreground color
-        bg_color: Background color
-        
-    Returns:
-        Color pair number
-    """
-    # Use a hash of the color combination to create a unique identifier
-    pair_id = (fg_color * 10 + bg_color) % curses.COLOR_PAIRS
-    
-    # Initialize the color pair
-    try:
-        curses.init_pair(pair_id, fg_color, bg_color)
-    except Exception:
-        pass  # Color already defined or terminal doesn't support color
-    
-    return pair_id
+    parts = line.split('|', 1)
+    if len(parts) == 2:
+        return parts[0], parts[1]
+    return "CONTEXT", line
 
 
 def tokenize_command(command: str) -> List[str]:
     """
-    Tokenize a command string, respecting quoted strings
+    Tokenize a command string into a list of tokens
     
     Args:
-        command: The command string
+        command: Command string
         
     Returns:
         List of command tokens
     """
+    # Match quoted strings or space-separated tokens
+    pattern = r'\"([^\"]*)\"|\'([^\']*)\'|(\S+)'
+    matches = re.finditer(pattern, command)
+    
     tokens = []
-    current_token = ""
-    in_quotes = False
-    quote_char = None
-    
-    for char in command:
-        if char in ['"', "'"]:
-            if not in_quotes:
-                # Start of quoted string
-                in_quotes = True
-                quote_char = char
-            elif char == quote_char:
-                # End of quoted string
-                in_quotes = False
-                quote_char = None
-            else:
-                # Different quote character within quoted string
-                current_token += char
-        elif char.isspace() and not in_quotes:
-            # Space outside quotes - end of token
-            if current_token:
-                tokens.append(current_token)
-                current_token = ""
+    for match in matches:
+        # Get the matched group (either quoted or unquoted)
+        if match.group(1) is not None:
+            # Double-quoted string
+            tokens.append(match.group(1))
+        elif match.group(2) is not None:
+            # Single-quoted string
+            tokens.append(match.group(2))
         else:
-            # Regular character
-            current_token += char
-    
-    # Add final token if any
-    if current_token:
-        tokens.append(current_token)
+            # Unquoted token
+            tokens.append(match.group(3))
     
     return tokens
 
 
-def parse_line_range(start_str: str, end_str: Optional[str] = None) -> tuple[int, int]:
+def parse_line_range(start_line: str, end_line: str) -> Tuple[int, int]:
     """
-    Parse a line range specification
+    Parse line range from string inputs
     
     Args:
-        start_str: Start line number as string (1-based)
-        end_str: End line number as string (1-based)
+        start_line: Starting line number (1-based)
+        end_line: Ending line number (1-based)
         
     Returns:
-        Tuple of (start, end) line numbers (0-based)
+        Tuple of (start, end) in 0-based indexing, or (-1, -1) if invalid
     """
     try:
-        start = int(start_str) - 1  # Convert to 0-based
-        if end_str:
-            end = int(end_str) - 1  # Convert to 0-based
-        else:
-            end = start
-        return start, end
+        start = int(start_line) - 1  # Convert to 0-based
+        end = int(end_line)  # End is exclusive in Python slices
+        
+        if start < 0:
+            return (-1, -1)
+            
+        return (start, end)
     except ValueError:
-        return -1, -1  # Invalid input
+        return (-1, -1)

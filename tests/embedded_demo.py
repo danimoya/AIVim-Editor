@@ -1,64 +1,30 @@
 #!/usr/bin/env python3
 """
-Demonstration of using AIVim as an embedded editor in another application
+Demo of embedding AIVim in another application.
 """
-import os
 import sys
+import os
 
-# Add parent directory to path for imports
+# Add parent directory to path so we can import main
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from aivim.editor import Editor
+from main import embed_editor
 
-
-def main():
-    """
-    Simple demonstration of embedding AIVim in another application
-    """
-    print("AIVim Embedded Demo")
-    print("-------------------")
+def run_demo():
+    """Run the embedded AIVim demo"""
+    print("Welcome to the AIVim Embedded Demo!")
+    print("Opening a sample file for editing...")
+    print("Press any key to continue...")
+    input()
     
-    # Example of programmatically preparing a file
-    example_file = "demo_file.py"
-    with open(example_file, "w") as f:
-        f.write("""#!/usr/bin/env python3
-\"\"\"
-Demo file for embedded AIVim
-\"\"\"
-
-def hello_world():
-    \"\"\"Print a greeting\"\"\"
-    print("Hello, world!")
-
-# TODO: Add a function to calculate the sum of a list
-""")
+    # Get path to example.py in the same directory
+    example_path = os.path.join(os.path.dirname(__file__), 'example.py')
     
-    print(f"Created example file: {example_file}")
-    print("Opening file in embedded AIVim...")
-    print("Use :help for commands. :q to quit.")
+    # Start embedded editor with the example file
+    embed_editor(example_path)
     
-    # Wait for user confirmation
-    input("Press Enter to continue...")
-    
-    # Start embedded editor
-    editor = Editor(example_file)
-    try:
-        # Use the embed_editor function from main.py for proper curses setup
-        from main import embed_editor
-        embed_editor(example_file)
-    except Exception as e:
-        print(f"Error running embedded editor: {str(e)}")
-    
-    print("Exited editor.")
-    
-    # Demonstrate reading the file after editing
-    print("\nFile content after editing:")
-    try:
-        with open(example_file, "r") as f:
-            print(f.read())
-    except Exception as e:
-        print(f"Error reading file: {str(e)}")
-
+    print("Editing complete!")
+    print("Thank you for trying AIVim!")
 
 if __name__ == "__main__":
-    main()
+    run_demo()

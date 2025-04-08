@@ -1,15 +1,16 @@
 """
 Command handler module for processing command-line commands.
 """
-
+import logging
+import os
 import re
-from typing import Dict, Callable, List, Optional, Tuple, Any
+from typing import Dict, Callable, List, Any, Optional, Match
+
 
 class CommandHandler:
     """
     Handler for Vim-style commands.
     """
-    
     def __init__(self, editor):
         """
         Initialize the command handler.
@@ -27,7 +28,7 @@ class CommandHandler:
         Returns:
             Dictionary mapping command patterns to handler functions
         """
-        return {
+        commands = {
             r'^w$': self._cmd_write,
             r'^w\s+(.+)$': self._cmd_write_as,
             r'^q$': self._cmd_quit,
@@ -40,6 +41,8 @@ class CommandHandler:
             r'^set\s+(.+)$': self._cmd_set_option,
             r'^help$': self._cmd_help,
         }
+        
+        return commands
     
     def execute(self, command_line: str) -> bool:
         """
@@ -51,14 +54,18 @@ class CommandHandler:
         Returns:
             True if the command was recognized and executed, False otherwise
         """
-        command = command_line.strip()
+        # Strip leading : if present
+        if command_line.startswith(':'):
+            command_line = command_line[1:]
         
+        # Find matching command pattern
         for pattern, handler in self.commands.items():
-            match = re.match(pattern, command)
+            match = re.match(pattern, command_line)
             if match:
+                logging.info(f"Executing command: {command_line}")
                 return handler(*match.groups())
         
-        self.editor.set_status_message(f"Unknown command: {command}")
+        self.editor.set_status_message(f"Unknown command: {command_line}")
         return False
     
     def _cmd_write(self) -> bool:
@@ -68,7 +75,12 @@ class CommandHandler:
         Returns:
             True if successful, False otherwise
         """
-        return self.editor.save_file()
+        try:
+            self.editor.save_file()
+            return True
+        except Exception as e:
+            self.editor.set_status_message(f"Error saving file: {str(e)}")
+            return False
     
     def _cmd_write_as(self, filename: str) -> bool:
         """
@@ -80,7 +92,12 @@ class CommandHandler:
         Returns:
             True if successful, False otherwise
         """
-        return self.editor.save_file_as(filename)
+        try:
+            self.editor.save_file(filename)
+            return True
+        except Exception as e:
+            self.editor.set_status_message(f"Error saving file: {str(e)}")
+            return False
     
     def _cmd_quit(self) -> bool:
         """
@@ -89,9 +106,7 @@ class CommandHandler:
         Returns:
             True if successful, False otherwise
         """
-        # Check for unsaved changes
-        # In a real implementation, we would check for buffer modifications
-        self.editor.quit = True
+        self.editor.quit()
         return True
     
     def _cmd_write_quit(self) -> bool:
@@ -101,9 +116,8 @@ class CommandHandler:
         Returns:
             True if successful, False otherwise
         """
-        if self.editor.save_file():
-            self.editor.quit = True
-            return True
+        if self._cmd_write():
+            return self._cmd_quit()
         return False
     
     def _cmd_force_quit(self) -> bool:
@@ -113,7 +127,7 @@ class CommandHandler:
         Returns:
             True if successful, False otherwise
         """
-        self.editor.quit = True
+        self.editor.quit(force=True)
         return True
     
     def _cmd_explain(self, start_line: str, end_line: str) -> bool:
@@ -128,14 +142,14 @@ class CommandHandler:
             True if successful, False otherwise
         """
         try:
-            # Convert to 0-based indexing
+            # Convert to 0-based
             start = int(start_line) - 1
             end = int(end_line) - 1
             
             self.editor.ai_explain(start, end)
             return True
-        except ValueError:
-            self.editor.set_status_message("Invalid line numbers")
+        except Exception as e:
+            self.editor.set_status_message(f"Error executing explain command: {str(e)}")
             return False
     
     def _cmd_improve(self, start_line: str, end_line: str) -> bool:
@@ -150,14 +164,14 @@ class CommandHandler:
             True if successful, False otherwise
         """
         try:
-            # Convert to 0-based indexing
+            # Convert to 0-based
             start = int(start_line) - 1
             end = int(end_line) - 1
             
             self.editor.ai_improve(start, end)
             return True
-        except ValueError:
-            self.editor.set_status_message("Invalid line numbers")
+        except Exception as e:
+            self.editor.set_status_message(f"Error executing improve command: {str(e)}")
             return False
     
     def _cmd_generate(self, start_line: str, description: str) -> bool:
@@ -172,14 +186,13 @@ class CommandHandler:
             True if successful, False otherwise
         """
         try:
-            # Convert to 0-based indexing
+            # Convert to 0-based
             start = int(start_line) - 1
             
-            # Call ai_generate with the starting line and description
             self.editor.ai_generate(start, description)
             return True
-        except ValueError:
-            self.editor.set_status_message("Invalid line number")
+        except Exception as e:
+            self.editor.set_status_message(f"Error executing generate command: {str(e)}")
             return False
     
     def _cmd_ai_query(self, query: str) -> bool:
@@ -192,8 +205,12 @@ class CommandHandler:
         Returns:
             True if successful, False otherwise
         """
-        self.editor.ai_custom_query(query)
-        return True
+        try:
+            self.editor.ai_custom_query(query)
+            return True
+        except Exception as e:
+            self.editor.set_status_message(f"Error executing AI query: {str(e)}")
+            return False
     
     def _cmd_set_option(self, option: str) -> bool:
         """
@@ -205,9 +222,9 @@ class CommandHandler:
         Returns:
             True if successful, False otherwise
         """
-        # Not implemented yet, but could be used for editor settings
+        # Not yet implemented
         self.editor.set_status_message(f"Option setting not implemented: {option}")
-        return True
+        return False
     
     def _cmd_help(self) -> bool:
         """
@@ -218,23 +235,32 @@ class CommandHandler:
         """
         help_text = [
             "AIVim Commands:",
-            "  :w                   - Write file",
-            "  :w filename          - Write to filename",
-            "  :q                   - Quit",
-            "  :wq                  - Write and quit",
-            "  :q!                  - Force quit",
-            "  :explain m n         - Explain lines m through n",
-            "  :improve m n         - Improve lines m through n",
-            "  :generate line desc  - Generate code at line based on description",
-            "  :ai query            - Send custom query to AI",
-            "  :help                - Show this help",
+            "",
+            "File Operations:",
+            "  :w             - Save the current file",
+            "  :w filename    - Save as filename",
+            "  :q             - Quit (fails if unsaved changes)",
+            "  :q!            - Force quit (discard changes)",
+            "  :wq            - Save and quit",
+            "",
+            "AI Commands:",
+            "  :explain s e   - Explain lines s through e",
+            "  :improve s e   - Improve code from lines s through e",
+            "  :generate l d  - Generate code at line l based on description d",
+            "  :ai query      - Ask AI about the current code",
             "",
             "Navigation:",
-            "  Ctrl+Left/Right - Navigate AI version history",
+            "  h,j,k,l        - Move cursor left, down, up, right",
+            "  i              - Enter insert mode",
+            "  Esc            - Return to normal mode",
+            "  v              - Enter visual mode for selection",
             "",
-            "Press any key to continue..."
+            "Normal Mode:",
+            "  dd             - Delete current line",
+            "  p              - Paste after cursor",
+            "  u              - Undo",
+            "  Ctrl+r         - Redo",
         ]
         
-        # In a real implementation, we would display this in a scrollable window
-        self.editor.set_status_message("\n".join(help_text[:3]) + "...")
+        self.editor.display.show_dialog("Help", help_text)
         return True
