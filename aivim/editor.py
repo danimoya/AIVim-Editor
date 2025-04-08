@@ -1000,17 +1000,32 @@ class Editor:
                     "metadata": metadata
                 }
                 
-                # Show diff in a dialog with explanation in a separate view if available
+                # Prepare all views needed for the multi-view dialog
                 if self.display:
-                    explanation_lines = None
+                    # Original code view
+                    original_code_lines = code.split("\n")
+                    
+                    # Improved code view
+                    improved_code_lines = improved_code.split("\n")
+                    
+                    # Diff view (showing changes)
                     
                     # Extract explanation if available
+                    explanation_lines = None
                     if improvement != improved_code:
                         explanation_lines = [line for line in improvement.split("\n") 
                                            if not line.strip().startswith("```")]
                     
-                    # Show diff dialog with the explanation as a separate view
-                    self.display.show_diff_dialog("Code Improvement Diff", diff_lines, explanation_lines)
+                    # Show multi-view dialog with all available views
+                    self.display.show_multi_view_dialog(
+                        views=[
+                            {"title": "Original Code", "content": original_code_lines},
+                            {"title": "AI Improved Code", "content": improved_code_lines},
+                            {"title": "Code Improvement Diff", "content": diff_lines},
+                        ],
+                        explanation=explanation_lines,
+                        default_view=1  # Show the AI Improved Code by default
+                    )
                 
                 # Set status message to prompt user for confirmation
                 self.set_status_message(f"Review changes and use :y to accept or :n to reject ({len(improved_lines)} lines)")

@@ -4,7 +4,7 @@ Display handling for AIVim
 import curses
 import time
 import threading
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict, Any
 
 from aivim.utils import split_diff_line
 
@@ -413,7 +413,63 @@ class Display:
         """Check if a dialog is currently open"""
         return self.dialog_win is not None
         
-    def show_diff_dialog(self, title: str, diff_lines: List[str], explanation: List[str] = None) -> None:
+    def show_multi_view_dialog(self, views: List[Dict[str, Any]], explanation: Optional[List[str]] = None, default_view: int = 0) -> None:
+        """
+        Show a multi-view dialog with different content in each view
+        
+        Args:
+            views: List of view dictionaries with 'title' and 'content' keys
+            explanation: Optional explanation to add as an additional view
+            default_view: Index of the view to show initially (default is 0)
+        """
+        self.dialog_views = []
+        self.dialog_view_titles = []
+        
+        # Process the diff view specially (it needs colorizing)
+        diff_view_index = None
+        diff_colorized_content = None
+        
+        # Add all the views
+        for i, view in enumerate(views):
+            title = view.get('title', f"View {i+1}")
+            content = view.get('content', [])
+            
+            # Check if this is a diff view that needs special handling
+            if "diff" in title.lower():
+                diff_view_index = i
+                # Convert diff lines to colorized format for display
+                colorized_content = []
+                for line in content:
+                    diff_type, line_content = split_diff_line(line)
+                    colorized_content.append((diff_type, line_content))
+                
+                self.dialog_views.append([content for _, content in colorized_content])
+                diff_colorized_content = colorized_content
+            else:
+                self.dialog_views.append(content)
+            
+            self.dialog_view_titles.append(title)
+        
+        # Add explanation as a separate view if provided
+        if explanation and len(explanation) > 0:
+            self.dialog_views.append(explanation)
+            self.dialog_view_titles.append("Explanation")
+        
+        # Set the current view
+        self.current_view_index = min(default_view, len(self.dialog_views) - 1) if self.dialog_views else 0
+        self.dialog_content = self.dialog_views[self.current_view_index] if self.dialog_views else []
+        self.dialog_scroll_position = 0
+        
+        # Setup and draw the dialog
+        self._setup_dialog_window()
+        
+        # Check if the current view is the diff view
+        if diff_view_index is not None and self.current_view_index == diff_view_index:
+            self._draw_diff_dialog(self.dialog_view_titles[self.current_view_index], diff_colorized_content)
+        else:
+            self._draw_dialog(self.dialog_view_titles[self.current_view_index])
+    
+    def show_diff_dialog(self, title: str, diff_lines: List[str], explanation: Optional[List[str]] = None) -> None:
         """
         Show a dialog box with diff content and optionally an explanation in separate views
         
@@ -422,29 +478,11 @@ class Display:
             diff_lines: List of formatted diff lines (from utils.create_diff)
             explanation: Optional explanation of the changes to show in a separate view
         """
-        # Convert diff lines to colorized format for display
-        colorized_content = []
-        for line in diff_lines:
-            diff_type, content = split_diff_line(line)
-            colorized_content.append((diff_type, content))
-            
-        self.dialog_content = [content for _, content in colorized_content]
-        self.dialog_views = [self.dialog_content]
-        self.dialog_view_titles = ["Code improvement diff"]
-        self.current_view_index = 0
+        views = [{"title": title, "content": diff_lines}]
+        default_view = 0
         
-        # Add explanation as a separate view if provided
-        if explanation and len(explanation) > 0:
-            self.dialog_views.append(explanation)
-            self.dialog_view_titles.append("Code improvement explanation")
-            
-        self._setup_dialog_window()
-        
-        # Use different drawing method based on the current view
-        if self.current_view_index == 0:  # Show diff view
-            self._draw_diff_dialog(self.dialog_view_titles[0], colorized_content)
-        else:  # Show explanation view
-            self._draw_dialog(self.dialog_view_titles[self.current_view_index])
+        # Use the new multi-view dialog method
+        self.show_multi_view_dialog(views, explanation, default_view)
         
     def show_confirmation_dialog(self, title: str, message: List[str]) -> bool:
         """
@@ -495,14 +533,18 @@ class Display:
                 self.close_dialog()
                 return False
     
-    def _draw_diff_dialog(self, title: str, colorized_content: List[Tuple[str, str]]) -> None:
+    def _draw_diff_dialog(self, title: str, colorized_content: Optional[List[Tuple[str, str]]]) -> None:
         """
         Draw the dialog with diff content
         
         Args:
             title: Dialog title
-            colorized_content: List of (diff_type, content) tuples
+            colorized_content: List of (diff_type, content) tuples or None
         """
+        if colorized_content is None:
+            # If no content is provided, fall back to regular dialog
+            self._draw_dialog(title)
+            return
         self.dialog_win.clear()
         self.dialog_win.bkgd(' ', self.COLOR_DIALOG)
         
