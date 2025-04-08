@@ -1,15 +1,22 @@
 """
-AI services for AIVim using OpenAI's API
+AI services for AIVim using multiple AI providers including OpenAI, Anthropic, and local LLMs
 """
 import logging
 import os
-from typing import Optional
+import time
+from typing import Optional, Dict, Any
 
 try:
     from openai import OpenAI
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
+
+try:
+    from llama_cpp import Llama
+    LLAMA_AVAILABLE = True
+except ImportError:
+    LLAMA_AVAILABLE = False
 
 
 class AIService:
@@ -25,6 +32,10 @@ class AIService:
         # Anthropic setup
         self.anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY")
         self.anthropic_client = None
+        
+        # Local LLM setup
+        self.llama_model_path = os.environ.get("LLAMA_MODEL_PATH")
+        self.local_llm = None
         
         # Default model provider
         self.current_model = "openai"  # Options: "openai", "claude", "local"
@@ -61,6 +72,53 @@ class AIService:
         except ImportError:
             logging.warning("Anthropic package not installed. Claude features will not work.")
             
+        # Initialize Local LLM (llama.cpp)
+        if LLAMA_AVAILABLE:
+            # Try to load a default model if path is not provided
+            model_path = self.llama_model_path
+            if not model_path:
+                # First check for models in common locations
+                possible_paths = [
+                    os.path.expanduser("~/.local/share/llama.cpp/models"),
+                    os.path.expanduser("~/models"),
+                    "./models"
+                ]
+                
+                # Names of popular open models to check for
+                model_names = [
+                    "llama-2-7b-chat.gguf",
+                    "ggml-model-q4_0.bin",
+                    "mistral-7b-instruct-v0.1.Q4_0.gguf",
+                    "llama-2-13b-chat.gguf"
+                ]
+                
+                # Search for models
+                for path in possible_paths:
+                    if os.path.exists(path):
+                        for model in model_names:
+                            model_path = os.path.join(path, model)
+                            if os.path.exists(model_path):
+                                logging.info(f"Found local model: {model_path}")
+                                break
+                    if model_path:
+                        break
+            
+            if model_path and os.path.exists(model_path):
+                try:
+                    # Initialize with minimal settings
+                    self.local_llm = Llama(
+                        model_path=model_path,
+                        n_ctx=2048,      # Context window size
+                        n_threads=4      # Number of CPU threads to use
+                    )
+                    logging.info(f"Local LLM initialized with model: {model_path}")
+                except Exception as e:
+                    logging.error(f"Error initializing local LLM: {str(e)}")
+            else:
+                logging.warning("No local model found. Set LLAMA_MODEL_PATH environment variable to use local LLM.")
+        else:
+            logging.warning("llama-cpp-python package not installed. Local LLM features will not work.")
+            
     def set_model(self, model_name: str) -> bool:
         """
         Set the AI model provider to use
@@ -78,6 +136,12 @@ class AIService:
             return False
         elif model_name == "claude" and not self.anthropic_client:
             logging.error("Claude client not available. Check API key and package installation.")
+            return False
+        elif model_name == "local" and not self.local_llm:
+            if not LLAMA_AVAILABLE:
+                logging.error("Local LLM not available. Please install llama-cpp-python package.")
+            else:
+                logging.error("Local LLM not initialized. Set LLAMA_MODEL_PATH environment variable.")
             return False
         elif model_name not in ["openai", "claude", "local"]:
             logging.error(f"Unknown model: {model_name}")
@@ -156,10 +220,48 @@ class AIService:
             return f"Error: {str(e)}"
         
     def _local_completion(self, system_prompt: str, user_prompt: str) -> Optional[str]:
-        """Create a completion using a local model"""
-        # This is a simplified placeholder. In a real implementation, this would 
-        # connect to a local model server or library like llama.cpp
-        return f"Local AI response to: {user_prompt[:30]}... (Local AI not yet implemented)"
+        """Create a completion using a local model with llama.cpp"""
+        if not LLAMA_AVAILABLE:
+            return "llama-cpp-python package not installed. Please install it with 'pip install llama-cpp-python'."
+            
+        if not self.local_llm:
+            return ("Local LLM not initialized. Please set LLAMA_MODEL_PATH environment variable "
+                   "or place a supported model in ./models directory.")
+            
+        try:
+            # Format the prompt in a chat-like format that local models can understand
+            formatted_prompt = f"""
+<|system|>
+{system_prompt}
+<|user|>
+{user_prompt}
+<|assistant|>
+"""
+            # Generate completion with the local model
+            start_time = time.time()
+            logging.info("Starting local LLM inference...")
+            
+            # Use the llama.cpp API to generate text
+            output = self.local_llm(
+                formatted_prompt,
+                max_tokens=1000,
+                stop=["<|user|>", "<|system|>"],  # Stop tokens
+                echo=False,            # Don't echo the prompt
+                temperature=0.2,       # Lower temp for more deterministic outputs
+                top_p=0.95,            # Nucleus sampling for more focused outputs
+                repeat_penalty=1.1     # Slight penalty for repetition
+            )
+            
+            # Extract the generated text from the model output
+            response = output["choices"][0]["text"].strip()
+            
+            elapsed_time = time.time() - start_time
+            logging.info(f"Local LLM inference completed in {elapsed_time:.2f} seconds.")
+            
+            return response
+        except Exception as e:
+            logging.error(f"Local LLM error: {str(e)}")
+            return f"Error using local LLM: {str(e)}"
     
     def get_explanation(self, code: str, context: str) -> str:
         """
