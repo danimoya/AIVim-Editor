@@ -1,27 +1,63 @@
 """
 AI services for AIVim using OpenAI's API
 """
+import logging
 import os
-import json
-from typing import Optional, Dict, Any, List
+from typing import Optional
 
 from openai import OpenAI
+
 
 class AIService:
     """
     Service for interacting with AI models
     """
     def __init__(self):
-        # Get API key from environment variable
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY environment variable not set")
+        """Initialize AI service"""
+        self.api_key = os.environ.get("OPENAI_API_KEY")
         
-        # Initialize OpenAI client
-        # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
-        # do not change this unless explicitly requested by the user
-        self.client = OpenAI(api_key=api_key)
-        self.model = "gpt-4o"
+        if not self.api_key:
+            logging.warning("OPENAI_API_KEY environment variable not set. AI features will not work.")
+            self.client = None
+        else:
+            try:
+                self.client = OpenAI(api_key=self.api_key)
+                logging.info("OpenAI client initialized successfully")
+            except Exception as e:
+                logging.error(f"Failed to initialize OpenAI client: {str(e)}")
+                self.client = None
+    
+    def _create_completion(self, system_prompt: str, user_prompt: str) -> Optional[str]:
+        """
+        Create an AI completion using OpenAI
+        
+        Args:
+            system_prompt: System instructions
+            user_prompt: User query
+            
+        Returns:
+            Generated text or None if the request failed
+        """
+        if not self.client:
+            return "AI services unavailable. Please set OPENAI_API_KEY environment variable."
+        
+        try:
+            # Use the gpt-4o model released after the knowledge cutoff
+            # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
+            # do not change this unless explicitly requested by the user
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.2,
+                max_tokens=1000
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            logging.error(f"OpenAI API error: {str(e)}")
+            return f"Error: {str(e)}"
     
     def get_explanation(self, code: str, context: str) -> str:
         """
@@ -34,34 +70,29 @@ class AIService:
         Returns:
             A detailed explanation of the code
         """
-        prompt = f"""
-        Please explain the following code in detail. Focus on what the code does, 
-        its purpose, and any interesting or complex aspects:
+        system_prompt = (
+            "You are an expert code analyst. "
+            "Provide a detailed explanation of the provided code, "
+            "including its purpose, how it works, and any potential issues. "
+            "Focus on clarity and depth of explanation."
+        )
+        
+        user_prompt = f"""
+# Code to explain:
+```
+{code}
+```
 
-        ```
-        {code}
-        ```
+# Context (surrounding code):
+```
+{context}
+```
+
+Please explain this code in detail.
+"""
         
-        Here is the surrounding context for reference:
-        
-        ```
-        {context}
-        ```
-        
-        Provide a clear, concise explanation that would help someone understand this code.
-        """
-        
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": "You are a helpful code assistant that explains code clearly and concisely."},
-                    {"role": "user", "content": prompt}
-                ]
-            )
-            return response.choices[0].message.content
-        except Exception as e:
-            return f"Error getting explanation: {str(e)}"
+        explanation = self._create_completion(system_prompt, user_prompt)
+        return explanation or "Failed to generate explanation."
     
     def get_improvement(self, code: str, context: str) -> str:
         """
@@ -74,55 +105,30 @@ class AIService:
         Returns:
             An improved version of the code
         """
-        prompt = f"""
-        Please improve the following code. Maintain the same functionality, but make it more:
-        - Efficient
-        - Readable
-        - Maintainable
-        - Robust (with proper error handling)
+        system_prompt = (
+            "You are an expert code improver. "
+            "Analyze the provided code and suggest improvements. "
+            "Maintain the original functionality while making enhancements for: "
+            "performance, readability, maintainability, or error handling. "
+            "Provide both the improved code and explanation of changes."
+        )
+        
+        user_prompt = f"""
+# Code to improve:
+```
+{code}
+```
 
-        Original code:
-        ```
-        {code}
-        ```
+# Context (surrounding code):
+```
+{context}
+```
+
+Please provide an improved version of this code along with an explanation of the improvements.
+"""
         
-        Here is the surrounding context for reference:
-        
-        ```
-        {context}
-        ```
-        
-        Return only the improved code without any explanations.
-        """
-        
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": "You are a helpful code assistant that improves code quality."},
-                    {"role": "user", "content": prompt}
-                ]
-            )
-            
-            content = response.choices[0].message.content
-            
-            # Try to extract just the code part (remove any markdown code blocks if present)
-            if "```" in content:
-                # Find first and last code block indicators
-                start = content.find("```") + 3
-                # Skip language identifier line if present
-                if "\n" in content[start:]:
-                    start = content.find("\n", start) + 1
-                end = content.rfind("```")
-                
-                # Extract only the code
-                if start < end:
-                    return content[start:end].strip()
-            
-            return content
-            
-        except Exception as e:
-            return f"Error improving code: {str(e)}"
+        improvement = self._create_completion(system_prompt, user_prompt)
+        return improvement or "Failed to generate improvement."
     
     def generate_code(self, specification: str, context: str) -> str:
         """
@@ -135,52 +141,28 @@ class AIService:
         Returns:
             Generated code based on the specification
         """
-        prompt = f"""
-        Please generate code based on the following specification or comments:
+        system_prompt = (
+            "You are an expert code generator. "
+            "Generate high-quality, efficient code based on the specification. "
+            "Ensure the generated code fits well with the provided context. "
+            "Focus on correctness, efficiency, and readability. "
+            "Include helpful comments where appropriate."
+        )
         
-        ```
-        {specification}
-        ```
+        user_prompt = f"""
+# Specification:
+{specification}
+
+# Context (surrounding code):
+```
+{context}
+```
+
+Please generate code that meets this specification and fits well with the context.
+"""
         
-        Here is the surrounding context for reference:
-        
-        ```
-        {context}
-        ```
-        
-        Return only the generated code without any explanations.
-        Use the appropriate programming language based on the context.
-        Match the coding style of the surrounding code.
-        """
-        
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": "You are a helpful code assistant that generates high-quality code."},
-                    {"role": "user", "content": prompt}
-                ]
-            )
-            
-            content = response.choices[0].message.content
-            
-            # Try to extract just the code part (remove any markdown code blocks if present)
-            if "```" in content:
-                # Find first and last code block indicators
-                start = content.find("```") + 3
-                # Skip language identifier line if present
-                if "\n" in content[start:]:
-                    start = content.find("\n", start) + 1
-                end = content.rfind("```")
-                
-                # Extract only the code
-                if start < end:
-                    return content[start:end].strip()
-            
-            return content
-            
-        except Exception as e:
-            return f"Error generating code: {str(e)}"
+        generated_code = self._create_completion(system_prompt, user_prompt)
+        return generated_code or "Failed to generate code."
     
     def custom_query(self, query: str, context: str) -> str:
         """
@@ -193,26 +175,25 @@ class AIService:
         Returns:
             The AI's response to the query
         """
-        prompt = f"""
-        Here is some code for context:
+        system_prompt = (
+            "You are an expert programming assistant. "
+            "Answer the user's query about their code accurately and helpfully. "
+            "If the query is unclear, ask for clarification. "
+            "Provide factual, specific information without making assumptions. "
+            "When relevant, include code examples."
+        )
         
-        ```
-        {context}
-        ```
+        user_prompt = f"""
+# Query:
+{query}
+
+# Code context:
+```
+{context}
+```
+
+Please respond to this query considering the code context.
+"""
         
-        Please answer the following question about the code:
-        {query}
-        """
-        
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": "You are a helpful code assistant that can answer questions about code."},
-                    {"role": "user", "content": prompt}
-                ]
-            )
-            return response.choices[0].message.content
-        except Exception as e:
-            return f"Error processing query: {str(e)}"
-        
+        response = self._create_completion(system_prompt, user_prompt)
+        return response or "Failed to process query."

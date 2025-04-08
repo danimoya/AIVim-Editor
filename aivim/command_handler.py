@@ -35,7 +35,7 @@ class CommandHandler:
             r'^q!$': self._cmd_force_quit,
             r'^explain\s+(\d+)\s+(\d+)$': self._cmd_explain,
             r'^improve\s+(\d+)\s+(\d+)$': self._cmd_improve,
-            r'^generate\s+(\d+)\s+(\d+)$': self._cmd_generate,
+            r'^generate\s+(\d+)\s+(.+)$': self._cmd_generate,
             r'^ai\s+(.+)$': self._cmd_ai_query,
             r'^set\s+(.+)$': self._cmd_set_option,
             r'^help$': self._cmd_help,
@@ -160,13 +160,13 @@ class CommandHandler:
             self.editor.set_status_message("Invalid line numbers")
             return False
     
-    def _cmd_generate(self, start_line: str, end_line: str) -> bool:
+    def _cmd_generate(self, start_line: str, description: str) -> bool:
         """
-        Handle the generate command (:generate start end).
+        Handle the generate command (:generate line_number description).
 
         Args:
-            start_line: Starting line number (1-based)
-            end_line: Ending line number (1-based)
+            start_line: Starting line number for insertion (1-based)
+            description: Description of what code to generate
 
         Returns:
             True if successful, False otherwise
@@ -174,12 +174,12 @@ class CommandHandler:
         try:
             # Convert to 0-based indexing
             start = int(start_line) - 1
-            end = int(end_line) - 1
             
-            self.editor.ai_generate(start, end)
+            # Call ai_generate with the starting line and description
+            self.editor.ai_generate(start, description)
             return True
         except ValueError:
-            self.editor.set_status_message("Invalid line numbers")
+            self.editor.set_status_message("Invalid line number")
             return False
     
     def _cmd_ai_query(self, query: str) -> bool:
@@ -218,16 +218,16 @@ class CommandHandler:
         """
         help_text = [
             "AIVim Commands:",
-            "  :w             - Write file",
-            "  :w filename    - Write to filename",
-            "  :q             - Quit",
-            "  :wq            - Write and quit",
-            "  :q!            - Force quit",
-            "  :explain m n   - Explain lines m through n",
-            "  :improve m n   - Improve lines m through n",
-            "  :generate m n  - Generate code based on lines m through n",
-            "  :ai query      - Send custom query to AI",
-            "  :help          - Show this help",
+            "  :w                   - Write file",
+            "  :w filename          - Write to filename",
+            "  :q                   - Quit",
+            "  :wq                  - Write and quit",
+            "  :q!                  - Force quit",
+            "  :explain m n         - Explain lines m through n",
+            "  :improve m n         - Improve lines m through n",
+            "  :generate line desc  - Generate code at line based on description",
+            "  :ai query            - Send custom query to AI",
+            "  :help                - Show this help",
             "",
             "Navigation:",
             "  Ctrl+Left/Right - Navigate AI version history",

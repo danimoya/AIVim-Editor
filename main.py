@@ -1,51 +1,101 @@
 #!/usr/bin/env python3
 """
 AIVim - An AI-enhanced version of Vim implemented in Python
+Web interface for launching the editor from a browser
 """
-import os
-import sys
-import curses
 import argparse
+import curses
+import logging
+import os
+import subprocess
+import sys
+import threading
 from typing import Optional
-from flask import Flask, render_template, request, jsonify
+
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 
 from aivim.editor import Editor
-from aivim.utils import run_with_curses
-from aivim.ai_service import AIService
 
-# Create Flask app for web interface
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+
+# Create Flask app
 app = Flask(__name__)
+app.secret_key = os.environ.get("SESSION_SECRET", "aivim-development-key")
 
+
+# Routes for web interface
+@app.route('/')
+def index():
+    """Home page"""
+    return render_template('index.html')
+
+
+@app.route('/launch', methods=['POST'])
+def launch():
+    """Launch AIVim with a specified file"""
+    filename = request.form.get('filename')
+    if not filename:
+        flash('Please specify a filename', 'error')
+        return redirect(url_for('index'))
+    
+    # Launch AIVim in a terminal window
+    try:
+        cmd = [sys.executable, 'run_editor.py', filename]
+        subprocess.Popen(cmd)
+        flash(f'AIVim launched with file: {filename}', 'success')
+    except Exception as e:
+        flash(f'Error launching AIVim: {str(e)}', 'error')
+    
+    return redirect(url_for('index'))
+
+
+@app.route('/api/check-openai-key')
+def check_openai_key():
+    """Check if OpenAI API key is configured"""
+    api_key_exists = bool(os.environ.get("OPENAI_API_KEY"))
+    return jsonify({
+        'api_key_exists': api_key_exists
+    })
+
+
+# Command-line interface functions
 def parse_arguments():
     """Parse command line arguments"""
-    parser = argparse.ArgumentParser(description='AIVim - AI-enhanced Vim clone')
-    parser.add_argument('filename', nargs='?', help='File to edit')
-    parser.add_argument('--version', action='store_true', help='Show version information')
+    parser = argparse.ArgumentParser(
+        description="AIVim - AI-enhanced Vim editor"
+    )
+    parser.add_argument(
+        "filename", nargs="?", default=None,
+        help="File to edit (if not specified, opens an empty buffer)"
+    )
     return parser.parse_args()
 
 
 def check_environment():
     """Check if the environment is properly set up"""
-    # Check for OpenAI API key
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        print("Warning: OPENAI_API_KEY environment variable not set.")
-        print("AI functionality will not work without an API key.")
-        print("Please set the OPENAI_API_KEY environment variable.")
-        print("Example: export OPENAI_API_KEY=your_api_key_here")
-        
-        # Ask if user wants to continue anyway
-        response = input("Continue without AI functionality? (y/n): ")
-        if response.lower() != 'y':
-            sys.exit(1)
+    # Check for OPENAI_API_KEY
+    if not os.environ.get("OPENAI_API_KEY"):
+        print("Warning: OPENAI_API_KEY environment variable is not set.")
+        print("AI features will not work without an OpenAI API key.")
+        print("Set the environment variable with: export OPENAI_API_KEY=your_key")
+        return False
+    return True
 
 
 def start_editor(stdscr, filename: Optional[str] = None):
     """Initialize and start the editor"""
-    # Create editor instance
-    editor = Editor(filename)
+    # Enable logging
+    logging.basicConfig(
+        filename="aivim.log",
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
     
-    # Start the editor
+    editor = Editor(filename)
     editor.start(stdscr)
 
 
@@ -56,116 +106,16 @@ def embed_editor(filename: Optional[str] = None):
     Args:
         filename: Optional file to edit
     """
-    run_with_curses(lambda stdscr: start_editor(stdscr, filename))
+    curses.wrapper(start_editor, filename)
 
 
-# API routes for web interface
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-
-@app.route('/api/explain', methods=['POST'])
-def api_explain():
-    try:
-        data = request.json
-        code = data.get('code', '')
-        context = data.get('context', '')
-        
-        service = AIService()
-        explanation = service.get_explanation(code, context)
-        
-        return jsonify({
-            'success': True,
-            'explanation': explanation
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-@app.route('/api/improve', methods=['POST'])
-def api_improve():
-    try:
-        data = request.json
-        code = data.get('code', '')
-        context = data.get('context', '')
-        
-        service = AIService()
-        improved_code = service.get_improvement(code, context)
-        
-        return jsonify({
-            'success': True,
-            'improved_code': improved_code
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-@app.route('/api/generate', methods=['POST'])
-def api_generate():
-    try:
-        data = request.json
-        specification = data.get('specification', '')
-        context = data.get('context', '')
-        
-        service = AIService()
-        generated_code = service.generate_code(specification, context)
-        
-        return jsonify({
-            'success': True,
-            'generated_code': generated_code
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-@app.route('/api/query', methods=['POST'])
-def api_query():
-    try:
-        data = request.json
-        query = data.get('query', '')
-        context = data.get('context', '')
-        
-        service = AIService()
-        response = service.custom_query(query, context)
-        
-        return jsonify({
-            'success': True,
-            'response': response
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-def main():
-    """Main entry point for AIVim"""
-    # Parse command line arguments
+def cli_main():
+    """Main entry point for AIVim from command line"""
     args = parse_arguments()
-    
-    # Show version if requested
-    if args.version:
-        from aivim import __version__
-        print(f"AIVim version {__version__}")
-        sys.exit(0)
-    
-    # Check environment
     check_environment()
-    
-    # Start the editor
-    run_with_curses(lambda stdscr: start_editor(stdscr, args.filename))
+    curses.wrapper(start_editor, args.filename)
 
 
 if __name__ == "__main__":
-    main()
+    # Run the web app when executed directly
+    app.run(host="0.0.0.0", port=5000, debug=True)

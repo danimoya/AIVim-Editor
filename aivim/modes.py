@@ -1,14 +1,12 @@
 """
 Mode definitions for AIVim
 """
-from enum import Enum, auto
+from enum import Enum
 
 
 class Mode(Enum):
-    """
-    Editor modes, similar to standard Vim modes
-    """
-    NORMAL = auto()   # Default mode for navigation and commands
-    INSERT = auto()   # Mode for inserting text
-    VISUAL = auto()   # Mode for selecting text
-    COMMAND = auto()  # Mode for entering commands
+    """Editor operating modes"""
+    NORMAL = 1  # Default mode for navigation and commands
+    INSERT = 2  # Mode for inserting text
+    VISUAL = 3  # Mode for selecting text
+    COMMAND = 4  # Mode for entering commands in the command line

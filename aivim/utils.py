@@ -1,95 +1,125 @@
 """
 Utility functions for AIVim
 """
-import os
-import sys
 import curses
-from typing import Optional, Callable, Any
+from typing import List, Dict, Any, Optional
 
 
-def safe_exit(stdscr: Optional[Any] = None) -> None:
+def clamp(value: int, min_val: int, max_val: int) -> int:
     """
-    Safely exit the application, restoring terminal state
+    Clamp a value between a minimum and maximum
     
     Args:
-        stdscr: The curses standard screen object, if available
-    """
-    if stdscr:
-        # End curses
-        stdscr.keypad(False)
-        curses.nocbreak()
-        curses.echo()
-        curses.endwin()
-    
-    # Exit the program
-    sys.exit(0)
-
-
-def get_file_type(filename: str) -> str:
-    """
-    Determine the type of file based on extension
-    
-    Args:
-        filename: The name of the file
+        value: The value to clamp
+        min_val: The minimum allowed value
+        max_val: The maximum allowed value
         
     Returns:
-        A string representing the file type
+        The clamped value
     """
-    if not filename:
-        return "unknown"
-    
-    _, ext = os.path.splitext(filename)
-    ext = ext.lower()
-    
-    file_types = {
-        '.py': 'python',
-        '.js': 'javascript',
-        '.html': 'html',
-        '.css': 'css',
-        '.json': 'json',
-        '.md': 'markdown',
-        '.txt': 'text',
-    }
-    
-    return file_types.get(ext, "unknown")
+    return max(min_val, min(value, max_val))
 
 
-def run_with_curses(func: Callable) -> None:
+def merge_dicts(dict1: Dict[str, Any], dict2: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Run a function with properly initialized curses environment
+    Merge two dictionaries with dict2 taking precedence
     
     Args:
-        func: The function to run with curses
+        dict1: First dictionary
+        dict2: Second dictionary (will override dict1 values)
+        
+    Returns:
+        Merged dictionary
+    """
+    result = dict1.copy()
+    result.update(dict2)
+    return result
+
+
+def get_color_pair(fg_color: int, bg_color: int) -> int:
+    """
+    Get or create a curses color pair
+    
+    Args:
+        fg_color: Foreground color
+        bg_color: Background color
+        
+    Returns:
+        Color pair number
+    """
+    # Use a hash of the color combination to create a unique identifier
+    pair_id = (fg_color * 10 + bg_color) % curses.COLOR_PAIRS
+    
+    # Initialize the color pair
+    try:
+        curses.init_pair(pair_id, fg_color, bg_color)
+    except Exception:
+        pass  # Color already defined or terminal doesn't support color
+    
+    return pair_id
+
+
+def tokenize_command(command: str) -> List[str]:
+    """
+    Tokenize a command string, respecting quoted strings
+    
+    Args:
+        command: The command string
+        
+    Returns:
+        List of command tokens
+    """
+    tokens = []
+    current_token = ""
+    in_quotes = False
+    quote_char = None
+    
+    for char in command:
+        if char in ['"', "'"]:
+            if not in_quotes:
+                # Start of quoted string
+                in_quotes = True
+                quote_char = char
+            elif char == quote_char:
+                # End of quoted string
+                in_quotes = False
+                quote_char = None
+            else:
+                # Different quote character within quoted string
+                current_token += char
+        elif char.isspace() and not in_quotes:
+            # Space outside quotes - end of token
+            if current_token:
+                tokens.append(current_token)
+                current_token = ""
+        else:
+            # Regular character
+            current_token += char
+    
+    # Add final token if any
+    if current_token:
+        tokens.append(current_token)
+    
+    return tokens
+
+
+def parse_line_range(start_str: str, end_str: Optional[str] = None) -> tuple[int, int]:
+    """
+    Parse a line range specification
+    
+    Args:
+        start_str: Start line number as string (1-based)
+        end_str: End line number as string (1-based)
+        
+    Returns:
+        Tuple of (start, end) line numbers (0-based)
     """
     try:
-        # Initialize curses
-        stdscr = curses.initscr()
-        curses.noecho()
-        curses.cbreak()
-        stdscr.keypad(True)
-        
-        # Run the function
-        func(stdscr)
-    except Exception as e:
-        # Make sure to restore terminal state on error
-        safe_exit(stdscr)
-        raise e
-    finally:
-        # Clean up curses
-        safe_exit(stdscr)
-
-
-def is_executable(filename: str) -> bool:
-    """
-    Check if a file is executable
-    
-    Args:
-        filename: The name of the file to check
-        
-    Returns:
-        True if the file is executable, False otherwise
-    """
-    if not os.path.isfile(filename):
-        return False
-    
-    return os.access(filename, os.X_OK)
+        start = int(start_str) - 1  # Convert to 0-based
+        if end_str:
+            end = int(end_str) - 1  # Convert to 0-based
+        else:
+            end = start
+        return start, end
+    except ValueError:
+        return -1, -1  # Invalid input

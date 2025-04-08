@@ -1,7 +1,7 @@
 """
 Buffer implementation for AIVim
 """
-from typing import List, Tuple, Optional
+from typing import List, Optional, Tuple
 
 
 class Buffer:
@@ -9,10 +9,11 @@ class Buffer:
     Represents an editing buffer that holds text content
     """
     def __init__(self):
-        self._lines: List[str] = [""]
-        self._modified: bool = False
-        self._selection_start: Optional[Tuple[int, int]] = None
-        self._selection_end: Optional[Tuple[int, int]] = None
+        """Initialize an empty buffer"""
+        self._lines = [""]
+        self._modified = False
+        self._selection_start = None
+        self._selection_end = None
     
     def get_lines(self) -> List[str]:
         """Get all lines in the buffer"""
@@ -39,11 +40,11 @@ class Buffer:
     def delete_line(self, index: int) -> None:
         """Delete the line at the specified index"""
         if 0 <= index < len(self._lines):
-            self._lines.pop(index)
-            self._modified = True
-            # Ensure there's always at least one line
+            del self._lines[index]
+            # Ensure buffer always has at least one line
             if not self._lines:
                 self._lines = [""]
+            self._modified = True
     
     def get_content(self) -> str:
         """Get the entire buffer content as a string"""
@@ -51,15 +52,17 @@ class Buffer:
     
     def set_content(self, content: str) -> None:
         """Set the entire buffer content"""
-        self._lines = content.split("\n")
-        if not self._lines:
+        if content:
+            self._lines = content.split("\n")
+        else:
             self._lines = [""]
-        self._modified = False
+        self._modified = True
     
     def set_lines(self, lines: List[str]) -> None:
         """Set all lines in the buffer"""
-        self._lines = lines.copy()
-        if not self._lines:
+        if lines:
+            self._lines = lines
+        else:
             self._lines = [""]
         self._modified = True
     
@@ -88,27 +91,33 @@ class Buffer:
     
     def get_selection(self) -> Tuple[Optional[Tuple[int, int]], Optional[Tuple[int, int]]]:
         """Get the current selection start and end points"""
-        return (self._selection_start, self._selection_end)
+        return self._selection_start, self._selection_end
     
     def get_selection_text(self) -> str:
         """Get the text in the current selection"""
         if not self._selection_start or not self._selection_end:
             return ""
         
+        # Sort selection points to get proper range
         start_y, start_x = self._selection_start
         end_y, end_x = self._selection_end
         
-        # Ensure start is before end
+        # Ensure start comes before end
         if start_y > end_y or (start_y == end_y and start_x > end_x):
             start_y, start_x, end_y, end_x = end_y, end_x, start_y, start_x
         
+        # Same line selection
         if start_y == end_y:
-            # Selection is within a single line
-            return self._lines[start_y][start_x:end_x+1]
-        else:
-            # Selection spans multiple lines
-            result = [self._lines[start_y][start_x:]]  # First line
-            for y in range(start_y + 1, end_y):  # Middle lines
-                result.append(self._lines[y])
-            result.append(self._lines[end_y][:end_x+1])  # Last line
-            return "\n".join(result)
+            return self._lines[start_y][start_x:end_x]
+        
+        # Multiple line selection
+        result = []
+        # First line (partial)
+        result.append(self._lines[start_y][start_x:])
+        # Middle lines (complete)
+        for y in range(start_y + 1, end_y):
+            result.append(self._lines[y])
+        # Last line (partial)
+        result.append(self._lines[end_y][:end_x])
+        
+        return "\n".join(result)

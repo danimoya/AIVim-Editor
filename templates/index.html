@@ -3,97 +3,170 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AIVim Web Interface</title>
-    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+    <title>AIVim - AI-Enhanced Vim Editor</title>
+    <link rel="stylesheet" href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css">
     <style>
-        .code-area {
-            font-family: monospace;
-            min-height: 200px;
-            white-space: pre-wrap;
+        .editor-preview {
+            border: 1px solid #444;
             background-color: #1e1e1e;
             color: #d4d4d4;
-            border: 1px solid #333;
+            padding: 10px;
+            font-family: monospace;
+            height: 300px;
+            overflow: auto;
+            margin-bottom: 20px;
         }
-        
-        .response-area {
-            min-height: 200px;
-            white-space: pre-wrap;
-            border: 1px solid #333;
+        .feature-icon {
+            font-size: 2rem;
+            color: var(--bs-info);
         }
-
-        .loading {
-            display: none;
-            margin: 10px 0;
+        .logo {
+            font-family: monospace;
+            font-weight: bold;
+            font-size: 2.5rem;
+            color: var(--bs-info);
         }
     </style>
 </head>
-<body>
-    <div class="container mt-4">
-        <div class="text-center mb-4">
-            <h1>AIVim Web Interface</h1>
-            <p class="lead">Access AI-powered code assistance without the command line</p>
-        </div>
+<body data-bs-theme="dark">
+    <div class="container py-5">
+        <header class="text-center mb-5">
+            <div class="logo">AIVim</div>
+            <p class="lead">An AI-enhanced version of Vim for smarter coding</p>
+        </header>
 
-        <div class="alert alert-info">
-            <strong>Note:</strong> This is a web interface for AI features of AIVim. For the full editor experience, 
-            use AIVim on the command line: <code>python main.py [filename]</code>
-        </div>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
 
-        <div class="row">
-            <div class="col-md-6">
+        <div class="row mb-5">
+            <div class="col-lg-6">
                 <div class="card mb-4">
                     <div class="card-header">
-                        <h5>Code Input</h5>
+                        <h2>Open or Create a File</h2>
                     </div>
                     <div class="card-body">
-                        <textarea id="codeInput" class="form-control code-area" placeholder="Enter your code here..."></textarea>
+                        <form action="/launch" method="post">
+                            <div class="mb-3">
+                                <label for="filename" class="form-label">Filename</label>
+                                <input type="text" class="form-control" id="filename" name="filename" placeholder="Enter path to file" required>
+                                <div class="form-text">Enter a path to an existing file or a new file to create</div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Launch AIVim</button>
+                        </form>
                     </div>
                 </div>
                 
-                <div class="card mb-4">
+                <div class="card" id="api-key-status">
                     <div class="card-header">
-                        <h5>Context (Optional)</h5>
+                        <h2>OpenAI API Status</h2>
                     </div>
                     <div class="card-body">
-                        <textarea id="contextInput" class="form-control code-area" placeholder="Enter surrounding code or context here..."></textarea>
+                        <div id="api-key-message">
+                            Checking API key status...
+                        </div>
                     </div>
                 </div>
             </div>
             
-            <div class="col-md-6">
-                <div class="card mb-4">
+            <div class="col-lg-6">
+                <div class="card">
                     <div class="card-header">
-                        <h5>AI Response</h5>
+                        <h2>Preview</h2>
                     </div>
                     <div class="card-body">
-                        <div id="responseOutput" class="response-area p-3"></div>
-                        <div id="loading" class="loading text-center">
-                            <div class="spinner-border text-primary" role="status">
-                                <span class="visually-hidden">Loading...</span>
-                            </div>
-                            <p>Processing request...</p>
+                        <div class="editor-preview">
+                            <pre><code>def fibonacci(n):
+    """Calculate the nth Fibonacci number"""
+    if n <= 0:
+        return 0
+    elif n == 1:
+        return 1
+    else:
+        return fibonacci(n-1) + fibonacci(n-2)
+
+# TODO: This is inefficient, improve it
+# :improve 1 7</code></pre>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        
-        <div class="row mb-4">
-            <div class="col-12">
+
+        <div class="row mb-5">
+            <h2 class="text-center mb-4">AI-Powered Features</h2>
+            
+            <div class="col-md-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <div class="feature-icon mb-3">✨</div>
+                        <h3>Code Explanation</h3>
+                        <p>Get detailed explanations of complex code using the <code>:explain</code> command.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <div class="feature-icon mb-3">🚀</div>
+                        <h3>Code Improvement</h3>
+                        <p>Enhance your code with the <code>:improve</code> command for better performance and readability.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <div class="feature-icon mb-3">🔍</div>
+                        <h3>Code Generation</h3>
+                        <p>Generate new code based on descriptions with the <code>:generate</code> command.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-lg-12">
                 <div class="card">
                     <div class="card-header">
-                        <h5>AI Operations</h5>
+                        <h2>Quick Reference</h2>
                     </div>
                     <div class="card-body">
-                        <div class="d-flex flex-wrap gap-2">
-                            <button id="btnExplain" class="btn btn-primary">Explain Code</button>
-                            <button id="btnImprove" class="btn btn-success">Improve Code</button>
-                            <button id="btnGenerate" class="btn btn-warning">Generate from Comments</button>
-                            <div class="ms-auto">
-                                <input type="text" id="customQuery" class="form-control" placeholder="Ask a custom question about the code...">
-                            </div>
-                            <button id="btnQuery" class="btn btn-info">Ask</button>
-                        </div>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Command</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>:explain 1 10</code></td>
+                                    <td>Explain code from lines 1 to 10</td>
+                                </tr>
+                                <tr>
+                                    <td><code>:improve 1 10</code></td>
+                                    <td>Improve code from lines 1 to 10</td>
+                                </tr>
+                                <tr>
+                                    <td><code>:generate 5 "Create a function to sort a list"</code></td>
+                                    <td>Generate code at line 5 based on the description</td>
+                                </tr>
+                                <tr>
+                                    <td><code>:ai "What does this code do?"</code></td>
+                                    <td>Ask a custom question about the current file</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -101,158 +174,39 @@
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const codeInput = document.getElementById('codeInput');
-            const contextInput = document.getElementById('contextInput');
-            const responseOutput = document.getElementById('responseOutput');
-            const customQuery = document.getElementById('customQuery');
-            const loading = document.getElementById('loading');
-            
-            // Explain button
-            document.getElementById('btnExplain').addEventListener('click', function() {
-                if (!codeInput.value.trim()) {
-                    alert('Please enter some code to explain');
-                    return;
+        // Check OpenAI API key status
+        fetch('/api/check-openai-key')
+            .then(response => response.json())
+            .then(data => {
+                const messageEl = document.getElementById('api-key-message');
+                const statusCardEl = document.getElementById('api-key-status');
+                
+                if (data.api_key_exists) {
+                    messageEl.innerHTML = `
+                        <div class="alert alert-success mb-0">
+                            <strong>OpenAI API Key is configured.</strong><br>
+                            All AI features are available.
+                        </div>
+                    `;
+                } else {
+                    messageEl.innerHTML = `
+                        <div class="alert alert-warning mb-0">
+                            <strong>OpenAI API Key is not configured.</strong><br>
+                            AI features will not work without setting the OPENAI_API_KEY environment variable.
+                        </div>
+                    `;
                 }
-                
-                showLoading();
-                
-                fetch('/api/explain', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        code: codeInput.value,
-                        context: contextInput.value
-                    })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    hideLoading();
-                    if (data.success) {
-                        responseOutput.textContent = data.explanation;
-                    } else {
-                        responseOutput.textContent = 'Error: ' + data.error;
-                    }
-                })
-                .catch(error => {
-                    hideLoading();
-                    responseOutput.textContent = 'Error: ' + error.message;
-                });
+            })
+            .catch(error => {
+                console.error('Error checking API key:', error);
+                const messageEl = document.getElementById('api-key-message');
+                messageEl.innerHTML = `
+                    <div class="alert alert-danger mb-0">
+                        <strong>Error checking API key status.</strong><br>
+                        Please ensure the application is running correctly.
+                    </div>
+                `;
             });
-            
-            // Improve button
-            document.getElementById('btnImprove').addEventListener('click', function() {
-                if (!codeInput.value.trim()) {
-                    alert('Please enter some code to improve');
-                    return;
-                }
-                
-                showLoading();
-                
-                fetch('/api/improve', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        code: codeInput.value,
-                        context: contextInput.value
-                    })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    hideLoading();
-                    if (data.success) {
-                        responseOutput.textContent = data.improved_code;
-                    } else {
-                        responseOutput.textContent = 'Error: ' + data.error;
-                    }
-                })
-                .catch(error => {
-                    hideLoading();
-                    responseOutput.textContent = 'Error: ' + error.message;
-                });
-            });
-            
-            // Generate button
-            document.getElementById('btnGenerate').addEventListener('click', function() {
-                if (!codeInput.value.trim()) {
-                    alert('Please enter a specification or comments for code generation');
-                    return;
-                }
-                
-                showLoading();
-                
-                fetch('/api/generate', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        specification: codeInput.value,
-                        context: contextInput.value
-                    })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    hideLoading();
-                    if (data.success) {
-                        responseOutput.textContent = data.generated_code;
-                    } else {
-                        responseOutput.textContent = 'Error: ' + data.error;
-                    }
-                })
-                .catch(error => {
-                    hideLoading();
-                    responseOutput.textContent = 'Error: ' + error.message;
-                });
-            });
-            
-            // Query button
-            document.getElementById('btnQuery').addEventListener('click', function() {
-                if (!customQuery.value.trim()) {
-                    alert('Please enter a question');
-                    return;
-                }
-                
-                showLoading();
-                
-                fetch('/api/query', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        query: customQuery.value,
-                        context: codeInput.value || contextInput.value
-                    })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    hideLoading();
-                    if (data.success) {
-                        responseOutput.textContent = data.response;
-                    } else {
-                        responseOutput.textContent = 'Error: ' + data.error;
-                    }
-                })
-                .catch(error => {
-                    hideLoading();
-                    responseOutput.textContent = 'Error: ' + error.message;
-                });
-            });
-            
-            function showLoading() {
-                loading.style.display = 'block';
-                responseOutput.textContent = '';
-            }
-            
-            function hideLoading() {
-                loading.style.display = 'none';
-            }
-        });
     </script>
 </body>
 </html>
