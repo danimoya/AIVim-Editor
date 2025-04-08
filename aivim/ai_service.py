@@ -172,21 +172,23 @@ Please explain this code in detail.
     
     def get_improvement(self, code: str, context: str) -> str:
         """
-        Get an improved version of the provided code
+        Get an improved version of the provided code with structured output
         
         Args:
             code: The specific code to improve
             context: The surrounding code for context
             
         Returns:
-            An improved version of the code
+            A structured string with EXPLANATION and IMPROVED_CODE sections
         """
         system_prompt = (
             "You are an expert code improver. "
             "Analyze the provided code and suggest improvements. "
             "Maintain the original functionality while making enhancements for: "
             "performance, readability, maintainability, or error handling. "
-            "Provide both the improved code and explanation of changes."
+            "YOUR RESPONSE MUST USE THIS EXACT FORMAT with these section headers:\n\n"
+            "# EXPLANATION\n<Your detailed explanation of all improvements>\n\n"
+            "# IMPROVED_CODE\n<The complete improved code without any markdown formatting>\n\n"
         )
         
         user_prompt = f"""
@@ -200,11 +202,22 @@ Please explain this code in detail.
 {context}
 ```
 
-Please provide an improved version of this code along with an explanation of the improvements.
+Please provide your response using the EXACT format with these section headers:
+1. Start with "# EXPLANATION" followed by your detailed explanation
+2. Then include "# IMPROVED_CODE" followed by just the improved code (no markdown code blocks)
 """
         
         improvement = self._create_completion(system_prompt, user_prompt)
-        return improvement or "Failed to generate improvement."
+        if not improvement:
+            return "Failed to generate improvement."
+            
+        # Ensure we have the two required sections
+        if "# EXPLANATION" not in improvement or "# IMPROVED_CODE" not in improvement:
+            # Try to parse it anyway by adding the headers
+            processed = "# EXPLANATION\n" + improvement + "\n\n# IMPROVED_CODE\n" + code
+            return processed
+            
+        return improvement
     
     def generate_code(self, specification: str, context: str) -> str:
         """

@@ -964,19 +964,50 @@ class Editor:
     def _ai_improve_thread(self, start_line: int, end_line: int, code: str, context: str, metadata: Dict[str, Any]) -> None:
         """Thread function for AI code improvement"""
         try:
+            # Get the AI improvement with the new structured format
             improvement = self.ai_service.get_improvement(code, context)
             
-            # Find the improved code section
-            improved_code = improvement
+            # Parse the structured response
+            explanation_text = ""
+            improved_code = code  # Default to original code if parsing fails
             
-            # Try to extract just the code if there's explanation text
-            import re
-            code_blocks = re.findall(r'```(?:\w+)?\n(.*?)\n```', improved_code, re.DOTALL)
-            if code_blocks:
-                # Use the largest code block
-                improved_code = max(code_blocks, key=len)
+            # Check if we have the expected format with separate sections
+            if "# EXPLANATION" in improvement and "# IMPROVED_CODE" in improvement:
+                # Extract the explanation section
+                explanation_start = improvement.find("# EXPLANATION")
+                improved_code_start = improvement.find("# IMPROVED_CODE")
+                
+                if explanation_start >= 0 and improved_code_start > explanation_start:
+                    # Get the explanation part
+                    explanation_text = improvement[explanation_start + len("# EXPLANATION"):improved_code_start].strip()
+                    
+                    # Get the improved code part
+                    improved_code = improvement[improved_code_start + len("# IMPROVED_CODE"):].strip()
+            else:
+                # Fallback: try to extract code from markdown code blocks
+                import re
+                code_blocks = re.findall(r'```(?:\w+)?\n(.*?)\n```', improvement, re.DOTALL)
+                if code_blocks:
+                    # Use the largest code block
+                    improved_code = max(code_blocks, key=len)
+                    # Everything else is potentially explanation
+                    explanation_text = improvement
             
+            # Split into lines
             improved_lines = improved_code.strip().split("\n")
+            explanation_lines = explanation_text.split("\n")
+            
+            # Clean up the explanation lines
+            if explanation_lines:
+                # Remove empty lines at the beginning and end
+                while explanation_lines and not explanation_lines[0].strip():
+                    explanation_lines.pop(0)
+                while explanation_lines and not explanation_lines[-1].strip():
+                    explanation_lines.pop()
+                
+                # Remove markdown code blocks from explanation
+                explanation_lines = [line for line in explanation_lines 
+                                   if not line.strip().startswith("```")]
             
             # Create a diff between original and improved code
             from aivim.utils import create_diff, create_backup_file
@@ -1008,22 +1039,17 @@ class Editor:
                     # Improved code view
                     improved_code_lines = improved_code.split("\n")
                     
-                    # Diff view (showing changes)
+                    # Build a clean, structured set of views
+                    views = [
+                        {"title": "Original Code", "content": original_code_lines},
+                        {"title": "AI Improved Code", "content": improved_code_lines},
+                        {"title": "Code Improvement Diff", "content": diff_lines},
+                    ]
                     
-                    # Extract explanation if available
-                    explanation_lines = None
-                    if improvement != improved_code:
-                        explanation_lines = [line for line in improvement.split("\n") 
-                                           if not line.strip().startswith("```")]
-                    
-                    # Show multi-view dialog with all available views
+                    # Show multi-view dialog with explanation as a separate view
                     self.display.show_multi_view_dialog(
-                        views=[
-                            {"title": "Original Code", "content": original_code_lines},
-                            {"title": "AI Improved Code", "content": improved_code_lines},
-                            {"title": "Code Improvement Diff", "content": diff_lines},
-                        ],
-                        explanation=explanation_lines,
+                        views=views,
+                        explanation=explanation_lines if explanation_lines else None,
                         default_view=1  # Show the AI Improved Code by default
                     )
                 
