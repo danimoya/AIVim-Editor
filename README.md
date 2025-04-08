@@ -15,7 +15,7 @@ AIVim is an AI-enhanced version of Vim built in Python, offering intelligent cod
 - **Code Improvement**: Get AI-powered refactoring and optimization suggestions with diff-style presentation
 - **Code Generation**: Generate new code based on natural language descriptions
 - **Custom AI Queries**: Ask questions about your code and receive contextual answers
-- **Interactive Chat**: Have multi-turn conversations with AI about your code
+
 - **Code Analysis**: Get complexity analysis and bug detection for your code
 - **Multi-Tab Interface**: View and compare original and AI-improved code in tabs
 - **Version History**: Automatic tracking of file changes with metadata
@@ -43,7 +43,6 @@ AIVim provides the following AI-specific commands:
 | `:analyze <start> <end>` | Analyze code complexity and detect bugs in lines `start` through `end` |
 | `:ai <query>` | Ask a custom question about the current file |
 | `:set model=<provider>` | Set the AI model provider (openai, claude, local) |
-| `:chat` | Start an interactive chat with the AI about your code |
 
 ## Tab Navigation Commands
 

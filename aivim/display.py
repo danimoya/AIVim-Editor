@@ -103,8 +103,7 @@ class Display:
         self.loading_thread = None
         self.loading_stop_event = threading.Event()
         
-        # Show a welcome message with info about performance optimizations
-        self.show_optimization_message()
+        # Performance optimization message has been removed as requested
     
     def resize(self) -> None:
         """Handle terminal resize"""
@@ -647,24 +646,5 @@ class Display:
             logging.error(f"Error in loading animation: {str(e)}")
             self._loading_active = False
     def show_optimization_message(self) -> None:
-        """Show a temporary message about the performance optimizations"""
-        optimization_content = [
-            "AIVim Performance Optimizations Enabled",
-            "",
-            "✓ Display debouncing active (20 fps max refresh rate)",
-            "✓ Input throttling active (reduces keyboard repeat flicker)",
-            "✓ Async processing for all AI operations",
-            "",
-            "These optimizations help reduce screen flashing and",
-            "improve editor responsiveness during fast typing and editing.",
-            "",
-            "Test by typing quickly or holding down navigation keys."
-        ]
-        
-        # Show the dialog for a brief moment, then auto-close it
-        self.show_dialog("Performance Optimization", optimization_content)
-        
-        # Schedule a timer to auto-close after 3 seconds
-        close_timer = threading.Timer(3.0, self.close_dialog)
-        close_timer.daemon = True
-        close_timer.start()
+        """Method implementation removed as requested"""
+        pass

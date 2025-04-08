@@ -41,7 +41,6 @@ class CommandHandler:
             r'^generate\s+(\d+)\s+(.+)$': self._cmd_generate,
             r'^ai\s+(.+)$': self._cmd_ai_query,
             r'^set\s+(.+)$': self._cmd_set_option,
-            r'^chat$': self._cmd_chat,
             r'^y$': self._cmd_confirm_yes,
             r'^n$': self._cmd_next_tab,    # Changed from nexttab back to n as requested
             r'^help$': self._cmd_help,
@@ -268,21 +267,7 @@ class CommandHandler:
             self.editor.set_status_message(f"Unknown option: {option}")
             return False
             
-    def _cmd_chat(self) -> bool:
-        """
-        Handle the chat command (:chat).
-        Opens an interactive chat dialog with the AI.
 
-        Returns:
-            True if successful, False otherwise
-        """
-        try:
-            self.editor.start_ai_chat()
-            return True
-        except Exception as e:
-            self.editor.set_status_message(f"Error starting chat: {str(e)}")
-            return False
-            
     def _cmd_confirm_yes(self) -> bool:
         """
         Handle the confirm yes command (:y).
@@ -435,7 +420,6 @@ class CommandHandler:
             "  :analyze s e   - Analyze code complexity and bugs in lines s through e",
             "  :generate l d  - Generate code at line l based on description d",
             "  :ai query      - Ask AI about the current code",
-            "  :chat          - Start an interactive chat with AI",
             "  :set model     - Set AI model (openai, claude, local)",
             "  :y             - Create a new tab with AI improved code",
             "  :n             - Reject AI suggestion",

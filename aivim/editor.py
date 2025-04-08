@@ -881,11 +881,7 @@ class Editor:
         else:
             self.set_status_message("No file opened")
             
-        # Show the performance optimization message
-        # Use a short timer to let the editor fully initialize first
-        opt_timer = threading.Timer(0.5, self.display.show_optimization_message)
-        opt_timer.daemon = True
-        opt_timer.start()
+        # Performance optimization message has been removed as requested
     
     def _adjust_cursor_x(self) -> None:
         """Adjust cursor x position when moving vertically"""
