@@ -77,9 +77,13 @@ class Display:
         self.status_win = curses.newwin(1, self.width, self.height - 2, 0)
         self.command_win = curses.newwin(1, self.width, self.height - 1, 0)
         
-        # For dialog
+        # For dialog and dialog navigation
         self.dialog_win = None
         self.dialog_content = []
+        self.dialog_views = []
+        self.current_view_index = 0
+        self.dialog_view_titles = []
+        self.dialog_scroll_position = 0
         
         # Enable special keys
         self.stdscr.keypad(True)
@@ -284,8 +288,48 @@ class Display:
             content: List of content lines
         """
         self.dialog_content = content
+        self.dialog_views = [content]
+        self.dialog_view_titles = [title]
+        self.current_view_index = 0
+        self.dialog_scroll_position = 0
         self._setup_dialog_window()
         self._draw_dialog(title)
+        
+    def add_dialog_view(self, title: str, content: List[str]) -> None:
+        """
+        Add an additional view to the current dialog
+        
+        Args:
+            title: View title
+            content: View content lines
+        """
+        if not self.is_dialog_open():
+            # If no dialog is open, just show as a new dialog
+            self.show_dialog(title, content)
+            return
+            
+        self.dialog_views.append(content)
+        self.dialog_view_titles.append(title)
+        
+    def next_dialog_view(self) -> None:
+        """Switch to the next dialog view if multiple views exist"""
+        if not self.is_dialog_open() or len(self.dialog_views) <= 1:
+            return
+            
+        self.current_view_index = (self.current_view_index + 1) % len(self.dialog_views)
+        self.dialog_content = self.dialog_views[self.current_view_index]
+        self.dialog_scroll_position = 0
+        self._draw_dialog(self.dialog_view_titles[self.current_view_index])
+        
+    def prev_dialog_view(self) -> None:
+        """Switch to the previous dialog view if multiple views exist"""
+        if not self.is_dialog_open() or len(self.dialog_views) <= 1:
+            return
+            
+        self.current_view_index = (self.current_view_index - 1) % len(self.dialog_views)
+        self.dialog_content = self.dialog_views[self.current_view_index]
+        self.dialog_scroll_position = 0
+        self._draw_dialog(self.dialog_view_titles[self.current_view_index])
     
     def _setup_dialog_window(self) -> None:
         """Set up the dialog window dimensions"""
@@ -318,6 +362,16 @@ class Display:
         title_x = (self.dialog_win.getmaxyx()[1] - len(title)) // 2
         self.dialog_win.addstr(0, title_x, title, self.COLOR_DIALOG_TITLE)
         
+        # Draw view navigation indicators if multiple views
+        if len(self.dialog_views) > 1:
+            # Display current view indicator
+            view_indicator = f"View {self.current_view_index + 1}/{len(self.dialog_views)}"
+            self.dialog_win.addstr(0, 2, view_indicator)
+            
+            # Display navigation hint
+            nav_hint = "Use Ctrl+Left/Right to navigate views"
+            self.dialog_win.addstr(0, self.dialog_win.getmaxyx()[1] - len(nav_hint) - 2, nav_hint)
+        
         # Draw content
         max_content_width = self.dialog_win.getmaxyx()[1] - 4
         visible_lines = min(len(self.dialog_content), self.dialog_win.getmaxyx()[0] - 4)
@@ -340,6 +394,10 @@ class Display:
         """Close the dialog"""
         self.dialog_win = None
         self.dialog_content = []
+        self.dialog_views = []
+        self.dialog_view_titles = []
+        self.current_view_index = 0
+        self.dialog_scroll_position = 0
         
         # Refresh main windows
         self.stdscr.touchwin()
@@ -355,13 +413,14 @@ class Display:
         """Check if a dialog is currently open"""
         return self.dialog_win is not None
         
-    def show_diff_dialog(self, title: str, diff_lines: List[str]) -> None:
+    def show_diff_dialog(self, title: str, diff_lines: List[str], explanation: List[str] = None) -> None:
         """
-        Show a dialog box with diff content
+        Show a dialog box with diff content and optionally an explanation in separate views
         
         Args:
             title: Dialog title
             diff_lines: List of formatted diff lines (from utils.create_diff)
+            explanation: Optional explanation of the changes to show in a separate view
         """
         # Convert diff lines to colorized format for display
         colorized_content = []
@@ -370,8 +429,22 @@ class Display:
             colorized_content.append((diff_type, content))
             
         self.dialog_content = [content for _, content in colorized_content]
+        self.dialog_views = [self.dialog_content]
+        self.dialog_view_titles = ["Code improvement diff"]
+        self.current_view_index = 0
+        
+        # Add explanation as a separate view if provided
+        if explanation and len(explanation) > 0:
+            self.dialog_views.append(explanation)
+            self.dialog_view_titles.append("Code improvement explanation")
+            
         self._setup_dialog_window()
-        self._draw_diff_dialog(title, colorized_content)
+        
+        # Use different drawing method based on the current view
+        if self.current_view_index == 0:  # Show diff view
+            self._draw_diff_dialog(self.dialog_view_titles[0], colorized_content)
+        else:  # Show explanation view
+            self._draw_dialog(self.dialog_view_titles[self.current_view_index])
         
     def show_confirmation_dialog(self, title: str, message: List[str]) -> bool:
         """
@@ -440,6 +513,16 @@ class Display:
         title = f" {title} "
         title_x = (self.dialog_win.getmaxyx()[1] - len(title)) // 2
         self.dialog_win.addstr(0, title_x, title, self.COLOR_DIALOG_TITLE)
+        
+        # Draw view navigation indicators if multiple views
+        if len(self.dialog_views) > 1:
+            # Display current view indicator
+            view_indicator = f"View {self.current_view_index + 1}/{len(self.dialog_views)}"
+            self.dialog_win.addstr(0, 2, view_indicator)
+            
+            # Display navigation hint
+            nav_hint = "Use Ctrl+Left/Right to navigate views"
+            self.dialog_win.addstr(0, self.dialog_win.getmaxyx()[1] - len(nav_hint) - 2, nav_hint)
         
         # Draw content
         max_content_width = self.dialog_win.getmaxyx()[1] - 4

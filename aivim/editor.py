@@ -233,6 +233,14 @@ class Editor:
         elif key == ord('d') and self.display.is_dialog_open():
             # Close dialog with 'd' key
             self.display.close_dialog()
+            
+        elif key == curses.KEY_LEFT and curses.keyname(key).decode("utf-8").startswith("^") and self.display.is_dialog_open():
+            # Navigate to previous dialog view with Ctrl+Left
+            self.display.prev_dialog_view()
+            
+        elif key == curses.KEY_RIGHT and curses.keyname(key).decode("utf-8").startswith("^") and self.display.is_dialog_open():
+            # Navigate to next dialog view with Ctrl+Right
+            self.display.next_dialog_view()
         
         elif key == ord('d'):
             # Delete operation - need another 'd' for line delete
@@ -992,16 +1000,17 @@ class Editor:
                     "metadata": metadata
                 }
                 
-                # If there's an explanation, show it in a separate dialog
-                if improvement != improved_code:
-                    explanation_lines = [line for line in improvement.split("\n") 
-                                       if not line.strip().startswith("```")]
-                    if explanation_lines:
-                        self.display.show_dialog("Code Improvement Explanation", explanation_lines)
-                
-                # Show diff in a dialog
+                # Show diff in a dialog with explanation in a separate view if available
                 if self.display:
-                    self.display.show_diff_dialog("Code Improvement Diff", diff_lines)
+                    explanation_lines = None
+                    
+                    # Extract explanation if available
+                    if improvement != improved_code:
+                        explanation_lines = [line for line in improvement.split("\n") 
+                                           if not line.strip().startswith("```")]
+                    
+                    # Show diff dialog with the explanation as a separate view
+                    self.display.show_diff_dialog("Code Improvement Diff", diff_lines, explanation_lines)
                 
                 # Set status message to prompt user for confirmation
                 self.set_status_message(f"Review changes and use :y to accept or :n to reject ({len(improved_lines)} lines)")
