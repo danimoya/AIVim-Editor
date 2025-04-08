@@ -988,6 +988,89 @@ class Editor:
                 self.set_status_message(f"Error improving code: {str(e)}")
             logging.error(f"AI improvement error: {str(e)}")
     
+    def ai_analyze_code(self, start_line: int, end_line: int) -> None:
+        """
+        Analyze code complexity and identify potential bugs in the specified line range
+        
+        Args:
+            start_line: Starting line number (0-based)
+            end_line: Ending line number (0-based)
+        """
+        if self.ai_processing:
+            self.set_status_message("AI is already processing a request")
+            return
+        
+        # Get the code to analyze
+        lines = self.buffer.get_lines()
+        if not lines or start_line > end_line or end_line >= len(lines):
+            self.set_status_message("Invalid line range")
+            return
+        
+        # Extract the selected lines
+        code_lines = lines[start_line:end_line+1]
+        code = "\n".join(code_lines)
+        
+        # Get surrounding context (up to 20 lines before and after)
+        context_start = max(0, start_line - 20)
+        context_end = min(len(lines) - 1, end_line + 20)
+        context_lines = lines[context_start:context_end+1]
+        context = "\n".join(context_lines)
+        
+        # Setup metadata
+        metadata = {
+            "command": "analyze_code",
+            "start_line": start_line,
+            "end_line": end_line,
+        }
+        
+        # Mark as processing
+        self.ai_processing = True
+        
+        # Start loading animation
+        if self.display:
+            self.display.start_loading_animation("AI analyzing code complexity and bugs")
+        else:
+            self.set_status_message("AI analyzing code...")
+        
+        # Run in a separate thread
+        self.ai_thread = threading.Thread(
+            target=self._ai_analyze_code_thread,
+            args=(code, context, metadata)
+        )
+        self.ai_thread.daemon = True
+        self.ai_thread.start()
+    
+    def _ai_analyze_code_thread(self, code: str, context: str, metadata: Dict[str, Any]) -> None:
+        """Thread function for AI code analysis"""
+        try:
+            analysis = self.ai_service.analyze_code(code, context)
+            
+            # Show the analysis in a dialog
+            with self.thread_lock:
+                # Stop loading animation if active
+                if self.display:
+                    self.display.stop_loading_animation()
+                
+                # Split into lines
+                analysis_lines = analysis.split("\n")
+                
+                # Update status
+                self.ai_processing = False
+                self.set_status_message("Code analysis complete")
+                
+                # Show dialog
+                self.display.show_dialog("Code Analysis Results", analysis_lines)
+        
+        except Exception as e:
+            with self.thread_lock:
+                # Stop loading animation if active
+                if self.display:
+                    self.display.stop_loading_animation()
+                
+                self.ai_processing = False
+                self.set_status_message(f"Error analyzing code: {str(e)}")
+            logging.error(f"AI analysis error: {str(e)}")
+    
     def ai_custom_query(self, query: str) -> None:
         """
         Run a custom AI query on the current buffer

@@ -36,6 +36,7 @@ class CommandHandler:
             r'^q!$': self._cmd_force_quit,
             r'^explain\s+(\d+)\s+(\d+)$': self._cmd_explain,
             r'^improve\s+(\d+)\s+(\d+)$': self._cmd_improve,
+            r'^analyze\s+(\d+)\s+(\d+)$': self._cmd_analyze,
             r'^generate\s+(\d+)\s+(.+)$': self._cmd_generate,
             r'^ai\s+(.+)$': self._cmd_ai_query,
             r'^set\s+(.+)$': self._cmd_set_option,
@@ -176,6 +177,29 @@ class CommandHandler:
         except Exception as e:
             self.editor.set_status_message(f"Error executing improve command: {str(e)}")
             return False
+            
+    def _cmd_analyze(self, start_line: str, end_line: str) -> bool:
+        """
+        Handle the analyze command (:analyze start end).
+        Analyzes code complexity and potential bugs in the specified line range.
+
+        Args:
+            start_line: Starting line number (1-based)
+            end_line: Ending line number (1-based)
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Convert to 0-based
+            start = int(start_line) - 1
+            end = int(end_line) - 1
+            
+            self.editor.ai_analyze_code(start, end)
+            return True
+        except Exception as e:
+            self.editor.set_status_message(f"Error executing analyze command: {str(e)}")
+            return False
     
     def _cmd_generate(self, start_line: str, description: str) -> bool:
         """
@@ -303,6 +327,7 @@ class CommandHandler:
             "AI Commands:",
             "  :explain s e   - Explain lines s through e",
             "  :improve s e   - Improve code from lines s through e",
+            "  :analyze s e   - Analyze code complexity and bugs in lines s through e",
             "  :generate l d  - Generate code at line l based on description d",
             "  :ai query      - Ask AI about the current code",
             "  :chat          - Start an interactive chat with AI",

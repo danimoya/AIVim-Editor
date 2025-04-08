@@ -273,3 +273,44 @@ Please respond to this query considering the code context.
         
         response = self._create_completion(system_prompt, user_prompt)
         return response or "Failed to process query."
+        
+    def analyze_code(self, code: str, context: str) -> str:
+        """
+        Analyze code complexity and identify potential bugs
+        
+        Args:
+            code: The specific code to analyze
+            context: The surrounding code for context
+            
+        Returns:
+            A detailed analysis of code complexity and potential bugs
+        """
+        system_prompt = (
+            "You are an expert code analyzer specializing in identifying complexity issues and potential bugs. "
+            "Analyze the provided code thoroughly and provide detailed feedback on: "
+            "1. Cyclomatic complexity - identify complex functions or methods and suggest simplification "
+            "2. Potential bugs - edge cases, error handling gaps, race conditions, etc. "
+            "3. Code smells - duplicate code, long methods, long parameter lists "
+            "4. Performance issues - inefficient algorithms, memory usage concerns "
+            "5. Security vulnerabilities - if any are evident "
+            "6. Maintainability concerns "
+            "Format your response with clear sections for each category and provide line references. "
+            "For each issue, explain why it's problematic and suggest a practical solution."
+        )
+        
+        user_prompt = f"""
+# Code to analyze:
+```
+{code}
+```
+
+# Context (surrounding code):
+```
+{context}
+```
+
+Please provide a comprehensive analysis of this code, focusing on complexity and potential bugs.
+"""
+        
+        analysis = self._create_completion(system_prompt, user_prompt)
+        return analysis or "Failed to analyze code."
