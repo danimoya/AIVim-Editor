@@ -118,7 +118,8 @@ class Editor:
         
         # Set up resize handler
         # curses.signal(curses.SIGWINCH, self._handle_resize)
-
+        
+        # Initialize editor components and settings
         self._initialize_editor(stdscr)
         
         # Main editor loop
@@ -624,6 +625,39 @@ class Editor:
         with self.thread_lock:
             self.display.resize()
             self._update_display()
+    
+    def _initialize_editor(self, stdscr) -> None:
+        """Initialize the editor components and settings"""
+        # Initialize curses color pairs
+        curses.start_color()
+        curses.use_default_colors()
+        
+        # Define color pairs for syntax highlighting and UI
+        curses.init_pair(1, curses.COLOR_WHITE, curses.COLOR_BLUE)    # Status line
+        curses.init_pair(2, curses.COLOR_BLACK, curses.COLOR_WHITE)   # Command line
+        curses.init_pair(3, curses.COLOR_RED, -1)                     # Error messages
+        curses.init_pair(4, curses.COLOR_GREEN, -1)                   # Success messages
+        curses.init_pair(5, curses.COLOR_CYAN, -1)                    # Info messages
+        curses.init_pair(6, curses.COLOR_MAGENTA, -1)                 # Selection
+        curses.init_pair(7, curses.COLOR_WHITE, curses.COLOR_RED)     # Dialog title
+        curses.init_pair(8, curses.COLOR_WHITE, curses.COLOR_BLACK)   # Dialog content
+        curses.init_pair(9, curses.COLOR_GREEN, -1)                   # Diff added
+        curses.init_pair(10, curses.COLOR_RED, -1)                    # Diff removed
+        curses.init_pair(11, curses.COLOR_YELLOW, -1)                 # Diff changed
+        
+        # No delay for ESC key
+        curses.set_escdelay(25)
+        
+        # Other initialization
+        stdscr.keypad(True)       # Enable keypad mode for function keys
+        curses.cbreak()           # No line buffering
+        curses.noecho()           # Don't echo typed characters
+        
+        # Initial status message
+        if self.filename:
+            self.set_status_message(f"Editing: {self.filename}")
+        else:
+            self.set_status_message("No file opened")
     
     def _adjust_cursor_x(self) -> None:
         """Adjust cursor x position when moving vertically"""

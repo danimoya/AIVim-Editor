@@ -1,22 +1,18 @@
 #!/usr/bin/env python3
 """
-AIVim - An AI-enhanced version of Vim implemented in Python
-Command-line interface and embeddable API
+Web API wrapper for AIVim
+This provides a simple web interface to interact with the AIVim editor
 """
-import argparse
-import curses
-import logging
 import os
 import sys
-from typing import Optional
-
-from aivim.editor import Editor
-
-# Import for web interface
+import json
 from flask import Flask, request, jsonify, render_template
+
+# Import AIVim modules
+from aivim.editor import Editor
 from aivim.ai_service import AIService
 
-# Flask app for the web interface
+# Initialize Flask app
 app = Flask(__name__)
 
 # Global services
@@ -41,7 +37,6 @@ def explain_code():
         explanation = ai_service.get_explanation(code, context)
         return jsonify({'explanation': explanation})
     except Exception as e:
-        logging.exception("Error in explain_code")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/improve', methods=['POST'])
@@ -58,7 +53,6 @@ def improve_code():
         improved_code = ai_service.get_improvement(code, context)
         return jsonify({'improved_code': improved_code})
     except Exception as e:
-        logging.exception("Error in improve_code")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/generate', methods=['POST'])
@@ -75,7 +69,6 @@ def generate_code():
         generated_code = ai_service.generate_code(specification, context)
         return jsonify({'generated_code': generated_code})
     except Exception as e:
-        logging.exception("Error in generate_code")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/query', methods=['POST'])
@@ -92,7 +85,6 @@ def custom_query():
         response = ai_service.custom_query(query, context)
         return jsonify({'response': response})
     except Exception as e:
-        logging.exception("Error in custom_query")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/health')
@@ -106,69 +98,12 @@ def health_check():
         'ai_service': 'available' if ai_status else 'unavailable (missing API key)'
     })
 
+# Create templates directory if it doesn't exist
+os.makedirs('templates', exist_ok=True)
 
-def parse_arguments():
-    """Parse command line arguments"""
-    parser = argparse.ArgumentParser(
-        description="AIVim - AI-enhanced Vim editor"
-    )
-    parser.add_argument(
-        "filename", nargs="?", default=None,
-        help="File to edit (if not specified, opens an empty buffer)"
-    )
-    return parser.parse_args()
-
-
-def check_environment():
-    """Check if the environment is properly set up"""
-    # Check for OPENAI_API_KEY
-    if not os.environ.get("OPENAI_API_KEY"):
-        print("Warning: OPENAI_API_KEY environment variable is not set.")
-        print("AI features will not work without an OpenAI API key.")
-        print("Set the environment variable with: export OPENAI_API_KEY=your_key")
-        return False
-    return True
-
-
-def start_editor(stdscr, filename: Optional[str] = None):
-    """Initialize and start the editor"""
-    # Enable logging
-    logging.basicConfig(
-        filename="aivim.log",
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    
-    editor = Editor(filename)
-    editor.start(stdscr)
-
-
-def embed_editor(filename: Optional[str] = None):
-    """
-    API function for embedding the editor in other applications
-    
-    Args:
-        filename: Optional file to edit
-    """
-    curses.wrapper(start_editor, filename)
-
-
-def main():
-    """Main entry point for AIVim"""
-    args = parse_arguments()
-    check_environment()
-    curses.wrapper(start_editor, args.filename)
-
-
-# Create templates directory and HTML file if needed
-def create_template():
-    """Create template directory and index.html file if needed"""
-    os.makedirs('templates', exist_ok=True)
-    
-    # Create simple HTML template if it doesn't exist
-    if not os.path.exists('templates/index.html'):
-        with open('templates/index.html', 'w') as f:
-            f.write("""<!DOCTYPE html>
+# Create simple HTML template
+with open('templates/index.html', 'w') as f:
+    f.write("""<!DOCTYPE html>
 <html>
 <head>
     <title>AIVim Web Interface</title>
@@ -430,8 +365,5 @@ def create_template():
 </body>
 </html>""")
 
-# Create template files at startup
-create_template()
-
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
