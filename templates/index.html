@@ -1,261 +1,308 @@
 <!DOCTYPE html>
-<html>
+<html lang="en" data-bs-theme="dark">
 <head>
-    <title>AIVim Web Interface</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+    <title>AIVim - AI-enhanced Vim Editor</title>
+    <link rel="stylesheet" href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css">
     <style>
-        body { padding: 20px; }
-        textarea { width: 100%; min-height: 200px; }
-        pre { background-color: #212529; padding: 15px; border-radius: 5px; }
+        .feature-box {
+            border: 1px solid var(--bs-border-color);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            background-color: var(--bs-dark);
+        }
+        .code-block {
+            background-color: var(--bs-gray-900);
+            border-radius: 5px;
+            padding: 15px;
+            font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', 'Menlo', monospace;
+            overflow-x: auto;
+            margin: 15px 0;
+        }
+        .terminal-demo {
+            background-color: var(--bs-gray-900);
+            border-radius: 5px;
+            padding: 15px;
+            font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', 'Menlo', monospace;
+            color: var(--bs-light);
+            margin: 20px 0;
+            border: 1px solid var(--bs-gray-700);
+        }
+        .added {
+            background-color: rgba(0, 255, 0, 0.1);
+            color: #00cc00;
+        }
+        .removed {
+            background-color: rgba(255, 0, 0, 0.1);
+            color: #ff6666;
+        }
+        .demo-section {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid var(--bs-border-color);
+        }
+        .command {
+            color: var(--bs-info);
+            font-weight: bold;
+        }
+        footer {
+            margin-top: 50px;
+            padding: 20px 0;
+            border-top: 1px solid var(--bs-border-color);
+        }
     </style>
 </head>
-<body data-bs-theme="dark">
-    <div class="container">
-        <h1 class="mt-4 mb-4">AIVim Web Interface</h1>
-        
-        <div class="alert alert-info">
-            <p>AIVim is primarily a terminal-based application. This web interface only provides access to 
-            the AI functionality. For the full editor experience, run the application in a terminal:</p>
-            <pre>python main.py [filename]</pre>
-        </div>
-        
-        <div class="card mt-4">
-            <div class="card-header">
-                <ul class="nav nav-tabs card-header-tabs" id="functionTabs" role="tablist">
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link active" id="explain-tab" data-bs-toggle="tab" data-bs-target="#explain" role="tab">Explain</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="improve-tab" data-bs-toggle="tab" data-bs-target="#improve" role="tab">Improve</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="generate-tab" data-bs-toggle="tab" data-bs-target="#generate" role="tab">Generate</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="query-tab" data-bs-toggle="tab" data-bs-target="#query" role="tab">Custom Query</button>
-                    </li>
-                </ul>
-            </div>
-            <div class="card-body">
-                <div class="tab-content" id="functionTabsContent">
-                    <!-- Explain Tab -->
-                    <div class="tab-pane fade show active" id="explain" role="tabpanel" aria-labelledby="explain-tab">
-                        <h5>Explain Code</h5>
-                        <div class="mb-3">
-                            <label for="explain-code" class="form-label">Enter code to explain:</label>
-                            <textarea class="form-control" id="explain-code" rows="6"></textarea>
-                        </div>
-                        <div class="mb-3">
-                            <label for="explain-context" class="form-label">Additional context (optional):</label>
-                            <textarea class="form-control" id="explain-context" rows="3"></textarea>
-                        </div>
-                        <button id="explain-btn" class="btn btn-primary">Explain</button>
-                        <div class="mt-3" id="explain-result" style="display: none;">
-                            <h6>Explanation:</h6>
-                            <div class="p-3 bg-dark result-box"></div>
-                        </div>
-                    </div>
+<body>
+    <div class="container py-5">
+        <header class="mb-5 text-center">
+            <h1 class="display-4">AIVim</h1>
+            <p class="lead">An AI-enhanced version of Vim for intelligent code editing</p>
+        </header>
+
+        <div class="row mb-5">
+            <div class="col-md-8 offset-md-2">
+                <div class="feature-box">
+                    <h2>About AIVim</h2>
+                    <p>AIVim combines the power of Vim's modal editing with intelligent AI-assisted coding features. Designed for developers who love Vim's efficiency but want the advantages of modern AI code assistance.</p>
                     
-                    <!-- Improve Tab -->
-                    <div class="tab-pane fade" id="improve" role="tabpanel" aria-labelledby="improve-tab">
-                        <h5>Improve Code</h5>
-                        <div class="mb-3">
-                            <label for="improve-code" class="form-label">Enter code to improve:</label>
-                            <textarea class="form-control" id="improve-code" rows="6"></textarea>
-                        </div>
-                        <div class="mb-3">
-                            <label for="improve-context" class="form-label">Additional context (optional):</label>
-                            <textarea class="form-control" id="improve-context" rows="3"></textarea>
-                        </div>
-                        <button id="improve-btn" class="btn btn-primary">Improve</button>
-                        <div class="mt-3" id="improve-result" style="display: none;">
-                            <h6>Improved Code:</h6>
-                            <div class="p-3 bg-dark result-box"></div>
-                        </div>
-                    </div>
-                    
-                    <!-- Generate Tab -->
-                    <div class="tab-pane fade" id="generate" role="tabpanel" aria-labelledby="generate-tab">
-                        <h5>Generate Code</h5>
-                        <div class="mb-3">
-                            <label for="generate-spec" class="form-label">Enter specification:</label>
-                            <textarea class="form-control" id="generate-spec" rows="6"></textarea>
-                        </div>
-                        <div class="mb-3">
-                            <label for="generate-context" class="form-label">Additional context (optional):</label>
-                            <textarea class="form-control" id="generate-context" rows="3"></textarea>
-                        </div>
-                        <button id="generate-btn" class="btn btn-primary">Generate</button>
-                        <div class="mt-3" id="generate-result" style="display: none;">
-                            <h6>Generated Code:</h6>
-                            <div class="p-3 bg-dark result-box"></div>
-                        </div>
-                    </div>
-                    
-                    <!-- Custom Query Tab -->
-                    <div class="tab-pane fade" id="query" role="tabpanel" aria-labelledby="query-tab">
-                        <h5>Custom Query</h5>
-                        <div class="mb-3">
-                            <label for="query-text" class="form-label">Enter your query:</label>
-                            <textarea class="form-control" id="query-text" rows="3"></textarea>
-                        </div>
-                        <div class="mb-3">
-                            <label for="query-context" class="form-label">Code context (optional):</label>
-                            <textarea class="form-control" id="query-context" rows="6"></textarea>
-                        </div>
-                        <button id="query-btn" class="btn btn-primary">Submit Query</button>
-                        <div class="mt-3" id="query-result" style="display: none;">
-                            <h6>Response:</h6>
-                            <div class="p-3 bg-dark result-box"></div>
-                        </div>
-                    </div>
+                    <h3 class="mt-4">Key Features</h3>
+                    <ul>
+                        <li><strong>Modal Editing</strong> - Familiar Vim-style modal editing, including normal, insert, and visual modes</li>
+                        <li><strong>AI Code Explanation</strong> - Get detailed explanations of selected code sections</li>
+                        <li><strong>Code Improvement</strong> - Receive AI-suggested improvements for your code</li>
+                        <li><strong>Code Generation</strong> - Generate new code based on specifications or comments</li>
+                        <li><strong>Custom AI Queries</strong> - Ask the AI assistant questions about your code</li>
+                        <li><strong>Cross-Platform</strong> - Runs on any system with Python installed</li>
+                        <li><strong>Embeddable API</strong> - Can be integrated into other Python applications</li>
+                    </ul>
                 </div>
             </div>
         </div>
-    </div>
+
+        <div class="row demo-section">
+            <div class="col-lg-6">
+                <h2>AI Code Explanation</h2>
+                <p>Select a code section and use <span class="command">:explain</span> to get a detailed explanation of how it works.</p>
+                
+                <div class="code-block">
+                    <pre>def calculate_fibonacci(n: int) -> int:
+    """
+    Calculate the nth Fibonacci number using
+    a simple recursive approach.
+    """
+    if n <= 0:
+        return 0
+    elif n == 1:
+        return 1
+    else:
+        return calculate_fibonacci(n - 1) + calculate_fibonacci(n - 2)</pre>
+                </div>
+                
+                <div class="terminal-demo">
+                    <p><strong>Command:</strong> :explain 1 10</p>
+                    <p><strong>AI Response:</strong></p>
+                    <p>This code defines a recursive function to calculate Fibonacci numbers.</p>
+                    <ul>
+                        <li>Base cases: n ≤ 0 returns 0, n = 1 returns 1</li>
+                        <li>For n > 1, it recursively calculates fib(n-1) + fib(n-2)</li>
+                        <li>Type hints indicate integer input and output</li>
+                        <li>The approach is simple but inefficient for large values</li>
+                        <li>Time complexity is O(2^n) due to redundant calculations</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="col-lg-6">
+                <h2>AI Code Improvement</h2>
+                <p>Select a code section and use <span class="command">:improve</span> to get suggestions for making your code better.</p>
+                
+                <div class="code-block">
+                    <pre>def parse_data(data_string: str):
+    result = {}
+    pairs = data_string.split(';')
+    for pair in pairs:
+        if '=' in pair:
+            key, value = pair.split('=')
+            result[key] = value
+    return result</pre>
+                </div>
+                
+                <div class="terminal-demo">
+                    <p><strong>Command:</strong> :improve 1 8</p>
+                    <p><strong>AI Response:</strong></p>
+                    <pre class="mb-0">def parse_data(data_string: str) -> dict[str, str]:
+    """
+    Parse a string of data into a dictionary.
     
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        // Common AJAX function
-        async function callAPI(endpoint, data) {
-            const response = await fetch('/api/' + endpoint, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(data)
-            });
-            
-            return await response.json();
-        }
+    Args:
+        data_string: A string in format "key1=value1;key2=value2"
         
-        // Explain Code
-        document.getElementById('explain-btn').addEventListener('click', async () => {
-            const code = document.getElementById('explain-code').value;
-            const context = document.getElementById('explain-context').value;
-            
-            if (!code) {
-                alert('Please enter code to explain.');
-                return;
-            }
-            
-            document.getElementById('explain-btn').disabled = true;
-            document.getElementById('explain-btn').textContent = 'Processing...';
-            
-            try {
-                const result = await callAPI('explain', { code, context });
-                if (result.error) {
-                    alert('Error: ' + result.error);
-                } else {
-                    document.querySelector('#explain-result .result-box').textContent = result.explanation;
-                    document.getElementById('explain-result').style.display = 'block';
-                }
-            } catch (err) {
-                alert('Error: ' + err.message);
-            } finally {
-                document.getElementById('explain-btn').disabled = false;
-                document.getElementById('explain-btn').textContent = 'Explain';
-            }
-        });
+    Returns:
+        A dictionary of parsed data
+    """
+    result = {}
+    if not data_string:
+        return result
         
-        // Improve Code
-        document.getElementById('improve-btn').addEventListener('click', async () => {
-            const code = document.getElementById('improve-code').value;
-            const context = document.getElementById('improve-context').value;
-            
-            if (!code) {
-                alert('Please enter code to improve.');
-                return;
-            }
-            
-            document.getElementById('improve-btn').disabled = true;
-            document.getElementById('improve-btn').textContent = 'Processing...';
-            
-            try {
-                const result = await callAPI('improve', { code, context });
-                if (result.error) {
-                    alert('Error: ' + result.error);
-                } else {
-                    document.querySelector('#improve-result .result-box').textContent = result.improved_code;
-                    document.getElementById('improve-result').style.display = 'block';
-                }
-            } catch (err) {
-                alert('Error: ' + err.message);
-            } finally {
-                document.getElementById('improve-btn').disabled = false;
-                document.getElementById('improve-btn').textContent = 'Improve';
-            }
-        });
+    pairs = data_string.split(';')
+    for pair in pairs:
+        if '=' in pair:
+            key, value = pair.split('=', 1)  # Split on first '=' only
+            result[key.strip()] = value.strip()
+    return result</pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="row demo-section">
+            <div class="col-lg-6">
+                <h2>AI Code Generation</h2>
+                <p>Use <span class="command">:generate</span> to create new code based on your specification.</p>
+                
+                <div class="code-block">
+                    <pre># Comment describing what to generate
+# Create a function to validate email addresses</pre>
+                </div>
+                
+                <div class="terminal-demo">
+                    <p><strong>Command:</strong> :generate 2 Create a function to validate email addresses</p>
+                    <p><strong>AI Response:</strong></p>
+                    <pre class="mb-0">def validate_email(email: str) -> bool:
+    """
+    Validate if a string is a proper email address.
+    
+    Args:
+        email: The email string to validate
         
-        // Generate Code
-        document.getElementById('generate-btn').addEventListener('click', async () => {
-            const specification = document.getElementById('generate-spec').value;
-            const context = document.getElementById('generate-context').value;
+    Returns:
+        True if the email is valid, False otherwise
+    """
+    import re
+    
+    # Regular expression for email validation
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    
+    # Check if the email matches the pattern
+    if re.match(pattern, email):
+        return True
+    return False</pre>
+                </div>
+            </div>
             
-            if (!specification) {
-                alert('Please enter a specification.');
-                return;
-            }
-            
-            document.getElementById('generate-btn').disabled = true;
-            document.getElementById('generate-btn').textContent = 'Processing...';
-            
-            try {
-                const result = await callAPI('generate', { specification, context });
-                if (result.error) {
-                    alert('Error: ' + result.error);
-                } else {
-                    document.querySelector('#generate-result .result-box').textContent = result.generated_code;
-                    document.getElementById('generate-result').style.display = 'block';
-                }
-            } catch (err) {
-                alert('Error: ' + err.message);
-            } finally {
-                document.getElementById('generate-btn').disabled = false;
-                document.getElementById('generate-btn').textContent = 'Generate';
-            }
-        });
+            <div class="col-lg-6">
+                <h2>AI Custom Queries</h2>
+                <p>Use <span class="command">:ai</span> to ask questions about your code.</p>
+                
+                <div class="code-block">
+                    <pre>class DataProcessor:
+    def __init__(self, data: List[int] = None):
+        self.data = data or []
         
-        // Custom Query
-        document.getElementById('query-btn').addEventListener('click', async () => {
-            const query = document.getElementById('query-text').value;
-            const context = document.getElementById('query-context').value;
-            
-            if (!query) {
-                alert('Please enter a query.');
-                return;
-            }
-            
-            document.getElementById('query-btn').disabled = true;
-            document.getElementById('query-btn').textContent = 'Processing...';
-            
-            try {
-                const result = await callAPI('query', { query, context });
-                if (result.error) {
-                    alert('Error: ' + result.error);
-                } else {
-                    document.querySelector('#query-result .result-box').textContent = result.response;
-                    document.getElementById('query-result').style.display = 'block';
-                }
-            } catch (err) {
-                alert('Error: ' + err.message);
-            } finally {
-                document.getElementById('query-btn').disabled = false;
-                document.getElementById('query-btn').textContent = 'Submit Query';
-            }
-        });
+    def add_item(self, item: int) -> None:
+        self.data.append(item)
         
-        // Bootstrap activation
-        const triggerTabList = document.querySelectorAll('#functionTabs button');
-        triggerTabList.forEach(triggerEl => {
-            const tabTrigger = new bootstrap.Tab(triggerEl);
-            triggerEl.addEventListener('click', event => {
-                event.preventDefault();
-                tabTrigger.show();
-            });
-        });
-    </script>
+    def calculate_statistics(self) -> Dict[str, float]:
+        if not self.data:
+            return {"count": 0, "mean": 0, "median": 0}
+        
+        count = len(self.data)
+        mean = sum(self.data) / count
+        sorted_data = sorted(self.data)
+        
+        if count % 2 == 0:
+            median = (sorted_data[count//2-1] + sorted_data[count//2]) / 2
+        else:
+            median = sorted_data[count//2]
+            
+        return {"count": count, "mean": mean, "median": median}</pre>
+                </div>
+                
+                <div class="terminal-demo">
+                    <p><strong>Command:</strong> :ai How can I add standard deviation to the statistics?</p>
+                    <p><strong>AI Response:</strong></p>
+                    <p>To add standard deviation to your statistics, modify the calculate_statistics method:</p>
+                    <pre class="mb-0">def calculate_statistics(self) -> Dict[str, float]:
+    if not self.data:
+        return {"count": 0, "mean": 0, "median": 0, "std_dev": 0}
+    
+    count = len(self.data)
+    mean = sum(self.data) / count
+    sorted_data = sorted(self.data)
+    
+    if count % 2 == 0:
+        median = (sorted_data[count//2-1] + sorted_data[count//2]) / 2
+    else:
+        median = sorted_data[count//2]
+    
+    # Calculate standard deviation
+    variance = sum((x - mean) ** 2 for x in self.data) / count
+    std_dev = variance ** 0.5
+        
+    return {
+        "count": count, 
+        "mean": mean, 
+        "median": median,
+        "std_dev": std_dev
+    }</pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="row demo-section">
+            <div class="col-md-8 offset-md-2">
+                <h2>Diff-Style Suggestions</h2>
+                <p>AIVim presents improvement suggestions in a diff format, making it easy to see what changes are being recommended.</p>
+                
+                <div class="terminal-demo">
+                    <pre><span class="removed">- def search_items(items, search_term):</span>
+<span class="added">+ def search_items(items: list, search_term: str) -> list:</span>
+    """Search for items matching the search term"""
+    results = []
+    for item in items:
+<span class="removed">-       if search_term in item:</span>
+<span class="added">+       if search_term.lower() in str(item).lower():</span>
+            results.append(item)
+    return results</pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="row demo-section">
+            <div class="col-md-8 offset-md-2">
+                <h2>Getting Started</h2>
+                <p>Install and run AIVim from the command line:</p>
+                
+                <div class="code-block">
+                    <pre># Install dependencies
+pip install openai
+
+# Set your OpenAI API key
+export OPENAI_API_KEY=your_api_key_here
+
+# Run AIVim
+python main.py [optional_filename]</pre>
+                </div>
+                
+                <p class="mt-4"><strong>Key Commands:</strong></p>
+                <ul>
+                    <li><span class="command">:w</span> - Save file</li>
+                    <li><span class="command">:q</span> - Quit</li>
+                    <li><span class="command">:wq</span> - Save and quit</li>
+                    <li><span class="command">:explain start end</span> - Explain lines from start to end</li>
+                    <li><span class="command">:improve start end</span> - Get improvements for lines from start to end</li>
+                    <li><span class="command">:generate line description</span> - Generate code at the specified line</li>
+                    <li><span class="command">:ai query</span> - Ask AI a question about your code</li>
+                    <li><span class="command">:help</span> - Show help information</li>
+                </ul>
+            </div>
+        </div>
+
+        <footer class="text-center">
+            <p>AIVim - Bringing AI assistance to Vim's modal editing paradigm</p>
+            <p><small>Requires Python 3.11+ and an OpenAI API key</small></p>
+        </footer>
+    </div>
 </body>
 </html>

@@ -32,7 +32,7 @@ AIVim provides the following AI-specific commands:
 ### Basic Editing
 - Press `i` to enter insert mode, `ESC` to return to normal mode
 - Use `:w` to save, `:q` to quit, `:wq` to save and quit
-- Navigation works with `h`, `j`, `k`, `l` keys (left, down, up, right)
+- Navigation works with arrow keys (primary) or `h`, `j`, `k`, `l` keys (alternative)
 
 ### AI Features
 1. Navigate to the code you want to work with

@@ -95,17 +95,17 @@ class KeyHandler:
             self.editor.command_line = ""
             self.editor.command_cursor = 0
         
-        # Cursor movement
-        elif key == ord('h') or key == curses.KEY_LEFT:
+        # Cursor movement - prioritize arrow keys but keep hjkl as alternatives
+        elif key == curses.KEY_LEFT or key == ord('h'):
             self.editor.move_cursor(-1, 0)
         
-        elif key == ord('j') or key == curses.KEY_DOWN:
+        elif key == curses.KEY_DOWN or key == ord('j'):
             self.editor.move_cursor(0, 1)
         
-        elif key == ord('k') or key == curses.KEY_UP:
+        elif key == curses.KEY_UP or key == ord('k'):
             self.editor.move_cursor(0, -1)
         
-        elif key == ord('l') or key == curses.KEY_RIGHT:
+        elif key == curses.KEY_RIGHT or key == ord('l'):
             self.editor.move_cursor(1, 0)
         
         # Line navigation
@@ -215,17 +215,17 @@ class KeyHandler:
             self.editor.mode = self.editor.NORMAL_MODE
             self.editor.set_status_message("")
         
-        # Cursor movement (same as normal mode)
-        elif key == ord('h') or key == curses.KEY_LEFT:
+        # Cursor movement - prioritize arrow keys but keep hjkl as alternatives
+        elif key == curses.KEY_LEFT or key == ord('h'):
             self.editor.move_cursor(-1, 0)
         
-        elif key == ord('j') or key == curses.KEY_DOWN:
+        elif key == curses.KEY_DOWN or key == ord('j'):
             self.editor.move_cursor(0, 1)
         
-        elif key == ord('k') or key == curses.KEY_UP:
+        elif key == curses.KEY_UP or key == ord('k'):
             self.editor.move_cursor(0, -1)
         
-        elif key == ord('l') or key == curses.KEY_RIGHT:
+        elif key == curses.KEY_RIGHT or key == ord('l'):
             self.editor.move_cursor(1, 0)
         
         # Line navigation

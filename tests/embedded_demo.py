@@ -1,30 +1,44 @@
-#!/usr/bin/env python3
 """
-Demo of embedding AIVim in another application.
+Example script showing how to embed AIVim in other Python applications
 """
-import sys
 import os
+import sys
 
-# Add parent directory to path so we can import main
+# Add the parent directory to the path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+# Import the embed_editor function from main
 from main import embed_editor
 
-def run_demo():
-    """Run the embedded AIVim demo"""
-    print("Welcome to the AIVim Embedded Demo!")
-    print("Opening a sample file for editing...")
-    print("Press any key to continue...")
+
+def demonstrate_embedded_editor():
+    """
+    Show how to use AIVim as an embedded editor within another Python application
+    """
+    print("AIVim Embedded Editor Demonstration")
+    print("===================================")
+    print()
+    print("The editor will be launched within this application.")
+    print("You can use all AIVim features including AI assistance.")
+    print()
+    print("Press any key to launch the editor...")
     input()
     
-    # Get path to example.py in the same directory
-    example_path = os.path.join(os.path.dirname(__file__), 'example.py')
+    # Path to our example file
+    example_file = os.path.join(os.path.dirname(__file__), 'example.py')
     
-    # Start embedded editor with the example file
-    embed_editor(example_path)
+    # Launch the embedded editor
+    print(f"Opening {example_file}...")
+    embed_editor(example_file)
     
-    print("Editing complete!")
-    print("Thank you for trying AIVim!")
+    # Editor has closed, continue with the application
+    print()
+    print("Editor session completed.")
+    print("Continuing with the main application...")
+    print()
+    print("This demonstrates how AIVim can be integrated into other Python applications")
+    print("as a text editor component with AI capabilities.")
+
 
 if __name__ == "__main__":
-    run_demo()
+    demonstrate_embedded_editor()
