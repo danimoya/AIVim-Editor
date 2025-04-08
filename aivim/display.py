@@ -2,6 +2,8 @@
 Display handling for AIVim
 """
 import curses
+import time
+import threading
 from typing import List, Optional, Tuple
 
 from aivim.utils import split_diff_line
@@ -361,6 +363,55 @@ class Display:
         self.dialog_content = [content for _, content in colorized_content]
         self._setup_dialog_window()
         self._draw_diff_dialog(title, colorized_content)
+        
+    def show_confirmation_dialog(self, title: str, message: List[str]) -> bool:
+        """
+        Show a confirmation dialog that requires user response (y/n)
+        
+        Args:
+            title: Dialog title
+            message: List of message lines
+            
+        Returns:
+            True if user confirmed (pressed 'y'), False otherwise
+        """
+        # Set up dialog
+        self.dialog_content = message + ["", "Press 'y' to confirm or 'n' to cancel"]
+        self._setup_dialog_window()
+        
+        # Draw dialog with special footer
+        self.dialog_win.clear()
+        self.dialog_win.bkgd(' ', self.COLOR_DIALOG)
+        
+        # Draw border
+        self.dialog_win.box()
+        
+        # Draw title
+        title_str = f" {title} "
+        title_x = (self.dialog_win.getmaxyx()[1] - len(title_str)) // 2
+        self.dialog_win.addstr(0, title_x, title_str, self.COLOR_DIALOG_TITLE)
+        
+        # Draw content
+        max_content_width = self.dialog_win.getmaxyx()[1] - 4
+        visible_lines = min(len(self.dialog_content), self.dialog_win.getmaxyx()[0] - 4)
+        
+        for i in range(visible_lines):
+            line = self.dialog_content[i]
+            if len(line) > max_content_width:
+                line = line[:max_content_width-3] + "..."
+            self.dialog_win.addstr(i + 1, 2, line)
+        
+        self.dialog_win.refresh()
+        
+        # Wait for y/n response
+        while True:
+            key = self.stdscr.getch()
+            if key in (ord('y'), ord('Y')):
+                self.close_dialog()
+                return True
+            elif key in (ord('n'), ord('N')):
+                self.close_dialog()
+                return False
     
     def _draw_diff_dialog(self, title: str, colorized_content: List[Tuple[str, str]]) -> None:
         """
@@ -411,3 +462,53 @@ class Display:
                             close_text)
         
         self.dialog_win.refresh()
+        
+    # Loading indicator methods
+    def start_loading_animation(self, message: str) -> None:
+        """
+        Start an animated loading indicator in the status line
+        
+        Args:
+            message: Status message to display alongside the animation
+        """
+        # Store the original message
+        self._loading_base_message = message
+        self._loading_active = True
+        self._loading_frame = 0
+        self._loading_frames = ['⣾', '⣽', '⣻', '⢿', '⡿', '⣟', '⣯', '⣷']  # Spinner animation frames
+        
+        # Start the animation thread
+        self._loading_thread = threading.Thread(target=self._animate_loading)
+        self._loading_thread.daemon = True
+        self._loading_thread.start()
+    
+    def stop_loading_animation(self) -> None:
+        """Stop the loading animation"""
+        if hasattr(self, '_loading_active') and self._loading_active:
+            self._loading_active = False
+            if hasattr(self, '_loading_thread') and self._loading_thread.is_alive():
+                self._loading_thread.join(0.5)  # Wait for thread to finish with timeout
+            
+            # Clear the animation from status line
+            self.update_status(self._loading_base_message)
+    
+    def _animate_loading(self) -> None:
+        """Thread function to animate the loading indicator"""
+        try:
+            while self._loading_active:
+                # Get the current frame
+                frame = self._loading_frames[self._loading_frame % len(self._loading_frames)]
+                
+                # Update status with animation
+                animated_message = f"{self._loading_base_message} {frame}"
+                self.update_status(animated_message)
+                
+                # Advance to next frame
+                self._loading_frame += 1
+                
+                # Sleep for a short time
+                time.sleep(0.1)
+        except Exception as e:
+            import logging
+            logging.error(f"Error in loading animation: {str(e)}")
+            self._loading_active = False

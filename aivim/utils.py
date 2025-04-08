@@ -2,7 +2,10 @@
 Utility functions for AIVim
 """
 import difflib
+import os
 import re
+import datetime
+import shutil
 from typing import List, Tuple, Optional
 
 
@@ -119,3 +122,37 @@ def parse_line_range(start_line: str, end_line: str) -> Tuple[int, int]:
         return (start, end)
     except ValueError:
         return (-1, -1)
+
+
+def create_backup_file(filename: str) -> str:
+    """
+    Create a backup of the given file with timestamp
+    
+    Args:
+        filename: Path to the file to backup
+        
+    Returns:
+        Path to the backup file
+    """
+    if not os.path.exists(filename):
+        return ""
+        
+    # Get the directory and base name
+    directory = os.path.dirname(filename)
+    basename = os.path.basename(filename)
+    
+    # Create timestamp in format YYYYMMDDHHMMSS
+    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    
+    # Create backup filename (.filename.timestamp)
+    backup_name = f".{basename}.{timestamp}"
+    backup_path = os.path.join(directory, backup_name)
+    
+    # Copy the file
+    try:
+        shutil.copy2(filename, backup_path)
+        return backup_path
+    except Exception as e:
+        import logging
+        logging.error(f"Failed to create backup file: {str(e)}")
+        return ""

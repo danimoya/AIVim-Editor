@@ -741,7 +741,12 @@ class Editor:
         
         # Mark as processing
         self.ai_processing = True
-        self.set_status_message("AI generating code...")
+        
+        # Start loading animation
+        if self.display:
+            self.display.start_loading_animation("AI generating code")
+        else:
+            self.set_status_message("AI generating code...")
         
         # Run in a separate thread
         self.ai_thread = threading.Thread(
@@ -758,6 +763,10 @@ class Editor:
             
             # Apply changes in main thread
             with self.thread_lock:
+                # Stop loading animation if active
+                if self.display:
+                    self.display.stop_loading_animation()
+                
                 # Store current version in history
                 self.history.add_version(self.buffer.get_lines())
                 
@@ -775,6 +784,10 @@ class Editor:
         
         except Exception as e:
             with self.thread_lock:
+                # Stop loading animation if active
+                if self.display:
+                    self.display.stop_loading_animation()
+                
                 self.ai_processing = False
                 self.set_status_message(f"Error generating code: {str(e)}")
             logging.error(f"AI generation error: {str(e)}")
@@ -812,7 +825,12 @@ class Editor:
         
         # Mark as processing
         self.ai_processing = True
-        self.set_status_message("AI explaining code...")
+        
+        # Start loading animation
+        if self.display:
+            self.display.start_loading_animation("AI explaining code")
+        else:
+            self.set_status_message("AI explaining code...")
         
         # Run in a separate thread
         self.ai_thread = threading.Thread(
@@ -829,6 +847,10 @@ class Editor:
             
             # Show the explanation in a dialog
             with self.thread_lock:
+                # Stop loading animation if active
+                if self.display:
+                    self.display.stop_loading_animation()
+                
                 # Split into lines of appropriate width
                 explanation_lines = explanation.split("\n")
                 
@@ -841,6 +863,10 @@ class Editor:
         
         except Exception as e:
             with self.thread_lock:
+                # Stop loading animation if active
+                if self.display:
+                    self.display.stop_loading_animation()
+                
                 self.ai_processing = False
                 self.set_status_message(f"Error explaining code: {str(e)}")
             logging.error(f"AI explanation error: {str(e)}")
@@ -878,7 +904,12 @@ class Editor:
         
         # Mark as processing
         self.ai_processing = True
-        self.set_status_message("AI improving code...")
+        
+        # Start loading animation
+        if self.display:
+            self.display.start_loading_animation("AI improving code")
+        else:
+            self.set_status_message("AI improving code...")
         
         # Run in a separate thread
         self.ai_thread = threading.Thread(
@@ -905,32 +936,19 @@ class Editor:
             
             improved_lines = improved_code.strip().split("\n")
             
-            # Apply changes in main thread
+            # Create a diff between original and improved code
+            from aivim.utils import create_diff, create_backup_file
+            diff_lines = create_diff(code, improved_code)
+            
+            # Deal with the display in the main thread
             with self.thread_lock:
-                # Store current version in history
-                self.history.add_version(self.buffer.get_lines())
-                
-                # Replace the lines
-                lines = self.buffer.get_lines()
-                del lines[start_line:end_line+1]
-                for i, line in enumerate(improved_lines):
-                    lines.insert(start_line + i, line)
-                self.buffer.set_lines(lines)
-                
-                # Add the new version to history with metadata
-                self.history.add_version(self.buffer.get_lines(), metadata)
+                # Stop loading animation if active
+                if self.display:
+                    self.display.stop_loading_animation()
                 
                 # Update status
                 self.ai_processing = False
-                self.set_status_message(f"Improved {len(improved_lines)} lines of code")
-                
-                # Create a diff between original and improved code
-                from aivim.utils import create_diff
-                diff_lines = create_diff(code, improved_code)
-                
-                # Show diff in a dialog
-                if self.display:
-                    self.display.show_diff_dialog("Code Improvement Diff", diff_lines)
+                self.set_status_message("Review code improvement")
                 
                 # If there's an explanation, show it in a separate dialog
                 if improvement != improved_code:
@@ -938,9 +956,54 @@ class Editor:
                                        if not line.strip().startswith("```")]
                     if explanation_lines:
                         self.display.show_dialog("Code Improvement Explanation", explanation_lines)
+                
+                # Show the diff and ask for confirmation
+                confirmation_msg = [
+                    "The AI has suggested the following improvements:",
+                    "",
+                    f"- Original: {len(code.splitlines())} lines",
+                    f"- Improved: {len(improved_lines)} lines",
+                    "",
+                    "Would you like to apply these changes? (y/n)",
+                    "A backup of the original file will be created."
+                ]
+                
+                # Show diff in a dialog first
+                if self.display:
+                    self.display.show_diff_dialog("Code Improvement Diff", diff_lines)
+                
+                # Check if user wants to apply changes
+                if self.display and self.display.show_confirmation_dialog("Apply Changes?", confirmation_msg):
+                    # Create backup if we have a filename
+                    if self.filename:
+                        backup_path = create_backup_file(self.filename)
+                        if backup_path:
+                            self.set_status_message(f"Backup created: {backup_path}")
+                    
+                    # Store current version in history
+                    self.history.add_version(self.buffer.get_lines())
+                    
+                    # Replace the lines
+                    lines = self.buffer.get_lines()
+                    del lines[start_line:end_line+1]
+                    for i, line in enumerate(improved_lines):
+                        lines.insert(start_line + i, line)
+                    self.buffer.set_lines(lines)
+                    
+                    # Add the new version to history with metadata
+                    self.history.add_version(self.buffer.get_lines(), metadata)
+                    
+                    # Update status
+                    self.set_status_message(f"Improved {len(improved_lines)} lines of code")
+                else:
+                    self.set_status_message("Code improvement cancelled")
         
         except Exception as e:
             with self.thread_lock:
+                # Stop loading animation if active
+                if self.display:
+                    self.display.stop_loading_animation()
+                
                 self.ai_processing = False
                 self.set_status_message(f"Error improving code: {str(e)}")
             logging.error(f"AI improvement error: {str(e)}")
@@ -967,7 +1030,12 @@ class Editor:
         
         # Mark as processing
         self.ai_processing = True
-        self.set_status_message("AI processing query...")
+        
+        # Start loading animation
+        if self.display:
+            self.display.start_loading_animation("AI processing query")
+        else:
+            self.set_status_message("AI processing query...")
         
         # Run in a separate thread
         self.ai_thread = threading.Thread(
@@ -984,6 +1052,10 @@ class Editor:
             
             # Show the response in a dialog
             with self.thread_lock:
+                # Stop loading animation if active
+                if self.display:
+                    self.display.stop_loading_animation()
+                
                 # Split into lines
                 response_lines = response.split("\n")
                 
@@ -996,6 +1068,10 @@ class Editor:
         
         except Exception as e:
             with self.thread_lock:
+                # Stop loading animation if active
+                if self.display:
+                    self.display.stop_loading_animation()
+                
                 self.ai_processing = False
                 self.set_status_message(f"Error processing query: {str(e)}")
             logging.error(f"AI query error: {str(e)}")
