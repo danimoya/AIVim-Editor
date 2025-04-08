@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIVim Web Interface</title>
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+    <style>
+        .code-area {
+            font-family: monospace;
+            min-height: 200px;
+            white-space: pre-wrap;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            border: 1px solid #333;
+        }
+        
+        .response-area {
+            min-height: 200px;
+            white-space: pre-wrap;
+            border: 1px solid #333;
+        }
+
+        .loading {
+            display: none;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <div class="text-center mb-4">
+            <h1>AIVim Web Interface</h1>
+            <p class="lead">Access AI-powered code assistance without the command line</p>
+        </div>
+
+        <div class="alert alert-info">
+            <strong>Note:</strong> This is a web interface for AI features of AIVim. For the full editor experience, 
+            use AIVim on the command line: <code>python main.py [filename]</code>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5>Code Input</h5>
+                    </div>
+                    <div class="card-body">
+                        <textarea id="codeInput" class="form-control code-area" placeholder="Enter your code here..."></textarea>
+                    </div>
+                </div>
+                
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5>Context (Optional)</h5>
+                    </div>
+                    <div class="card-body">
+                        <textarea id="contextInput" class="form-control code-area" placeholder="Enter surrounding code or context here..."></textarea>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5>AI Response</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="responseOutput" class="response-area p-3"></div>
+                        <div id="loading" class="loading text-center">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p>Processing request...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>AI Operations</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex flex-wrap gap-2">
+                            <button id="btnExplain" class="btn btn-primary">Explain Code</button>
+                            <button id="btnImprove" class="btn btn-success">Improve Code</button>
+                            <button id="btnGenerate" class="btn btn-warning">Generate from Comments</button>
+                            <div class="ms-auto">
+                                <input type="text" id="customQuery" class="form-control" placeholder="Ask a custom question about the code...">
+                            </div>
+                            <button id="btnQuery" class="btn btn-info">Ask</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const codeInput = document.getElementById('codeInput');
+            const contextInput = document.getElementById('contextInput');
+            const responseOutput = document.getElementById('responseOutput');
+            const customQuery = document.getElementById('customQuery');
+            const loading = document.getElementById('loading');
+            
+            // Explain button
+            document.getElementById('btnExplain').addEventListener('click', function() {
+                if (!codeInput.value.trim()) {
+                    alert('Please enter some code to explain');
+                    return;
+                }
+                
+                showLoading();
+                
+                fetch('/api/explain', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        code: codeInput.value,
+                        context: contextInput.value
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    hideLoading();
+                    if (data.success) {
+                        responseOutput.textContent = data.explanation;
+                    } else {
+                        responseOutput.textContent = 'Error: ' + data.error;
+                    }
+                })
+                .catch(error => {
+                    hideLoading();
+                    responseOutput.textContent = 'Error: ' + error.message;
+                });
+            });
+            
+            // Improve button
+            document.getElementById('btnImprove').addEventListener('click', function() {
+                if (!codeInput.value.trim()) {
+                    alert('Please enter some code to improve');
+                    return;
+                }
+                
+                showLoading();
+                
+                fetch('/api/improve', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        code: codeInput.value,
+                        context: contextInput.value
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    hideLoading();
+                    if (data.success) {
+                        responseOutput.textContent = data.improved_code;
+                    } else {
+                        responseOutput.textContent = 'Error: ' + data.error;
+                    }
+                })
+                .catch(error => {
+                    hideLoading();
+                    responseOutput.textContent = 'Error: ' + error.message;
+                });
+            });
+            
+            // Generate button
+            document.getElementById('btnGenerate').addEventListener('click', function() {
+                if (!codeInput.value.trim()) {
+                    alert('Please enter a specification or comments for code generation');
+                    return;
+                }
+                
+                showLoading();
+                
+                fetch('/api/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        specification: codeInput.value,
+                        context: contextInput.value
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    hideLoading();
+                    if (data.success) {
+                        responseOutput.textContent = data.generated_code;
+                    } else {
+                        responseOutput.textContent = 'Error: ' + data.error;
+                    }
+                })
+                .catch(error => {
+                    hideLoading();
+                    responseOutput.textContent = 'Error: ' + error.message;
+                });
+            });
+            
+            // Query button
+            document.getElementById('btnQuery').addEventListener('click', function() {
+                if (!customQuery.value.trim()) {
+                    alert('Please enter a question');
+                    return;
+                }
+                
+                showLoading();
+                
+                fetch('/api/query', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        query: customQuery.value,
+                        context: codeInput.value || contextInput.value
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    hideLoading();
+                    if (data.success) {
+                        responseOutput.textContent = data.response;
+                    } else {
+                        responseOutput.textContent = 'Error: ' + data.error;
+                    }
+                })
+                .catch(error => {
+                    hideLoading();
+                    responseOutput.textContent = 'Error: ' + error.message;
+                });
+            });
+            
+            function showLoading() {
+                loading.style.display = 'block';
+                responseOutput.textContent = '';
+            }
+            
+            function hideLoading() {
+                loading.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>
