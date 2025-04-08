@@ -1330,14 +1330,15 @@ class Editor:
                     new_code = self.pending_ai_action.get("new_code")
                     
                     if start_line is not None and end_line is not None and new_code:
-                        # Create backup if we have a filename
+                        # First, save the current buffer to a backup file if we have a filename
+                        backup_path = ""
                         if self.filename:
                             from aivim.utils import create_backup_file
                             backup_path = create_backup_file(self.filename)
                             if backup_path:
                                 self.set_status_message(f"Backup created: {backup_path}")
                         
-                        # Save current buffer state to history
+                        # Save current buffer state to history for undo/redo
                         self.history.add_version(self.buffer.get_lines())
                         
                         # Replace the code
