@@ -90,6 +90,87 @@ pip install -e .
 python -m aivim.run_editor file.py
 ```
 
+
+### System-wide Installation
+
+To make AIVim available as a system-wide command (`aivim`), follow these steps:
+
+```bash
+# For temporary use in current session
+alias aivim='python -m aivim.run_editor'
+
+# For permanent installation, add to your shell configuration
+echo 'alias aivim="python -m aivim.run_editor"' >> ~/.bashrc
+# Or for Zsh
+echo 'alias aivim="python -m aivim.run_editor"' >> ~/.zshrc
+
+# Apply changes without restarting the terminal
+source ~/.bashrc  # or source ~/.zshrc
+```
+
+For a more robust system-wide installation, create a symbolic link:
+
+```bash
+# Create a symbolic link in a directory that's in your PATH
+sudo ln -s "$(which python) $(pwd)/run_editor.py" /usr/local/bin/aivim
+sudo chmod +x /usr/local/bin/aivim
+
+# Now you can run AIVim from anywhere
+aivim myfile.py
+```
+### System-wide Installation
+
+To make AIVim available as a system-wide command (`aivim`), follow these steps:
+
+```bash
+# For temporary use in current session
+alias aivim='python -m aivim.run_editor'
+
+# For permanent installation, add to your shell configuration
+echo 'alias aivim="python -m aivim.run_editor"' >> ~/.bashrc
+# Or for Zsh
+echo 'alias aivim="python -m aivim.run_editor"' >> ~/.zshrc
+
+# Apply changes without restarting the terminal
+source ~/.bashrc  # or source ~/.zshrc
+```
+
+For a more robust system-wide installation, create a symbolic link:
+
+```bash
+# Create a symbolic link in a directory that's in your PATH
+sudo ln -s "$(which python) $(pwd)/run_editor.py" /usr/local/bin/aivim
+sudo chmod +x /usr/local/bin/aivim
+
+# Now you can run AIVim from anywhere
+aivim myfile.py
+```
+
+
+### Configuration File
+
+Instead of setting environment variables, you can create a configuration file for storing API keys:
+
+```bash
+# Create a config directory
+mkdir -p ~/.config/aivim
+
+# Create and edit the configuration file
+cat > ~/.config/aivim/config.ini << EOF
+[api_keys]
+openai = your_openai_api_key_here
+anthropic = your_anthropic_api_key_here
+llama_model_path = /path/to/your/local/model.gguf
+
+[settings]
+default_model = openai
+EOF
+
+# Set proper permissions to protect your API keys
+chmod 600 ~/.config/aivim/config.ini
+```
+
+AIVim will automatically check for this configuration file and use these settings in addition to any environment variables that are set.
 ## Setting Up Local LLM Support
 
 AIVim supports using local LLM models via llama-cpp-python:
