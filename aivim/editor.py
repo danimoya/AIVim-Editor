@@ -15,6 +15,38 @@ from .ai_service import AIService
 from .history import History
 
 
+class Tab:
+    """
+    Represents a single tab in the editor
+    """
+    def __init__(self, name: str, buffer: Optional[Buffer] = None, filename: Optional[str] = None):
+        """
+        Initialize a new tab
+        
+        Args:
+            name: The name/title of the tab
+            buffer: Optional buffer to use, creates a new one if None
+            filename: Optional filename associated with this tab
+        """
+        self.name = name
+        self.buffer = buffer if buffer else Buffer()
+        self.cursor_x = 0
+        self.cursor_y = 0
+        self.scroll_y = 0
+        self.preferred_x = 0  # For maintaining horizontal position when moving vertically
+        self.filename = filename
+        self.is_temporary = False  # Indicates if this is a temporary tab (like AI suggestions)
+        self.history = History()  # Each tab has its own history
+        
+    def set_name(self, name: str) -> None:
+        """Set the tab name"""
+        self.name = name
+        
+    def get_name(self) -> str:
+        """Get the tab name"""
+        return self.name
+
+
 class Editor:
     """
     Main editor class that coordinates all AIVim components
@@ -26,18 +58,20 @@ class Editor:
         Args:
             filename: Optional file to edit
         """
-        self.buffer = Buffer()
+        # Tabs management
+        self.tabs = []  # List of all tabs
+        self.current_tab_index = 0  # Index of current active tab
+        
+        # Initialize common components
         self.display = None  # Will be initialized in start()
         self.command_handler = None  # Will be initialized in start()
         self.ai_service = AIService()
-        self.history = History()
+        
+        # Create initial tab
+        initial_tab = Tab("Untitled", filename=filename)
+        self.tabs.append(initial_tab)
         
         # Editor state
-        self.filename = filename
-        self.cursor_x = 0
-        self.cursor_y = 0
-        self.scroll_y = 0
-        self.preferred_x = 0  # For maintaining horizontal position when moving vertically
         self.status_message = ""
         self.command_buffer = ""
         self.command_cursor = 0
@@ -66,6 +100,148 @@ class Editor:
         if filename:
             self.load_file(filename)
     
+    # Property accessors to maintain compatibility with the rest of the code
+    @property
+    def buffer(self) -> Buffer:
+        """Get the buffer from the current tab"""
+        return self.tabs[self.current_tab_index].buffer
+        
+    @buffer.setter
+    def buffer(self, value: Buffer) -> None:
+        """Set the buffer for the current tab"""
+        self.tabs[self.current_tab_index].buffer = value
+        
+    @property
+    def cursor_x(self) -> int:
+        """Get cursor X position from the current tab"""
+        return self.tabs[self.current_tab_index].cursor_x
+        
+    @cursor_x.setter
+    def cursor_x(self, value: int) -> None:
+        """Set cursor X position for the current tab"""
+        self.tabs[self.current_tab_index].cursor_x = value
+        
+    @property
+    def cursor_y(self) -> int:
+        """Get cursor Y position from the current tab"""
+        return self.tabs[self.current_tab_index].cursor_y
+        
+    @cursor_y.setter
+    def cursor_y(self, value: int) -> None:
+        """Set cursor Y position for the current tab"""
+        self.tabs[self.current_tab_index].cursor_y = value
+        
+    @property
+    def scroll_y(self) -> int:
+        """Get scroll Y position from the current tab"""
+        return self.tabs[self.current_tab_index].scroll_y
+        
+    @scroll_y.setter
+    def scroll_y(self, value: int) -> None:
+        """Set scroll Y position for the current tab"""
+        self.tabs[self.current_tab_index].scroll_y = value
+        
+    @property
+    def filename(self) -> Optional[str]:
+        """Get filename from the current tab"""
+        return self.tabs[self.current_tab_index].filename
+        
+    @filename.setter
+    def filename(self, value: Optional[str]) -> None:
+        """Set filename for the current tab and update tab name"""
+        self.tabs[self.current_tab_index].filename = value
+        if value:
+            # Update tab name to match the filename (without path)
+            self.tabs[self.current_tab_index].name = os.path.basename(value)
+            
+    @property
+    def history(self) -> History:
+        """Get history from the current tab"""
+        return self.tabs[self.current_tab_index].history
+        
+    @property
+    def current_tab(self) -> Tab:
+        """Get the current active tab"""
+        return self.tabs[self.current_tab_index]
+    
+    @property
+    def preferred_x(self) -> int:
+        """Get preferred X position for the current tab"""
+        return self.tabs[self.current_tab_index].preferred_x
+        
+    @preferred_x.setter
+    def preferred_x(self, value: int) -> None:
+        """Set preferred X position for the current tab"""
+        self.tabs[self.current_tab_index].preferred_x = value
+        
+    # Tab management methods
+    def create_tab(self, name: str = "Untitled", buffer: Optional[Buffer] = None, 
+                  filename: Optional[str] = None, temporary: bool = False) -> int:
+        """
+        Create a new tab
+        
+        Args:
+            name: Name/title for the tab
+            buffer: Optional buffer to use
+            filename: Optional filename
+            temporary: Whether this is a temporary tab
+            
+        Returns:
+            Index of the new tab
+        """
+        new_tab = Tab(name, buffer, filename)
+        new_tab.is_temporary = temporary
+        self.tabs.append(new_tab)
+        return len(self.tabs) - 1
+        
+    def switch_to_tab(self, index: int) -> bool:
+        """
+        Switch to the specified tab
+        
+        Args:
+            index: Tab index
+            
+        Returns:
+            True if successful, False if index is invalid
+        """
+        if 0 <= index < len(self.tabs):
+            self.current_tab_index = index
+            return True
+        return False
+        
+    def next_tab(self) -> None:
+        """Switch to the next tab"""
+        if len(self.tabs) > 1:
+            self.current_tab_index = (self.current_tab_index + 1) % len(self.tabs)
+            self.set_status_message(f"Tab: {self.current_tab.name}")
+            
+    def prev_tab(self) -> None:
+        """Switch to the previous tab"""
+        if len(self.tabs) > 1:
+            self.current_tab_index = (self.current_tab_index - 1) % len(self.tabs)
+            self.set_status_message(f"Tab: {self.current_tab.name}")
+            
+    def close_current_tab(self) -> bool:
+        """
+        Close the current tab
+        
+        Returns:
+            True if successful, False otherwise (can't close last tab)
+        """
+        if len(self.tabs) <= 1:
+            # Can't close the last tab
+            self.set_status_message("Cannot close the last tab")
+            return False
+            
+        # Remove the current tab
+        del self.tabs[self.current_tab_index]
+        
+        # Adjust current index if needed
+        if self.current_tab_index >= len(self.tabs):
+            self.current_tab_index = len(self.tabs) - 1
+            
+        return True
+      
     def load_file(self, filename: str) -> None:
         """Load content from a file into the buffer"""
         try:
@@ -619,9 +795,19 @@ class Editor:
             return
         self._last_update_time = current_time
         
-        # Update status line
+        # Update status line with tab information
+        tab_info = ""
+        if len(self.tabs) > 1:
+            tab_names = []
+            for i, tab in enumerate(self.tabs):
+                if i == self.current_tab_index:
+                    tab_names.append(f"[{tab.name}]")
+                else:
+                    tab_names.append(f" {tab.name} ")
+            tab_info = " ".join(tab_names) + " | "
+                
         self.display.update_status(
-            f"{self.filename or '[No Name]'} "
+            f"{tab_info}{self.filename or '[No Name]'} "
             f"{'[+]' if self.buffer.is_modified() else ''} "
             f"Line {self.cursor_y+1}/{len(self.buffer.get_lines())} "
             f"Col {self.cursor_x+1} "

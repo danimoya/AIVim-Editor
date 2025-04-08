@@ -3,6 +3,7 @@ Command handler module for processing command-line commands.
 """
 import logging
 import os
+import os.path
 import re
 from typing import Dict, Callable, List, Any, Optional, Match
 
@@ -42,8 +43,14 @@ class CommandHandler:
             r'^set\s+(.+)$': self._cmd_set_option,
             r'^chat$': self._cmd_chat,
             r'^y$': self._cmd_confirm_yes,
-            r'^n$': self._cmd_confirm_no,
+            r'^n$': self._cmd_confirm_no,  # This conflicts with next tab, but confirm/reject is being deprecated
             r'^help$': self._cmd_help,
+            # Tab navigation commands
+            r'^nexttab$': self._cmd_next_tab,  # Changed to avoid conflict with 'n' for reject
+            r'^N$': self._cmd_prev_tab,
+            r'^tabnew$': self._cmd_tab_new,
+            r'^tabnew\s+(.+)$': self._cmd_tab_new_file,
+            r'^tabclose$': self._cmd_tab_close,
         }
         
         return commands
@@ -307,6 +314,96 @@ class CommandHandler:
             self.editor.set_status_message(f"Error handling rejection: {str(e)}")
             return False
     
+    def _cmd_next_tab(self) -> bool:
+        """
+        Handle the next tab command (:nexttab).
+        Switches to the next tab in the list.
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            self.editor.next_tab()
+            return True
+        except Exception as e:
+            self.editor.set_status_message(f"Error switching to next tab: {str(e)}")
+            return False
+    
+    def _cmd_prev_tab(self) -> bool:
+        """
+        Handle the previous tab command (:N).
+        Switches to the previous tab in the list.
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            self.editor.prev_tab()
+            return True
+        except Exception as e:
+            self.editor.set_status_message(f"Error switching to previous tab: {str(e)}")
+            return False
+    
+    def _cmd_tab_new(self) -> bool:
+        """
+        Handle the tab new command (:tabnew).
+        Creates a new empty tab.
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            tab_index = self.editor.create_tab("Untitled")
+            self.editor.switch_to_tab(tab_index)
+            self.editor.set_status_message("Created new tab")
+            return True
+        except Exception as e:
+            self.editor.set_status_message(f"Error creating new tab: {str(e)}")
+            return False
+    
+    def _cmd_tab_new_file(self, filename: str) -> bool:
+        """
+        Handle the tab new file command (:tabnew filename).
+        Creates a new tab and opens the specified file.
+
+        Args:
+            filename: The file to open
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Create a new tab
+            tab_index = self.editor.create_tab(os.path.basename(filename), filename=filename)
+            self.editor.switch_to_tab(tab_index)
+            
+            # Load the file
+            self.editor.load_file(filename)
+            self.editor.set_status_message(f"Opened {filename} in new tab")
+            return True
+        except Exception as e:
+            self.editor.set_status_message(f"Error opening file in new tab: {str(e)}")
+            return False
+    
+    def _cmd_tab_close(self) -> bool:
+        """
+        Handle the tab close command (:tabclose).
+        Closes the current tab.
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            if self.editor.close_current_tab():
+                self.editor.set_status_message("Closed tab")
+                return True
+            else:
+                # close_current_tab already sets an appropriate status message
+                return False
+        except Exception as e:
+            self.editor.set_status_message(f"Error closing tab: {str(e)}")
+            return False
+    
     def _cmd_help(self) -> bool:
         """
         Handle the help command (:help).
@@ -323,6 +420,13 @@ class CommandHandler:
             "  :q             - Quit (fails if unsaved changes)",
             "  :q!            - Force quit (discard changes)",
             "  :wq            - Save and quit",
+            "",
+            "Tab Management:",
+            "  :nexttab       - Switch to next tab",
+            "  :N             - Switch to previous tab",
+            "  :tabnew        - Create a new empty tab",
+            "  :tabnew file   - Open file in a new tab",
+            "  :tabclose      - Close the current tab",
             "",
             "AI Commands:",
             "  :explain s e   - Explain lines s through e",
