@@ -43,10 +43,9 @@ class CommandHandler:
             r'^set\s+(.+)$': self._cmd_set_option,
             r'^chat$': self._cmd_chat,
             r'^y$': self._cmd_confirm_yes,
-            r'^n$': self._cmd_confirm_no,  # This conflicts with next tab, but confirm/reject is being deprecated
+            r'^n$': self._cmd_next_tab,    # Changed from nexttab back to n as requested
             r'^help$': self._cmd_help,
             # Tab navigation commands
-            r'^nexttab$': self._cmd_next_tab,  # Changed to avoid conflict with 'n' for reject
             r'^N$': self._cmd_prev_tab,
             r'^tabnew$': self._cmd_tab_new,
             r'^tabnew\s+(.+)$': self._cmd_tab_new_file,
@@ -287,13 +286,15 @@ class CommandHandler:
     def _cmd_confirm_yes(self) -> bool:
         """
         Handle the confirm yes command (:y).
-        Used to confirm AI improvement suggestions.
+        Used to confirm AI improvement suggestions and create a new tab with
+        the improved content.
 
         Returns:
             True if successful, False otherwise
         """
         try:
-            self.editor.confirm_ai_action(True)
+            # Pass True for create_new_tab to open the improved code in a new tab
+            self.editor.confirm_ai_action(True, create_new_tab=True)
             return True
         except Exception as e:
             self.editor.set_status_message(f"Error handling confirmation: {str(e)}")
@@ -422,7 +423,7 @@ class CommandHandler:
             "  :wq            - Save and quit",
             "",
             "Tab Management:",
-            "  :nexttab       - Switch to next tab",
+            "  :n             - Switch to next tab",
             "  :N             - Switch to previous tab",
             "  :tabnew        - Create a new empty tab",
             "  :tabnew file   - Open file in a new tab",
@@ -436,7 +437,7 @@ class CommandHandler:
             "  :ai query      - Ask AI about the current code",
             "  :chat          - Start an interactive chat with AI",
             "  :set model     - Set AI model (openai, claude, local)",
-            "  :y             - Confirm AI suggestion",
+            "  :y             - Create a new tab with AI improved code",
             "  :n             - Reject AI suggestion",
             "",
             "Navigation:",

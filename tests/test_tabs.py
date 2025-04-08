@@ -61,7 +61,7 @@ def test_tab_commands(editor):
     # Switch between tabs a few times
     for _ in range(3):
         # Next tab
-        editor.command_buffer = "nexttab"
+        editor.command_buffer = "n"
         editor._process_command()
         
         # Let the user see the tab change

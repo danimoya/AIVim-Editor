@@ -1493,12 +1493,14 @@ class Editor:
         else:
             self.set_status_message(f"Unknown model: {model_name}. Valid options: openai, claude, local")
             
-    def confirm_ai_action(self, confirmed: bool) -> None:
+    def confirm_ai_action(self, confirmed: bool, create_new_tab: bool = False) -> None:
         """
         Confirm or reject a pending AI action
         
         Args:
             confirmed: True to confirm, False to reject
+            create_new_tab: If True, create a new tab with the improved content
+                           instead of modifying the current buffer
         """
         if not self.pending_ai_action:
             self.set_status_message("No pending AI action to confirm")
@@ -1524,24 +1526,58 @@ class Editor:
                             if backup_path:
                                 self.set_status_message(f"Backup created: {backup_path}")
                         
-                        # Save current buffer state to history for undo/redo
-                        self.history.add_version(self.buffer.get_lines())
-                        
-                        # Replace the code
+                        # Convert new code to lines
                         new_lines = new_code.split("\n")
                         
-                        # Delete the old lines
-                        for _ in range(end_line - start_line + 1):
-                            self.buffer.delete_line(start_line)
+                        if create_new_tab:
+                            # Create a new tab with the improved content
+                            # Generate a new filename based on the current filename
+                            new_filename = None
+                            timestamp = time.strftime("%Y%m%d%H%M%S")
                             
-                        # Insert the new lines
-                        for i, line in enumerate(new_lines):
-                            self.buffer.insert_line(start_line + i, line)
+                            if self.filename:
+                                # Get the directory and base name
+                                directory = os.path.dirname(self.filename)
+                                basename = os.path.basename(self.filename)
+                                name, ext = os.path.splitext(basename)
+                                
+                                # Create new filename (name_improved_timestamp.ext)
+                                new_basename = f"{name}_improved_{timestamp}{ext}"
+                                new_filename = os.path.join(directory, new_basename) if directory else new_basename
+                                
+                                # Create tab name from the new basename
+                                tab_name = new_basename
+                            else:
+                                # No filename, just use "Improved Code"
+                                tab_name = f"Improved_{timestamp}"
                             
-                        # Save the updated state in history
-                        metadata = self.pending_ai_action.get("metadata", {})
-                        self.history.add_version(self.buffer.get_lines(), metadata)
-                        self.set_status_message(f"AI improvement applied ({len(new_lines)} lines)")
+                            # Create a new buffer with the improved code
+                            new_buffer = Buffer()
+                            new_buffer.set_lines(new_lines)
+                            
+                            # Create the new tab
+                            tab_index = self.create_tab(tab_name, new_buffer, new_filename)
+                            
+                            # Switch to the new tab
+                            self.switch_to_tab(tab_index)
+                            self.set_status_message(f"Created new tab with improved code ({len(new_lines)} lines)")
+                        else:
+                            # Apply to current buffer
+                            # Save current buffer state to history for undo/redo
+                            self.history.add_version(self.buffer.get_lines())
+                            
+                            # Delete the old lines
+                            for _ in range(end_line - start_line + 1):
+                                self.buffer.delete_line(start_line)
+                                
+                            # Insert the new lines
+                            for i, line in enumerate(new_lines):
+                                self.buffer.insert_line(start_line + i, line)
+                                
+                            # Save the updated state in history
+                            metadata = self.pending_ai_action.get("metadata", {})
+                            self.history.add_version(self.buffer.get_lines(), metadata)
+                            self.set_status_message(f"AI improvement applied ({len(new_lines)} lines)")
                     else:
                         self.set_status_message("Invalid AI action data")
                 else:

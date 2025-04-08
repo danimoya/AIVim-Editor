@@ -15,12 +15,9 @@ AIVim is an AI-enhanced version of Vim built in Python, offering intelligent cod
 - **Code Improvement**: Get AI-powered refactoring and optimization suggestions with diff-style presentation
 - **Code Generation**: Generate new code based on natural language descriptions
 - **Custom AI Queries**: Ask questions about your code and receive contextual answers
-- **Loading Animations**: Visual feedback during AI processing operations
+- **Version History**: Automatic tracking of file changes with metadata
+- **File Backups**: Automatic backup creation when applying improvements
 
-### Performance Optimizations
-- **Display Debouncing**: Prevents screen flashing by limiting refresh rate to a maximum of 20 updates per second
-- **Input Throttling**: Improves responsiveness by filtering out rapid-fire repeated keystrokes during fast typing
-- **Async Processing**: All AI operations run in background threads to keep the editor responsive
 ## AI Commands
 
 AIVim provides the following AI-specific commands:
@@ -48,8 +45,6 @@ AIVim provides the following AI-specific commands:
    - Upon confirmation, a backup of the original file is automatically created
 4. Add `:generate 5 "Create a function that calculates factorial"` to generate code
 5. Ask questions with `:ai How does this algorithm work?`
-6. During AI processing, a spinning animation will show in the status bar to indicate progress
-6. During AI processing, a spinning animation will show in the status bar to indicate progress
 
 ## Installation
 
