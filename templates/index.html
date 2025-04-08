@@ -3,306 +3,406 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AIVim - AI-enhanced Vim Editor</title>
+    <title>AIVim Demo</title>
     <link rel="stylesheet" href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css">
     <style>
-        .feature-box {
+        body {
+            padding-top: 2rem;
+            padding-bottom: 2rem;
+        }
+        .editor-container {
+            min-height: 400px;
             border: 1px solid var(--bs-border-color);
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
+            border-radius: 0.25rem;
+            margin-bottom: 1rem;
+            display: flex;
+            flex-direction: column;
+        }
+        .code-area {
+            flex-grow: 1;
+            resize: none;
+            font-family: monospace;
+            padding: 1rem;
             background-color: var(--bs-dark);
-        }
-        .code-block {
-            background-color: var(--bs-gray-900);
-            border-radius: 5px;
-            padding: 15px;
-            font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', 'Menlo', monospace;
-            overflow-x: auto;
-            margin: 15px 0;
-        }
-        .terminal-demo {
-            background-color: var(--bs-gray-900);
-            border-radius: 5px;
-            padding: 15px;
-            font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', 'Menlo', monospace;
             color: var(--bs-light);
-            margin: 20px 0;
-            border: 1px solid var(--bs-gray-700);
+            border: none;
+            min-height: 350px;
         }
-        .added {
-            background-color: rgba(0, 255, 0, 0.1);
-            color: #00cc00;
+        .result-container {
+            min-height: 200px;
+            border: 1px solid var(--bs-border-color);
+            border-radius: 0.25rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            background-color: var(--bs-dark);
+            font-family: monospace;
+            white-space: pre-wrap;
         }
-        .removed {
-            background-color: rgba(255, 0, 0, 0.1);
-            color: #ff6666;
+        .editor-toolbar {
+            padding: 0.5rem;
+            background-color: var(--bs-dark-bg-subtle);
+            border-bottom: 1px solid var(--bs-border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
-        .demo-section {
-            margin-top: 40px;
-            padding-top: 20px;
+        .editor-footer {
+            padding: 0.5rem;
+            background-color: var(--bs-dark-bg-subtle);
             border-top: 1px solid var(--bs-border-color);
+            font-size: 0.8rem;
+            color: var(--bs-secondary);
         }
-        .command {
-            color: var(--bs-info);
-            font-weight: bold;
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
         }
-        footer {
-            margin-top: 50px;
-            padding: 20px 0;
-            border-top: 1px solid var(--bs-border-color);
+        .status-active {
+            background-color: var(--bs-success);
+        }
+        .status-pending {
+            background-color: var(--bs-warning);
+            animation: blink 1s infinite;
+        }
+        .status-error {
+            background-color: var(--bs-danger);
+        }
+        @keyframes blink {
+            0% { opacity: 0.5; }
+            50% { opacity: 1; }
+            100% { opacity: 0.5; }
         }
     </style>
 </head>
 <body>
-    <div class="container py-5">
-        <header class="mb-5 text-center">
-            <h1 class="display-4">AIVim</h1>
-            <p class="lead">An AI-enhanced version of Vim for intelligent code editing</p>
-        </header>
-
-        <div class="row mb-5">
-            <div class="col-md-8 offset-md-2">
-                <div class="feature-box">
-                    <h2>About AIVim</h2>
-                    <p>AIVim combines the power of Vim's modal editing with intelligent AI-assisted coding features. Designed for developers who love Vim's efficiency but want the advantages of modern AI code assistance.</p>
-                    
-                    <h3 class="mt-4">Key Features</h3>
-                    <ul>
-                        <li><strong>Modal Editing</strong> - Familiar Vim-style modal editing, including normal, insert, and visual modes</li>
-                        <li><strong>AI Code Explanation</strong> - Get detailed explanations of selected code sections</li>
-                        <li><strong>Code Improvement</strong> - Receive AI-suggested improvements for your code</li>
-                        <li><strong>Code Generation</strong> - Generate new code based on specifications or comments</li>
-                        <li><strong>Custom AI Queries</strong> - Ask the AI assistant questions about your code</li>
-                        <li><strong>Cross-Platform</strong> - Runs on any system with Python installed</li>
-                        <li><strong>Embeddable API</strong> - Can be integrated into other Python applications</li>
-                    </ul>
+    <div class="container">
+        <h1 class="mb-4">AIVim Demo</h1>
+        
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="alert alert-info">
+                    <h5>Welcome to AIVim Web Demo</h5>
+                    <p>Experience the power of AI-enhanced code editing without installing anything. This demo showcases the core AI features of AIVim, a terminal-based editor that combines Vim's modal editing with advanced AI assistance.</p>
+                    <p>Note: For the full experience including modal editing, install the command-line version.</p>
                 </div>
             </div>
         </div>
-
-        <div class="row demo-section">
-            <div class="col-lg-6">
-                <h2>AI Code Explanation</h2>
-                <p>Select a code section and use <span class="command">:explain</span> to get a detailed explanation of how it works.</p>
+        
+        <div class="row">
+            <div class="col-md-6">
+                <h3>Code Editor</h3>
+                <div class="editor-container">
+                    <div class="editor-toolbar">
+                        <span>Enter your code here</span>
+                        <div class="btn-group">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="loadSample('python')">Python Sample</button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="loadSample('javascript')">JavaScript Sample</button>
+                        </div>
+                    </div>
+                    <textarea id="code-editor" class="code-area"></textarea>
+                    <div class="editor-footer">
+                        <span class="status-indicator" id="status-indicator"></span>
+                        <span id="editor-status">Ready</span>
+                    </div>
+                </div>
                 
-                <div class="code-block">
-                    <pre>def calculate_fibonacci(n: int) -> int:
+                <div class="mb-3">
+                    <label for="context-editor" class="form-label">Context (optional)</label>
+                    <textarea id="context-editor" class="form-control" rows="3" placeholder="Enter additional context about your project (optional)"></textarea>
+                </div>
+                
+                <div class="d-grid gap-2">
+                    <div class="row">
+                        <div class="col">
+                            <button type="button" class="btn btn-primary w-100" onclick="requestAI('explain')">AI Explain</button>
+                        </div>
+                        <div class="col">
+                            <button type="button" class="btn btn-info w-100" onclick="requestAI('improve')">AI Improve</button>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col">
+                            <div class="input-group">
+                                <input type="text" id="query-input" class="form-control" placeholder="Ask a question about the code...">
+                                <button class="btn btn-secondary" type="button" onclick="customQuery()">Query</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col">
+                            <div class="input-group">
+                                <input type="text" id="generate-input" class="form-control" placeholder="Describe code to generate...">
+                                <button class="btn btn-success" type="button" onclick="generateCode()">Generate</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <h3>AI Response</h3>
+                <div class="result-container" id="result-display">Results will appear here...</div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Key AIVim Features</h5>
+                    </div>
+                    <div class="list-group list-group-flush">
+                        <div class="list-group-item">
+                            <h6>AI Explain</h6>
+                            <p class="mb-0">Get a detailed explanation of what your code does.</p>
+                        </div>
+                        <div class="list-group-item">
+                            <h6>AI Improve</h6>
+                            <p class="mb-0">Get suggestions to improve your code.</p>
+                        </div>
+                        <div class="list-group-item">
+                            <h6>AI Query</h6>
+                            <p class="mb-0">Ask questions about your code.</p>
+                        </div>
+                        <div class="list-group-item">
+                            <h6>AI Generate</h6>
+                            <p class="mb-0">Generate code based on your description.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h4>About AIVim</h4>
+                    </div>
+                    <div class="card-body">
+                        <p>AIVim is an AI-enhanced version of Vim that maintains Vim's modal editing paradigm while incorporating AI assistance for code editing and generation. The full application runs from the command line, is easily embeddable by other Python programs, and allows editing files via parameter input.</p>
+                        
+                        <h5 class="mt-3">Full Feature Set</h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <ul>
+                                    <li>Modal editing (Normal, Insert, Visual modes)</li>
+                                    <li>AI-powered code explanation</li>
+                                    <li>Smart code improvement suggestions</li>
+                                    <li>Context-aware code generation</li>
+                                    <li>Interactive AI chat for coding questions</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <ul>
+                                    <li>Multiple AI provider support (OpenAI, Claude)</li>
+                                    <li>Advanced code analysis for bugs and complexity</li>
+                                    <li>Diff-style presentation of AI suggestions</li>
+                                    <li>Version history with automatic backups</li>
+                                    <li>Performance optimizations for smooth editing</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Sample code examples
+        const samples = {
+            python: `def fibonacci(n):
     """
-    Calculate the nth Fibonacci number using
-    a simple recursive approach.
+    Calculate the nth Fibonacci number using recursion.
+    
+    Args:
+        n: The position in the Fibonacci sequence
+        
+    Returns:
+        The nth Fibonacci number
     """
     if n <= 0:
         return 0
     elif n == 1:
         return 1
     else:
-        return calculate_fibonacci(n - 1) + calculate_fibonacci(n - 2)</pre>
-                </div>
-                
-                <div class="terminal-demo">
-                    <p><strong>Command:</strong> :explain 1 10</p>
-                    <p><strong>AI Response:</strong></p>
-                    <p>This code defines a recursive function to calculate Fibonacci numbers.</p>
-                    <ul>
-                        <li>Base cases: n ≤ 0 returns 0, n = 1 returns 1</li>
-                        <li>For n > 1, it recursively calculates fib(n-1) + fib(n-2)</li>
-                        <li>Type hints indicate integer input and output</li>
-                        <li>The approach is simple but inefficient for large values</li>
-                        <li>Time complexity is O(2^n) due to redundant calculations</li>
-                    </ul>
-                </div>
-            </div>
-            
-            <div class="col-lg-6">
-                <h2>AI Code Improvement</h2>
-                <p>Select a code section and use <span class="command">:improve</span> to get suggestions for making your code better.</p>
-                
-                <div class="code-block">
-                    <pre>def parse_data(data_string: str):
-    result = {}
-    pairs = data_string.split(';')
-    for pair in pairs:
-        if '=' in pair:
-            key, value = pair.split('=')
-            result[key] = value
-    return result</pre>
-                </div>
-                
-                <div class="terminal-demo">
-                    <p><strong>Command:</strong> :improve 1 8</p>
-                    <p><strong>AI Response:</strong></p>
-                    <pre class="mb-0">def parse_data(data_string: str) -> dict[str, str]:
-    """
-    Parse a string of data into a dictionary.
-    
-    Args:
-        data_string: A string in format "key1=value1;key2=value2"
-        
-    Returns:
-        A dictionary of parsed data
-    """
-    result = {}
-    if not data_string:
-        return result
-        
-    pairs = data_string.split(';')
-    for pair in pairs:
-        if '=' in pair:
-            key, value = pair.split('=', 1)  # Split on first '=' only
-            result[key.strip()] = value.strip()
-    return result</pre>
-                </div>
-            </div>
-        </div>
+        return fibonacci(n-1) + fibonacci(n-2)
 
-        <div class="row demo-section">
-            <div class="col-lg-6">
-                <h2>AI Code Generation</h2>
-                <p>Use <span class="command">:generate</span> to create new code based on your specification.</p>
-                
-                <div class="code-block">
-                    <pre># Comment describing what to generate
-# Create a function to validate email addresses</pre>
-                </div>
-                
-                <div class="terminal-demo">
-                    <p><strong>Command:</strong> :generate 2 Create a function to validate email addresses</p>
-                    <p><strong>AI Response:</strong></p>
-                    <pre class="mb-0">def validate_email(email: str) -> bool:
-    """
-    Validate if a string is a proper email address.
+def main():
+    # Calculate the 10th Fibonacci number
+    result = fibonacci(10)
+    print(f"The 10th Fibonacci number is: {result}")
+
+if __name__ == "__main__":
+    main()`,
+            javascript: `// A simple e-commerce shopping cart calculation
+function calculateTotal(items, promoCode) {
+    // Calculate the total price of all items
+    const subtotal = items.reduce((total, item) => {
+        return total + (item.price * item.quantity);
+    }, 0);
     
-    Args:
-        email: The email string to validate
-        
-    Returns:
-        True if the email is valid, False otherwise
-    """
-    import re
+    // Apply discount if promo code is valid
+    let discount = 0;
+    if (promoCode === "SAVE10") {
+        discount = subtotal * 0.1;
+    } else if (promoCode === "SAVE20") {
+        discount = subtotal * 0.2;
+    }
     
-    # Regular expression for email validation
-    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    // Calculate tax (assume 8% tax rate)
+    const tax = (subtotal - discount) * 0.08;
     
-    # Check if the email matches the pattern
-    if re.match(pattern, email):
-        return True
-    return False</pre>
-                </div>
-            </div>
-            
-            <div class="col-lg-6">
-                <h2>AI Custom Queries</h2>
-                <p>Use <span class="command">:ai</span> to ask questions about your code.</p>
-                
-                <div class="code-block">
-                    <pre>class DataProcessor:
-    def __init__(self, data: List[int] = None):
-        self.data = data or []
-        
-    def add_item(self, item: int) -> None:
-        self.data.append(item)
-        
-    def calculate_statistics(self) -> Dict[str, float]:
-        if not self.data:
-            return {"count": 0, "mean": 0, "median": 0}
-        
-        count = len(self.data)
-        mean = sum(self.data) / count
-        sorted_data = sorted(self.data)
-        
-        if count % 2 == 0:
-            median = (sorted_data[count//2-1] + sorted_data[count//2]) / 2
-        else:
-            median = sorted_data[count//2]
-            
-        return {"count": count, "mean": mean, "median": median}</pre>
-                </div>
-                
-                <div class="terminal-demo">
-                    <p><strong>Command:</strong> :ai How can I add standard deviation to the statistics?</p>
-                    <p><strong>AI Response:</strong></p>
-                    <p>To add standard deviation to your statistics, modify the calculate_statistics method:</p>
-                    <pre class="mb-0">def calculate_statistics(self) -> Dict[str, float]:
-    if not self.data:
-        return {"count": 0, "mean": 0, "median": 0, "std_dev": 0}
+    // Calculate final total
+    const total = subtotal - discount + tax;
     
-    count = len(self.data)
-    mean = sum(self.data) / count
-    sorted_data = sorted(self.data)
-    
-    if count % 2 == 0:
-        median = (sorted_data[count//2-1] + sorted_data[count//2]) / 2
-    else:
-        median = sorted_data[count//2]
-    
-    # Calculate standard deviation
-    variance = sum((x - mean) ** 2 for x in self.data) / count
-    std_dev = variance ** 0.5
-        
     return {
-        "count": count, 
-        "mean": mean, 
-        "median": median,
-        "std_dev": std_dev
-    }</pre>
-                </div>
-            </div>
-        </div>
+        subtotal: subtotal.toFixed(2),
+        discount: discount.toFixed(2),
+        tax: tax.toFixed(2),
+        total: total.toFixed(2)
+    };
+}`
+        };
 
-        <div class="row demo-section">
-            <div class="col-md-8 offset-md-2">
-                <h2>Diff-Style Suggestions</h2>
-                <p>AIVim presents improvement suggestions in a diff format, making it easy to see what changes are being recommended.</p>
-                
-                <div class="terminal-demo">
-                    <pre><span class="removed">- def search_items(items, search_term):</span>
-<span class="added">+ def search_items(items: list, search_term: str) -> list:</span>
-    """Search for items matching the search term"""
-    results = []
-    for item in items:
-<span class="removed">-       if search_term in item:</span>
-<span class="added">+       if search_term.lower() in str(item).lower():</span>
-            results.append(item)
-    return results</pre>
-                </div>
-            </div>
-        </div>
+        // Load a sample into the editor
+        function loadSample(language) {
+            document.getElementById('code-editor').value = samples[language];
+        }
 
-        <div class="row demo-section">
-            <div class="col-md-8 offset-md-2">
-                <h2>Getting Started</h2>
-                <p>Install and run AIVim from the command line:</p>
-                
-                <div class="code-block">
-                    <pre># Install dependencies
-pip install openai
+        // Handle AI requests
+        function requestAI(action) {
+            const code = document.getElementById('code-editor').value;
+            const context = document.getElementById('context-editor').value;
+            
+            if (!code.trim()) {
+                alert('Please enter some code first');
+                return;
+            }
+            
+            setStatus('pending', 'Processing...');
+            
+            fetch('/api/ai-assist', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    action: action,
+                    code: code,
+                    context: context
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                setStatus('active', 'Ready');
+                document.getElementById('result-display').textContent = data.result;
+            })
+            .catch(error => {
+                setStatus('error', 'Error: ' + error.message);
+                document.getElementById('result-display').textContent = 'Error: ' + error.message;
+            });
+        }
 
-# Set your OpenAI API key
-export OPENAI_API_KEY=your_api_key_here
+        // Handle custom query
+        function customQuery() {
+            const code = document.getElementById('code-editor').value;
+            const context = document.getElementById('context-editor').value;
+            const query = document.getElementById('query-input').value;
+            
+            if (!query.trim()) {
+                alert('Please enter a query');
+                return;
+            }
+            
+            setStatus('pending', 'Processing query...');
+            
+            fetch('/api/ai-assist', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    action: 'query',
+                    code: code,
+                    context: context,
+                    query: query
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                setStatus('active', 'Ready');
+                document.getElementById('result-display').textContent = data.result;
+            })
+            .catch(error => {
+                setStatus('error', 'Error: ' + error.message);
+                document.getElementById('result-display').textContent = 'Error: ' + error.message;
+            });
+        }
 
-# Run AIVim
-python main.py [optional_filename]</pre>
-                </div>
-                
-                <p class="mt-4"><strong>Key Commands:</strong></p>
-                <ul>
-                    <li><span class="command">:w</span> - Save file</li>
-                    <li><span class="command">:q</span> - Quit</li>
-                    <li><span class="command">:wq</span> - Save and quit</li>
-                    <li><span class="command">:explain start end</span> - Explain lines from start to end</li>
-                    <li><span class="command">:improve start end</span> - Get improvements for lines from start to end</li>
-                    <li><span class="command">:generate line description</span> - Generate code at the specified line</li>
-                    <li><span class="command">:ai query</span> - Ask AI a question about your code</li>
-                    <li><span class="command">:help</span> - Show help information</li>
-                </ul>
-            </div>
-        </div>
+        // Handle code generation
+        function generateCode() {
+            const context = document.getElementById('context-editor').value;
+            const spec = document.getElementById('generate-input').value;
+            
+            if (!spec.trim()) {
+                alert('Please enter a description of the code to generate');
+                return;
+            }
+            
+            setStatus('pending', 'Generating code...');
+            
+            fetch('/api/ai-assist', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    action: 'generate',
+                    context: context,
+                    specification: spec
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                setStatus('active', 'Ready');
+                document.getElementById('result-display').textContent = data.result;
+            })
+            .catch(error => {
+                setStatus('error', 'Error: ' + error.message);
+                document.getElementById('result-display').textContent = 'Error: ' + error.message;
+            });
+        }
 
-        <footer class="text-center">
-            <p>AIVim - Bringing AI assistance to Vim's modal editing paradigm</p>
-            <p><small>Requires Python 3.11+ and an OpenAI API key</small></p>
-        </footer>
-    </div>
+        // Update status indicator
+        function setStatus(type, text) {
+            const indicator = document.getElementById('status-indicator');
+            const status = document.getElementById('editor-status');
+            
+            indicator.className = 'status-indicator';
+            indicator.classList.add('status-' + type);
+            status.textContent = text;
+        }
+
+        // Initialize with Python sample
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSample('python');
+        });
+    </script>
 </body>
 </html>

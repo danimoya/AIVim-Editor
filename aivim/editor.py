@@ -58,6 +58,10 @@ class Editor:
         self.pending_ai_action = None     # For storing AI suggestions awaiting confirmation
         self.chat_history = []            # For storing chat conversation history
         
+        # For display optimization
+        self._last_update_time = time.time()
+        self._last_input_time = time.time()
+        
         # Load file if specified
         if filename:
             self.load_file(filename)
@@ -145,11 +149,25 @@ class Editor:
     
     def handle_input(self, key: int) -> None:
         """Process user input based on current mode"""
+        # Store current time for input handling throttling
+        current_time = time.time()
+        
         if key == curses.KEY_RESIZE:
             # Terminal was resized
             self._handle_resize()
             return
+            
+        # Skip processing if we're in the middle of AI processing
+        if self.ai_processing:
+            # Allow escape key to cancel AI processing in the future
+            return
         
+        # Skip too frequent key processing (throttle keyboard repeat)
+        if hasattr(self, '_last_input_time') and current_time - self._last_input_time < 0.01:
+            # Skip if less than 10ms has passed since last input (very rapid typing)
+            return
+        self._last_input_time = current_time
+            
         # Handle input based on current mode
         if self.mode == "NORMAL":
             self._handle_normal_mode(key)
@@ -585,6 +603,13 @@ class Editor:
         if self.display.is_dialog_open():
             # Only handle dialog close key
             return
+            
+        # Prevent too frequent updates (debouncing)
+        current_time = time.time()
+        if hasattr(self, '_last_update_time') and current_time - self._last_update_time < 0.05:
+            # Skip update if less than 50ms has passed since last update
+            return
+        self._last_update_time = current_time
         
         # Update status line
         self.display.update_status(
@@ -661,6 +686,12 @@ class Editor:
             self.set_status_message(f"Editing: {self.filename}")
         else:
             self.set_status_message("No file opened")
+            
+        # Show the performance optimization message
+        # Use a short timer to let the editor fully initialize first
+        opt_timer = threading.Timer(0.5, self.display.show_optimization_message)
+        opt_timer.daemon = True
+        opt_timer.start()
     
     def _adjust_cursor_x(self) -> None:
         """Adjust cursor x position when moving vertically"""
