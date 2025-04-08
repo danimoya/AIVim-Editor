@@ -47,6 +47,20 @@ class AIService:
         else:
             logging.warning("OpenAI package not installed. OpenAI features will not work.")
             
+        # Initialize Anthropic
+        try:
+            import anthropic
+            if self.anthropic_api_key:
+                try:
+                    self.anthropic_client = anthropic.Anthropic(api_key=self.anthropic_api_key)
+                    logging.info("Anthropic client initialized successfully")
+                except Exception as e:
+                    logging.error(f"Error initializing Anthropic client: {str(e)}")
+            else:
+                logging.warning("ANTHROPIC_API_KEY environment variable not set. Claude features will not work.")
+        except ImportError:
+            logging.warning("Anthropic package not installed. Claude features will not work.")
+            
     def set_model(self, model_name: str) -> bool:
         """
         Set the AI model provider to use
@@ -125,9 +139,21 @@ class AIService:
         if not self.anthropic_client:
             return "Anthropic Claude API unavailable. Please set ANTHROPIC_API_KEY environment variable."
         
-        # This is a placeholder for actual Claude implementation
-        # The newest Anthropic model is "claude-3-5-sonnet-20241022" which was released October 22, 2024.
-        return "Claude API support coming soon. Please use OpenAI or local models for now."
+        try:
+            # Use the claude-3-5-sonnet-20241022 model, the latest available
+            response = self.anthropic_client.messages.create(
+                model="claude-3-5-sonnet-20241022",
+                system=system_prompt,
+                messages=[
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.2,
+                max_tokens=1000
+            )
+            return response.content[0].text
+        except Exception as e:
+            logging.error(f"Anthropic API error: {str(e)}")
+            return f"Error: {str(e)}"
         
     def _local_completion(self, system_prompt: str, user_prompt: str) -> Optional[str]:
         """Create a completion using a local model"""
