@@ -6,3 +6,7 @@ anthropic
 llama-cpp-python
 requests
 tqdm
+anthropic
+configparser
+llama-cpp-python
+python-dotenv

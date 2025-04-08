@@ -1,88 +1,32 @@
 #!/usr/bin/env python3
 """
 AIVim - An AI-enhanced version of Vim implemented in Python
-Command-line interface and embeddable API
+Web interface and API server
 """
 import os
+import logging
 from flask import Flask, render_template, jsonify, request, send_from_directory
 
 # Create Flask app
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret-key")
-import argparse
-import curses
-import logging
-import os
-import sys
-from typing import Optional
 
-from aivim.editor import Editor
-
-from aivim.ai_service import AIService
-
-
-def parse_arguments():
-    """Parse command line arguments"""
-    parser = argparse.ArgumentParser(
-        description="AIVim - AI-enhanced Vim editor"
-    )
-    parser.add_argument(
-        "filename", nargs="?", default=None,
-        help="File to edit (if not specified, opens an empty buffer)"
-    )
-    return parser.parse_args()
-
-
-def check_environment():
-    """Check if the environment is properly set up"""
-    # Check for OPENAI_API_KEY
-    if not os.environ.get("OPENAI_API_KEY"):
-        print("Warning: OPENAI_API_KEY environment variable is not set.")
-        print("AI features will not work without an OpenAI API key.")
-        print("Set the environment variable with: export OPENAI_API_KEY=your_key")
-        return False
-    return True
-
-
-def start_editor(stdscr, filename: Optional[str] = None):
-    """Initialize and start the editor"""
-    # Enable logging
-    logging.basicConfig(
-        filename="aivim.log",
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    
-    editor = Editor(filename)
-    editor.start(stdscr)
-
-
-def embed_editor(filename: Optional[str] = None):
-    """
-    API function for embedding the editor in other applications
-    
-    Args:
-        filename: Optional file to edit
-    """
-    curses.wrapper(start_editor, filename)
-
-
-def main():
-    """Main entry point for AIVim"""
-    args = parse_arguments()
-    check_environment()
-    curses.wrapper(start_editor, args.filename)
-
-
-
+# Enable logging
+logging.basicConfig(
+    filename="aivim.log",
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 
 # Web application routes
 @app.route('/')
 def index():
+    """Render the main web interface"""
     return render_template('index.html')
 
 @app.route('/api/ai-assist', methods=['POST'])
 def ai_assist():
+    """Handle AI assistance requests from the web interface"""
     data = request.json
     action = data.get('action')
     code = data.get('code', '')
@@ -102,10 +46,23 @@ def ai_assist():
     elif action == 'query':
         query = data.get('query', '')
         result = ai_service.custom_query(query, context)
+    elif action == 'analyze':
+        result = ai_service.analyze_code(code, context)
     else:
         return jsonify({"error": "Invalid action"}), 400
         
     return jsonify({"result": result})
 
+@app.route('/api/check-api-key', methods=['GET'])
+def check_api_key():
+    """Check if the OPENAI_API_KEY is set"""
+    has_key = bool(os.environ.get("OPENAI_API_KEY"))
+    return jsonify({"has_key": has_key})
+
+@app.route('/static/<path:path>')
+def send_static(path):
+    """Serve static files"""
+    return send_from_directory('static', path)
+
 if __name__ == "__main__":
-    main()
+    app.run(host="0.0.0.0", port=5000, debug=True)

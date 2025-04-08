@@ -1,4 +1,12 @@
-# AIVim - AI-Enhanced Text Editor
+#!/usr/bin/env python3
+"""
+Script to create a new README.md file with all sections.
+"""
+
+def main():
+    """Main function to create a new README.md"""
+    
+    readme_content = '''# AIVim - AI-Enhanced Text Editor
 
 AIVim is an AI-enhanced version of Vim built in Python, offering intelligent code assistance and generation capabilities while maintaining the core modal editing experience. Combining the power of different AI models with familiar Vim interactions, AIVim helps developers understand, improve, and generate code more efficiently.
 
@@ -206,3 +214,23 @@ embed_editor()
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+'''
+    
+    # Create a backup of the current README
+    try:
+        with open('README.md', 'r') as f:
+            old_content = f.read()
+        
+        with open('README.md.backup', 'w') as f:
+            f.write(old_content)
+    except Exception as e:
+        print(f"Warning: Failed to create backup: {e}")
+    
+    # Write the new README
+    with open('README.md', 'w') as f:
+        f.write(readme_content)
+    
+    print("New README.md created successfully!")
+
+if __name__ == "__main__":
+    main()
