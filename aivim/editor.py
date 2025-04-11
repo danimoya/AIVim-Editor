@@ -92,6 +92,12 @@ class Editor:
         self.pending_ai_action = None     # For storing AI suggestions awaiting confirmation
         self.chat_history = []            # For storing chat conversation history
         
+        # For search and replace functionality
+        self.search_pattern = ""          # Current search pattern
+        self.search_direction = "forward" # Direction of search (forward/backward)
+        self.search_results = []          # List of (line, col) positions of search matches
+        self.current_search_index = -1    # Index in search_results of current match
+        
         # For display optimization
         self._last_update_time = time.time()
         self._last_input_time = time.time()
@@ -373,6 +379,38 @@ class Editor:
             self.buffer.start_selection(self.cursor_y, self.cursor_x)
             self.set_status_message("-- VISUAL --")
         
+        elif key == ord('/'):
+            # Enter command mode for forward search
+            self.mode = "COMMAND"
+            self.command_buffer = "/"
+            self.command_cursor = 1
+            self.search_direction = "forward"
+        
+        elif key == ord('?'):
+            # Enter command mode for backward search
+            self.mode = "COMMAND"
+            self.command_buffer = "?"
+            self.command_cursor = 1
+            self.search_direction = "backward"
+        
+        elif key == ord('n'):
+            # Repeat last search
+            if self.search_pattern:
+                self._find_next_search_match()
+        
+        elif key == ord('N'):
+            # Repeat last search in opposite direction
+            if self.search_pattern:
+                self._find_next_search_match(opposite_direction=True)
+            
+        elif key == ord('o'):
+            # Open new line below cursor and enter insert mode
+            self._open_line_below()
+            
+        elif key == ord('O'):
+            # Open new line above cursor and enter insert mode
+            self._open_line_above()
+        
         elif key == ord('h') or key == curses.KEY_LEFT:
             # Move cursor left
             if self.cursor_x > 0:
@@ -423,14 +461,40 @@ class Editor:
             next_key = self.display.stdscr.getch()
             if next_key == ord('d'):
                 # Delete current line
-                self.buffer.delete_line(self.cursor_y)
+                # Store line count before deletion
+                line_count = 1
+                
+                # Check if there's a numeric prefix
+                if hasattr(self, '_numeric_prefix') and self._numeric_prefix > 0:
+                    line_count = self._numeric_prefix
+                    self._numeric_prefix = 0
+                
+                # Delete the specified number of lines
+                for _ in range(min(line_count, len(self.buffer.get_lines()))):
+                    self.buffer.delete_line(self.cursor_y)
+                
                 # Adjust cursor position if needed
                 if self.cursor_y >= len(self.buffer.get_lines()):
                     self.cursor_y = max(0, len(self.buffer.get_lines()) - 1)
                 self._adjust_cursor_x()
+                
                 # Add to history
                 self.history.add_version(self.buffer.get_lines())
-                self.set_status_message("Line deleted")
+                self.set_status_message(f"{line_count} line(s) deleted")
+        
+        # Handle numeric prefixes for commands like "5dd"
+        elif key >= ord('0') and key <= ord('9'):
+            digit = key - ord('0')
+            if not hasattr(self, '_numeric_prefix'):
+                self._numeric_prefix = 0
+            
+            if self._numeric_prefix == 0 and digit == 0:
+                # Special case: '0' by itself means go to beginning of line
+                self.cursor_x = 0
+                self.preferred_x = 0
+            else:
+                # Build up the numeric prefix
+                self._numeric_prefix = self._numeric_prefix * 10 + digit
         
         elif key == ord('u'):
             # Undo
