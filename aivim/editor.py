@@ -495,30 +495,145 @@ class Editor:
             else:
                 # Build up the numeric prefix
                 self._numeric_prefix = self._numeric_prefix * 10 + digit
+                
+    def _open_line_below(self) -> None:
+        """
+        Open a new line below the current line and enter insert mode (o command)
+        """
+        # Store current version in history first
+        self.history.add_version(self.buffer.get_lines())
         
-        elif key == ord('u'):
-            # Undo
-            if self.history.can_undo():
-                lines, metadata = self.history.undo()
-                if lines:
-                    self.buffer.set_lines(lines)
-                    self.set_status_message("Undo")
-            else:
-                self.set_status_message("Nothing to undo")
+        # Insert a new empty line after the current line
+        self.buffer.insert_line(self.cursor_y + 1, "")
         
-        elif key == ord('r') and (curses.keyname(key).decode("utf-8").startswith("^")):
-            # Redo (Ctrl+r)
-            if self.history.can_redo():
-                lines, metadata = self.history.redo()
-                if lines:
-                    self.buffer.set_lines(lines)
-                    self.set_status_message("Redo")
-            else:
-                self.set_status_message("Nothing to redo")
+        # Move cursor to the new line
+        self.cursor_y += 1
+        self.cursor_x = 0
+        self.preferred_x = 0
         
-        elif key == ord('p'):
-            # Paste
-            if self.clipboard:
+        # Enter insert mode
+        self.mode = "INSERT"
+        self.set_status_message("-- INSERT --")
+        
+    def _open_line_above(self) -> None:
+        """
+        Open a new line above the current line and enter insert mode (O command)
+        """
+        # Store current version in history first
+        self.history.add_version(self.buffer.get_lines())
+        
+        # Insert a new empty line before the current line
+        self.buffer.insert_line(self.cursor_y, "")
+        
+        # Keep cursor at the same line number (but now on the new empty line)
+        self.cursor_x = 0
+        self.preferred_x = 0
+        
+        # Enter insert mode
+        self.mode = "INSERT"
+        self.set_status_message("-- INSERT --")
+        
+    def _start_search(self, pattern: str) -> None:
+        """
+        Start a search for the given pattern
+        
+        Args:
+            pattern: The search pattern to find
+        """
+        # Store the search pattern
+        self.search_pattern = pattern
+        
+        # Find all matches
+        self.search_results = []
+        
+        # Search through the buffer for all occurrences
+        for y, line in enumerate(self.buffer.get_lines()):
+            start_pos = 0
+            while True:
+                try:
+                    # Find the next occurrence in this line
+                    pos = line.find(pattern, start_pos)
+                    if pos == -1:
+                        break
+                    
+                    # Add this match to results
+                    self.search_results.append((y, pos))
+                    
+                    # Move past this match for the next iteration
+                    start_pos = pos + 1
+                except:
+                    # Handle any search errors
+                    break
+        
+        # If we found matches, move to the first one
+        if self.search_results:
+            # Sort results based on search direction
+            self._find_next_search_match()
+            self.set_status_message(f"Found {len(self.search_results)} matches")
+        else:
+            self.set_status_message(f"Pattern not found: {pattern}")
+            
+    def _find_next_search_match(self, opposite_direction: bool = False) -> None:
+        """
+        Move to the next search match
+        
+        Args:
+            opposite_direction: If True, search in the opposite direction from the current
+        """
+        if not self.search_results:
+            self.set_status_message(f"No matches for: {self.search_pattern}")
+            return
+            
+        # Determine search direction
+        direction = self.search_direction
+        if opposite_direction:
+            direction = "backward" if direction == "forward" else "forward"
+            
+        # Find the match closest to cursor position in the appropriate direction
+        cursor_pos = (self.cursor_y, self.cursor_x)
+        
+        if direction == "forward":
+            # Find the next match after cursor position
+            next_match = None
+            for i, match in enumerate(self.search_results):
+                if match > cursor_pos:
+                    next_match = match
+                    self.current_search_index = i
+                    break
+                    
+            # Wrap around if needed
+            if next_match is None:
+                next_match = self.search_results[0]
+                self.current_search_index = 0
+                self.set_status_message("Search wrapped to top")
+        else:
+            # Find the previous match before cursor position
+            prev_match = None
+            for i in range(len(self.search_results) - 1, -1, -1):
+                match = self.search_results[i]
+                if match < cursor_pos:
+                    prev_match = match
+                    self.current_search_index = i
+                    break
+                    
+            # Wrap around if needed
+            if prev_match is None:
+                prev_match = self.search_results[-1]
+                self.current_search_index = len(self.search_results) - 1
+                self.set_status_message("Search wrapped to bottom")
+                
+            next_match = prev_match
+        
+        # Move cursor to the match
+        if next_match:
+            self.cursor_y, self.cursor_x = next_match
+            self.preferred_x = self.cursor_x
+            
+            # Ensure match is visible
+            if self.cursor_y < self.scroll_y:
+                self.scroll_y = self.cursor_y
+            elif self.cursor_y >= self.scroll_y + self.display.max_text_height:
+                self.scroll_y = self.cursor_y - self.display.max_text_height + 1
                 # Store current version in history before paste
                 self.history.add_version(self.buffer.get_lines())
                 
@@ -789,7 +904,7 @@ class Editor:
         
         elif key == curses.KEY_BACKSPACE or key == 127:
             # Backspace
-            if self.command_cursor > 1:  # Keep the initial ':'
+            if self.command_cursor > 1:  # Keep the initial character (':', '/', or '?')
                 self.command_buffer = (
                     self.command_buffer[:self.command_cursor-1] + 
                     self.command_buffer[self.command_cursor:]
@@ -798,7 +913,7 @@ class Editor:
         
         elif key == curses.KEY_LEFT:
             # Move cursor left
-            if self.command_cursor > 1:  # Don't move past the initial ':'
+            if self.command_cursor > 1:  # Don't move past the initial character
                 self.command_cursor -= 1
         
         elif key == curses.KEY_RIGHT:
@@ -807,7 +922,7 @@ class Editor:
                 self.command_cursor += 1
         
         elif key == curses.KEY_HOME:
-            # Move to beginning of command (after :)
+            # Move to beginning of command (after the initial character)
             self.command_cursor = 1
         
         elif key == curses.KEY_END:
@@ -830,16 +945,112 @@ class Editor:
     
     def _process_command(self) -> None:
         """Process entered command"""
-        # Execute command
-        result = self.command_handler.execute(self.command_buffer)
+        command = self.command_buffer
         
-        # Return to normal mode
-        self.mode = "NORMAL"
-        self.command_buffer = ""
-        self.command_cursor = 0
+        # Check if this is a search command
+        if command.startswith('/'):
+            # Forward search
+            pattern = command[1:]
+            if pattern:
+                self._start_search(pattern)
+            # Return to normal mode
+            self.mode = "NORMAL"
+            self.command_buffer = ""
+            self.command_cursor = 0
+            return
+            
+        elif command.startswith('?'):
+            # Backward search
+            pattern = command[1:]
+            if pattern:
+                self.search_direction = "backward"
+                self._start_search(pattern)
+            # Return to normal mode
+            self.mode = "NORMAL"
+            self.command_buffer = ""
+            self.command_cursor = 0
+            return
+            
+        elif command.startswith(':'):
+            # Check for substitution command
+            if command.startswith(':%s/'):
+                # Global substitution: :%s/pattern/replacement/g
+                try:
+                    # Parse the command
+                    parts = command[4:].split('/')
+                    if len(parts) >= 3:
+                        pattern = parts[0]
+                        replacement = parts[1]
+                        
+                        # Check for flags
+                        global_replace = False
+                        if len(parts) > 3 and 'g' in parts[2]:
+                            global_replace = True
+                            
+                        # Do the replacement
+                        self._replace_text(pattern, replacement, global_replace)
+                        
+                        # Return to normal mode
+                        self.mode = "NORMAL"
+                        self.command_buffer = ""
+                        self.command_cursor = 0
+                        return
+                except Exception as e:
+                    # Handle any errors
+                    self.set_status_message(f"Error in substitution: {str(e)}")
+                    self.mode = "NORMAL"
+                    self.command_buffer = ""
+                    self.command_cursor = 0
+                    return
+            
+            # If not a substitution, handle as a normal command
+            result = self.command_handler.execute(command[1:])  # Remove the leading ':'
+            
+            # Return to normal mode
+            self.mode = "NORMAL"
+            self.command_buffer = ""
+            self.command_cursor = 0
+            
+            if not result:
+                self.set_status_message(f"Invalid command")
+                
+    def _replace_text(self, pattern: str, replacement: str, global_replace: bool = False) -> None:
+        """
+        Replace all occurrences of pattern with replacement
         
-        if not result:
-            self.set_status_message(f"Invalid command")
+        Args:
+            pattern: The pattern to search for
+            replacement: The text to replace it with
+            global_replace: If True, replace all occurrences in each line, otherwise just the first
+        """
+        # Store buffer state in history
+        self.history.add_version(self.buffer.get_lines())
+        
+        # Track the number of replacements
+        num_replacements = 0
+        
+        # Process each line in the buffer
+        for y, line in enumerate(self.buffer.get_lines()):
+            if global_replace:
+                # Replace all occurrences in the line
+                new_line = line.replace(pattern, replacement)
+                # Count how many replacements were made
+                num_replacements += line.count(pattern)
+            else:
+                # Replace only the first occurrence
+                pos = line.find(pattern)
+                if pos != -1:
+                    new_line = line[:pos] + replacement + line[pos + len(pattern):]
+                    num_replacements += 1
+                else:
+                    new_line = line
+                    
+            # Update the line in the buffer
+            if new_line != line:
+                self.buffer.set_line(y, new_line)
+        
+        # Set status message
+        self.set_status_message(f"Replaced {num_replacements} occurrences")
     
     def _update_display(self) -> None:
         """Update the display with current buffer content"""
