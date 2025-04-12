@@ -1,3 +1,4 @@
+
 # AIVim - AI-Enhanced Text Editor
 
 AIVim is an AI-enhanced version of Vim built in Python, offering intelligent code assistance and generation capabilities while maintaining the core modal editing experience. Combining the power of different AI models with familiar Vim interactions, AIVim helps developers understand, improve, and generate code more efficiently.
@@ -15,22 +16,26 @@ AIVim is an AI-enhanced version of Vim built in Python, offering intelligent cod
 - **Code Improvement**: Get AI-powered refactoring and optimization suggestions with diff-style presentation
 - **Code Generation**: Generate new code based on natural language descriptions
 - **Custom AI Queries**: Ask questions about your code and receive contextual answers
-
 - **Code Analysis**: Get complexity analysis and bug detection for your code
+- **Multi-Provider Support**: Choose between OpenAI, Anthropic Claude, or local LLM models
+
+### Editor Features
+- **Vim-Style Commands**: Familiar commands like `dd` (delete line), `yy` (yank line), `p` (paste)
 - **Multi-Tab Interface**: View and compare original and AI-improved code in tabs
 - **Version History**: Automatic tracking of file changes with metadata
 - **File Backups**: Automatic backup creation when applying improvements (with timestamps)
-- **Multi-Provider Support**: Choose between OpenAI, Anthropic Claude, or local LLM models
 - **Loading Indicators**: Visual feedback when AI operations are in progress
-
-### Advanced UI Features
-- **Multi-Tab System**: Seamlessly switch between different files and AI suggestions
-- **Tab Navigation**: Use `:nexttab` (or alias `:n`) and `:prevtab` (or alias `:N`) to navigate tabs
-- **Tab Management**: Create new tabs with `:tabnew` or `:tabnew filename`, close with `:tabclose`
-- **Status Line**: Displays current mode, filename, cursor position, and tab information
-- **Animated Loading**: Visual indicators during AI operations to show progress
-- **Syntax Highlighting**: Basic syntax highlighting for improved code readability
 - **Line Numbers**: Display line numbers for easier navigation and reference
+- **Status Line**: Displays current mode, filename, cursor position, and tab information
+- **Syntax Highlighting**: Basic syntax highlighting for improved code readability
+- **Animated Loading**: Visual indicators during AI operations to show progress
+
+### Web Interface
+- **Browser Access**: Access AIVim from a web browser via Flask
+- **Code Editor**: Edit and modify code directly in the browser
+- **AI Operations**: Access all AI capabilities through the web interface
+- **Results Display**: View AI-generated output in a dedicated results area
+
 ## AI Commands
 
 AIVim provides the following AI-specific commands:
@@ -54,6 +59,25 @@ AIVim provides the following AI-specific commands:
 | `:tabnew <filename>` | Create a new tab and open the specified file |
 | `:tabclose` | Close the current tab |
 
+## Vim Commands Supported
+
+| Command | Description |
+|---------|-------------|
+| `dd` | Delete current line |
+| `yy` | Yank (copy) current line |
+| `p` | Paste after cursor |
+| `P` | Paste before cursor |
+| `o` | Open new line below cursor and enter insert mode |
+| `O` | Open new line above cursor and enter insert mode |
+| `x` | Delete character under cursor |
+| `u` | Undo last change |
+| `Ctrl+r` | Redo |
+| `i` | Enter insert mode |
+| `v` | Enter visual mode |
+| `gg` | Go to first line |
+| `G` | Go to last line |
+| `$` | Go to end of line |
+
 ## Usage
 
 ### Basic Editing
@@ -72,8 +96,7 @@ AIVim provides the following AI-specific commands:
 4. Generate code with `:generate 5 "Create a function that calculates factorial"`
 5. Analyze code with `:analyze 10 20` to identify complexity issues and potential bugs
 6. Ask questions with `:ai How does this algorithm work?`
-7. Start an interactive chat with `:chat` and have a multi-turn conversation about your code
-8. Switch between AI providers with `:set model=openai`, `:set model=claude`, or `:set model=local`
+7. Switch between AI providers with `:set model=openai`, `:set model=claude`, or `:set model=local`
 
 ## Installation
 
@@ -177,8 +200,10 @@ AIVim also includes a web interface for easy access:
 python main.py
 
 # Access AIVim in your browser at:
-# http://localhost:5000
+# http://0.0.0.0:5000
 ```
+
+The web interface provides access to all the AI-powered features through a more traditional web IDE experience. It communicates with the same AI services backend as the terminal-based editor.
 
 ## Embedding AIVim
 
