@@ -1,0 +1,7 @@
+include LICENSE
+include README.md
+include requirements.txt
+recursive-include aivim *.py
+recursive-include templates *.html
+recursive-include static *.css *.js *.png
+recursive-include models *.gguf

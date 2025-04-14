@@ -241,3 +241,15 @@ embed_editor()
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Publishing to PyPI
+
+AIVim can be published to PyPI using the GitHub Actions workflow. For detailed instructions, see [docs/publishing.md](docs/publishing.md).
+
+```bash
+# Install from PyPI (once published)
+pip install aivim
+
+# Run the editor
+aivim myfile.py
+```

@@ -1,15 +1,45 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "aivim"
 version = "0.1.0"
 description = "AI-enhanced Vim-like text editor with code assistance and generation"
-requires-python = ">=3.11"
+readme = "README.md"
+authors = [
+    {name = "AIVim Team", email = "aivim@example.com"},
+]
+license = {text = "MIT"}
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Text Editors",
+    "Topic :: Text Editors :: Integrated Development Environments (IDE)",
+    "Topic :: Software Development",
+]
+keywords = ["vim", "editor", "ai", "code-generation", "code-improvement", "nlp"]
+requires-python = ">=3.8"
 dependencies = [
-    "flask>=3.1.0",
-    "openai>=1.71.0",
+    "flask>=2.0.0",
+    "openai>=1.0.0",
+    "requests>=2.25.0",
+    "windows-curses>=2.3.0;platform_system=='Windows'",
 ]
 
+[project.urls]
+"Homepage" = "https://github.com/yourusername/aivim"
+"Bug Tracker" = "https://github.com/yourusername/aivim/issues"
+
 [project.scripts]
-aivim = "main:main"
+aivim = "aivim.run_editor:main"
 
 [tool.setuptools]
 packages = ["aivim"]
