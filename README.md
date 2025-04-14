@@ -77,6 +77,14 @@ AIVim provides the following AI-specific commands:
 | `gg` | Go to first line |
 | `G` | Go to last line |
 | `$` | Go to end of line |
+| `/pattern` | Search forward for pattern |
+| `?pattern` | Search backward for pattern |
+| `n` | Find next search match |
+| `N` | Find previous search match |
+| `:%s/old/new/g` | Replace all occurrences of 'old' with 'new' |
+| `:1` | Jump to line 1 |
+| `:14` | Jump to line 14 |
+| `:$` | Jump to last line of the file |
 
 ## Usage
 
@@ -84,6 +92,10 @@ AIVim provides the following AI-specific commands:
 - Press `i` to enter insert mode, `ESC` to return to normal mode
 - Use `:w` to save, `:q` to quit, `:wq` to save and quit
 - Navigation works with arrow keys (primary) or `h`, `j`, `k`, `l` keys (alternative)
+- Jump to specific lines with `:1`, `:14` or `:$` (last line)
+- Search for text with `/pattern` (forward) or `?pattern` (backward)
+- Use `n` to find next match, `N` to find previous match
+- Replace text with `:%s/old/new/g` syntax
 
 ### AI Features
 1. Navigate to the code you want to work with

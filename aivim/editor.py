@@ -4,6 +4,7 @@ Core editor implementation for AIVim
 import curses
 import logging
 import os
+import re
 import threading
 import time
 from typing import List, Optional, Dict, Any, Tuple
@@ -1002,8 +1003,41 @@ class Editor:
                     self.command_buffer = ""
                     self.command_cursor = 0
                     return
+                    
+            # Check for line navigation commands: ":123" or ":$"
+            line_number_match = re.match(r':(\d+)$', command)
+            last_line_match = re.match(r':\$$', command)
             
-            # If not a substitution, handle as a normal command
+            if line_number_match:
+                # Navigate to specified line number
+                try:
+                    line_number = int(line_number_match.group(1))
+                    self._navigate_to_line(line_number - 1)  # Convert to 0-based index
+                    
+                    # Return to normal mode
+                    self.mode = "NORMAL"
+                    self.command_buffer = ""
+                    self.command_cursor = 0
+                    return
+                except Exception as e:
+                    # Handle any errors
+                    self.set_status_message(f"Error navigating to line: {str(e)}")
+                    self.mode = "NORMAL"
+                    self.command_buffer = ""
+                    self.command_cursor = 0
+                    return
+                    
+            elif last_line_match:
+                # Navigate to last line
+                self._navigate_to_line(len(self.buffer.get_lines()) - 1)
+                
+                # Return to normal mode
+                self.mode = "NORMAL"
+                self.command_buffer = ""
+                self.command_cursor = 0
+                return
+            
+            # If not a special command, handle as a normal command
             result = self.command_handler.execute(command[1:])  # Remove the leading ':'
             
             # Return to normal mode
@@ -1162,6 +1196,35 @@ class Editor:
         """Adjust cursor x position when moving vertically"""
         line = self.buffer.get_line(self.cursor_y)
         self.cursor_x = min(self.preferred_x, len(line))
+        
+    def _navigate_to_line(self, line_number: int) -> None:
+        """
+        Navigate to a specific line number (0-based)
+        
+        Args:
+            line_number: Zero-based line number to navigate to
+        """
+        # Validate and clamp line number to valid range
+        max_line = max(0, len(self.buffer.get_lines()) - 1)
+        line_number = max(0, min(line_number, max_line))
+        
+        # Set cursor position at the start of the specified line
+        self.cursor_y = line_number
+        self.cursor_x = 0
+        self.preferred_x = 0
+        
+        # Adjust scroll position if needed
+        if self.display:
+            if self.cursor_y < self.scroll_y:
+                self.scroll_y = self.cursor_y
+            elif self.cursor_y >= self.scroll_y + self.display.max_text_height:
+                self.scroll_y = self.cursor_y - self.display.max_text_height + 1
+                
+        # Set status message
+        if line_number == max_line:
+            self.set_status_message(f"Moved to last line ({line_number + 1})")
+        else:
+            self.set_status_message(f"Moved to line {line_number + 1}")
     
     def set_status_message(self, message: str) -> None:
         """Set the status message"""
