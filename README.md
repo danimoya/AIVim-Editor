@@ -82,8 +82,7 @@ AIVim provides the following AI-specific commands:
 | `n` | Find next search match |
 | `N` | Find previous search match |
 | `:%s/old/new/g` | Replace all occurrences of 'old' with 'new' |
-| `:1` | Jump to line 1 |
-| `:14` | Jump to line 14 |
+| `:<line_number>` | Jump to line number (integer expected) |
 | `:$` | Jump to last line of the file |
 
 ## Usage
