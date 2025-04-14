@@ -7,8 +7,8 @@ import sys
 # Add the parent directory to the path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# Import the embed_editor function from run_editor
-from run_editor import embed_editor
+# Import the embed_editor function from aivim.run_editor
+from aivim.run_editor import embed_editor
 
 
 def demonstrate_embedded_editor():

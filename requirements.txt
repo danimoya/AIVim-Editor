@@ -2,11 +2,8 @@ flask>=3.1.0
 openai>=1.71.0
 gunicorn>=23.0.0
 anthropic
-anthropic
 llama-cpp-python
 requests
 tqdm
-anthropic
 configparser
-llama-cpp-python
 python-dotenv
