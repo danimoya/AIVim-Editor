@@ -1,0 +1,6 @@
+# Replit specific files
+.replit
+replit.nix
+.breakpoints
+.cache/
+.upm/
