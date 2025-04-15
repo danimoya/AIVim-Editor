@@ -168,28 +168,49 @@ pip install aivim
 
 ### Configuration File
 
-Instead of setting environment variables, you can create a configuration file for storing API keys:
+Instead of setting environment variables, you can create a configuration file for storing API keys. AIVim will automatically check the following locations for a config file:
+
+1. `~/.aivim/config`
+2. `~/.config/aivim/config`
+3. `~/.aivimrc`
+4. `./aivim.config` (in the current directory)
+
+Create a configuration file with the following format:
+
+```ini
+# AIVim Configuration File
+
+[General]
+# Choose your default AI model provider: openai, claude, or local
+default_model = openai
+
+[OpenAI]
+# Your OpenAI API key (get it from https://platform.openai.com/account/api-keys)
+api_key = your_openai_api_key_here
+
+[Anthropic]
+# Your Anthropic Claude API key (get it from https://console.anthropic.com/)
+api_key = your_anthropic_api_key_here
+
+[LocalLLM]
+# Path to your local model file (generally a .gguf file)
+model_path = /path/to/your/local/model.gguf
+```
+
+To create this configuration file:
 
 ```bash
 # Create a config directory
 mkdir -p ~/.config/aivim
 
 # Create and edit the configuration file
-cat > ~/.config/aivim/config.ini << EOF
-[api_keys]
-openai = your_openai_api_key_here
-anthropic = your_anthropic_api_key_here
-llama_model_path = /path/to/your/local/model.gguf
-
-[settings]
-default_model = openai
-EOF
+nano ~/.config/aivim/config
 
 # Set proper permissions to protect your API keys
-chmod 600 ~/.config/aivim/config.ini
+chmod 600 ~/.config/aivim/config
 ```
 
-AIVim will automatically check for this configuration file and use these settings in addition to any environment variables that are set.
+When AIVim starts, it will display information about the config file it loaded and the AI model being used in the status bar.
 
 ## Setting Up Local LLM Support
 

@@ -4,7 +4,11 @@ AI services for AIVim using multiple AI providers including OpenAI, Anthropic, a
 import logging
 import os
 import time
-from typing import Optional, Dict, Any
+import datetime
+import json
+import configparser
+from pathlib import Path
+from typing import Optional, Dict, Any, Tuple
 
 try:
     from openai import OpenAI
@@ -25,6 +29,9 @@ class AIService:
     """
     def __init__(self):
         """Initialize AI service"""
+        # Config info
+        self.config_status = {"loaded": False, "path": None, "message": "No config loaded"}
+        
         # OpenAI setup
         self.openai_api_key = os.environ.get("OPENAI_API_KEY")
         self.openai_client = None
@@ -40,8 +47,87 @@ class AIService:
         # Default model provider
         self.current_model = "openai"  # Options: "openai", "claude", "local"
         
+        # Load config if available
+        self.load_config()
+        
         # Initialize available clients
         self._initialize_clients()
+        
+    def load_config(self) -> Dict[str, Any]:
+        """
+        Load configuration from config file
+        
+        Returns:
+            Dict with config status information
+        """
+        config = configparser.ConfigParser()
+        
+        # Check for config files in common locations
+        config_paths = [
+            os.path.expanduser("~/.aivim/config"),
+            os.path.expanduser("~/.config/aivim/config"),
+            os.path.expanduser("~/.aivimrc"),
+            "./aivim.config"
+        ]
+        
+        config_found = False
+        for path in config_paths:
+            if os.path.exists(path):
+                try:
+                    config.read(path)
+                    config_found = True
+                    self.config_status = {
+                        "loaded": True, 
+                        "path": path,
+                        "message": f"Config loaded from {path}"
+                    }
+                    logging.info(f"Loaded config from {path}")
+                    
+                    # Extract API keys if present
+                    if 'OpenAI' in config and 'api_key' in config['OpenAI']:
+                        self.openai_api_key = config['OpenAI']['api_key']
+                        logging.info("Loaded OpenAI API key from config")
+                        
+                    if 'Anthropic' in config and 'api_key' in config['Anthropic']:
+                        self.anthropic_api_key = config['Anthropic']['api_key']
+                        logging.info("Loaded Anthropic API key from config")
+                        
+                    if 'LocalLLM' in config and 'model_path' in config['LocalLLM']:
+                        self.llama_model_path = config['LocalLLM']['model_path']
+                        logging.info(f"Loaded local model path from config: {self.llama_model_path}")
+                        
+                    # Set default model if specified
+                    if 'General' in config and 'default_model' in config['General']:
+                        self.current_model = config['General']['default_model'].lower()
+                        logging.info(f"Set default model to {self.current_model} from config")
+                    
+                    break
+                except Exception as e:
+                    logging.error(f"Error loading config from {path}: {str(e)}")
+                    self.config_status = {
+                        "loaded": False, 
+                        "path": path,
+                        "message": f"Error loading config: {str(e)}"
+                    }
+        
+        if not config_found:
+            logging.warning("No config file found. Using environment variables.")
+            self.config_status = {
+                "loaded": False,
+                "path": None,
+                "message": "No config file found. Using environment variables."
+            }
+            
+        return self.config_status
+        
+    def get_config_status(self) -> Dict[str, Any]:
+        """
+        Get the status of config loading
+        
+        Returns:
+            Dict with config status information
+        """
+        return self.config_status
         
     def _initialize_clients(self):
         """Initialize available AI clients based on API keys"""
@@ -150,6 +236,49 @@ class AIService:
         self.current_model = model_name
         logging.info(f"AI model set to: {model_name}")
         return True
+        
+    def get_current_model_info(self) -> str:
+        """
+        Get information about the currently selected model
+        
+        Returns:
+            String describing the current model in use
+        """
+        if self.current_model == "openai":
+            if self.openai_client:
+                return "GPT-4o"
+            else:
+                return "OpenAI (not configured)"
+        elif self.current_model == "claude":
+            if self.anthropic_client:
+                return "Claude 3.5 Sonnet"
+            else:
+                return "Claude (not configured)"
+        elif self.current_model == "local":
+            if self.local_llm:
+                model_path = getattr(self.local_llm, 'model_path', 'unknown')
+                # Extract just the filename from the path
+                model_name = os.path.basename(model_path) if model_path != 'unknown' else 'Local LLM'
+                return f"Local: {model_name}"
+            else:
+                return "Local LLM (not configured)"
+        else:
+            return f"Unknown model: {self.current_model}"
+            
+    def is_model_configured(self) -> bool:
+        """
+        Check if the current model is properly configured
+        
+        Returns:
+            True if the current model is configured, False otherwise
+        """
+        if self.current_model == "openai":
+            return self.openai_client is not None
+        elif self.current_model == "claude":
+            return self.anthropic_client is not None
+        elif self.current_model == "local":
+            return self.local_llm is not None
+        return False
     
     def _create_completion(self, system_prompt: str, user_prompt: str) -> Optional[str]:
         """
@@ -258,10 +387,62 @@ class AIService:
             elapsed_time = time.time() - start_time
             logging.info(f"Local LLM inference completed in {elapsed_time:.2f} seconds.")
             
+            # Save the response to a file 
+            self._save_local_model_response(system_prompt, user_prompt, response, elapsed_time)
+            
             return response
         except Exception as e:
-            logging.error(f"Local LLM error: {str(e)}")
-            return f"Error using local LLM: {str(e)}"
+            return self._local_llm_error(e)
+            
+    def _save_local_model_response(self, system_prompt: str, user_prompt: str, 
+                                 response: str, elapsed_time: float) -> None:
+        """
+        Save the local model response to a file for reference
+        
+        Args:
+            system_prompt: The system prompt that was used
+            user_prompt: The user prompt that was sent
+            response: The model's response
+            elapsed_time: Time taken to generate the response
+        """
+        try:
+            # Create responses directory if it doesn't exist
+            responses_dir = os.path.join(os.path.expanduser("~"), ".aivim", "responses")
+            os.makedirs(responses_dir, exist_ok=True)
+            
+            # Generate timestamp for the filename
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            model_name = "local"
+            if self.local_llm:
+                model_path = getattr(self.local_llm, 'model_path', 'unknown')
+                model_name = os.path.basename(model_path).replace('.', '_')
+                
+            # Create a descriptive filename
+            filename = f"{timestamp}_{model_name}_response.json"
+            filepath = os.path.join(responses_dir, filename)
+            
+            # Create the response data
+            response_data = {
+                "timestamp": timestamp,
+                "model": model_name,
+                "system_prompt": system_prompt,
+                "user_prompt": user_prompt,
+                "response": response,
+                "elapsed_time_seconds": elapsed_time
+            }
+            
+            # Write to file
+            with open(filepath, 'w') as f:
+                json.dump(response_data, f, indent=2)
+                
+            logging.info(f"Saved local model response to {filepath}")
+        except Exception as e:
+            logging.error(f"Error saving local model response: {str(e)}")
+        
+    def _local_llm_error(self, error) -> str:
+        """Handle local LLM errors and return appropriate message"""
+        logging.error(f"Local LLM error: {str(error)}")
+        return f"Error using local LLM: {str(error)}"
     
     def get_explanation(self, code: str, context: str) -> str:
         """

@@ -114,6 +114,10 @@
                         <strong>API Key Missing:</strong> AI features require an OpenAI API key. 
                         Please set the <code>OPENAI_API_KEY</code> environment variable to use AI capabilities.
                     </div>
+                    <div id="model-info" class="alert alert-info api-key-alert">
+                        <strong>Current Model:</strong> <span id="current-model">Loading...</span>
+                        <div id="config-status" class="mt-2"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -127,13 +131,15 @@
                     <option value="query">Custom Query</option>
                     <option value="analyze">Analyze Code</option>
                 </select>
-                <div id="specification-container" class="d-none">
-                    <input type="text" id="specification-input" class="form-control" 
-                        placeholder="Enter code specification..." />
+                <div id="specification-container" class="d-none" style="flex-grow: 1;">
+                    <textarea id="specification-input" class="form-control" 
+                        placeholder="Enter code specification (up to 1000 characters)..." 
+                        rows="4" style="resize: vertical; min-height: 80px; max-height: 200px;"></textarea>
                 </div>
-                <div id="query-container" class="d-none">
-                    <input type="text" id="query-input" class="form-control" 
-                        placeholder="Ask a question about the code..." />
+                <div id="query-container" class="d-none" style="flex-grow: 1;">
+                    <textarea id="query-input" class="form-control" 
+                        placeholder="Ask a question about the code..." 
+                        rows="3" style="resize: vertical; min-height: 60px; max-height: 150px;"></textarea>
                 </div>
                 <button id="execute-btn" class="btn btn-primary">Execute</button>
                 <div id="loading" class="loading">
@@ -228,6 +234,31 @@ if __name__ == "__main__":
                 .catch(error => {
                     console.error('Error checking API key:', error);
                     apiKeyAlert.classList.remove('d-none');
+                });
+                
+            // Get model information
+            const currentModelSpan = document.getElementById('current-model');
+            const configStatusDiv = document.getElementById('config-status');
+            
+            fetch('/api/model-info')
+                .then(response => response.json())
+                .then(data => {
+                    // Update model information
+                    currentModelSpan.textContent = data.model;
+                    
+                    // Show config status
+                    if (data.config_status.loaded) {
+                        configStatusDiv.innerHTML = `<small class="text-success">Configuration loaded from: ${data.config_status.path}</small>`;
+                    } else if (data.is_configured) {
+                        configStatusDiv.innerHTML = `<small class="text-info">Using environment variables for AI configuration</small>`;
+                    } else {
+                        configStatusDiv.innerHTML = `<small class="text-warning">${data.config_status.message}</small>`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching model info:', error);
+                    currentModelSpan.textContent = 'Error loading model info';
+                    configStatusDiv.innerHTML = `<small class="text-danger">Could not retrieve model information</small>`;
                 });
             
             // Handle action selection changes

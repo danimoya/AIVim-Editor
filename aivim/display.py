@@ -239,16 +239,36 @@ class Display:
         
         self.status_win.refresh()
     
-    def update_mode(self, mode: str) -> None:
+    def update_mode(self, mode: str, model_info: str = None) -> None:
         """
-        Update the display to show the current mode
+        Update the display to show the current mode and AI model
         
         Args:
             mode: Current editor mode
+            model_info: Optional AI model information to display
         """
         # Add mode to the right side of the status line
         mode_text = f" {mode} "
-        self.status_win.addstr(0, self.width - len(mode_text) - 1, mode_text)
+        
+        # Add AI model info if provided
+        if model_info:
+            # Position model info before the mode
+            model_text = f"[{model_info}] "
+            model_pos = self.width - len(mode_text) - len(model_text) - 1
+            if model_pos > 0:  # Make sure we don't go out of bounds
+                try:
+                    self.status_win.addstr(0, model_pos, model_text)
+                except curses.error:
+                    # Handle potential overflow
+                    pass
+        
+        # Add mode
+        try:
+            self.status_win.addstr(0, self.width - len(mode_text) - 1, mode_text)
+        except curses.error:
+            # Handle potential overflow
+            pass
+            
         self.status_win.refresh()
     
     def update_command_line(self, command: str, cursor_pos: int) -> None:

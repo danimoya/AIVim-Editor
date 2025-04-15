@@ -59,6 +59,24 @@ def check_api_key():
     has_key = bool(os.environ.get("OPENAI_API_KEY"))
     return jsonify({"has_key": has_key})
 
+@app.route('/api/model-info', methods=['GET'])
+def get_model_info():
+    """Get information about the currently configured AI model"""
+    # Create an instance of the AI service
+    from aivim.ai_service import AIService
+    ai_service = AIService()
+    
+    # Get model information
+    model_info = ai_service.get_current_model_info()
+    config_status = ai_service.get_config_status()
+    is_configured = ai_service.is_model_configured()
+    
+    return jsonify({
+        "model": model_info,
+        "config_status": config_status,
+        "is_configured": is_configured
+    })
+
 @app.route('/static/<path:path>')
 def send_static(path):
     """Serve static files"""

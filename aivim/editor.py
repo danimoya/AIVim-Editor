@@ -367,6 +367,45 @@ class Editor:
             # Enter insert mode
             self.mode = "INSERT"
             self.set_status_message("-- INSERT --")
+            
+        elif key == ord('S'):
+            # Delete current character and enter insert mode
+            line = self.buffer.get_line(self.cursor_y)
+            if self.cursor_x < len(line):
+                # Delete character under cursor
+                new_line = line[:self.cursor_x] + line[self.cursor_x+1:]
+                self.buffer.set_line(self.cursor_y, new_line)
+                
+                # Enter insert mode
+                self.mode = "INSERT"
+                self.set_status_message("-- INSERT --")
+                
+        elif key == ord('A') or (key == ord('a') and (curses.keyname(key).decode("utf-8").startswith("^") or curses.keyname(key).decode("utf-8").startswith("S-"))):
+            # Go to end of line and enter insert mode (Shift+A)
+            line = self.buffer.get_line(self.cursor_y)
+            self.cursor_x = len(line)
+            self.preferred_x = self.cursor_x
+            self.mode = "INSERT"
+            self.set_status_message("-- INSERT --")
+        
+        elif key == ord('x'):
+            # Delete character under cursor
+            line = self.buffer.get_line(self.cursor_y)
+            if self.cursor_x < len(line):
+                # Store current version in history
+                self.history.add_version(self.buffer.get_lines())
+                
+                # Delete the character
+                new_line = line[:self.cursor_x] + line[self.cursor_x+1:]
+                self.buffer.set_line(self.cursor_y, new_line)
+                
+                # Store updated version in history
+                self.history.add_version(self.buffer.get_lines())
+                
+                # Adjust cursor if at end of line
+                if self.cursor_x >= len(new_line):
+                    self.cursor_x = max(0, len(new_line))
+                    self.preferred_x = self.cursor_x
         
         elif key == ord(':'):
             # Enter command mode
@@ -411,6 +450,45 @@ class Editor:
         elif key == ord('O'):
             # Open new line above cursor and enter insert mode
             self._open_line_above()
+            
+        elif key == ord('p'):
+            # Paste clipboard content after cursor
+            if self.clipboard:
+                # Store current version in history before paste
+                self.history.add_version(self.buffer.get_lines())
+                
+                # Get the current line
+                current_line = self.buffer.get_line(self.cursor_y)
+                
+                if len(self.clipboard) == 1:
+                    # Single line paste - insert at cursor position on current line
+                    new_line = current_line[:self.cursor_x] + self.clipboard[0] + current_line[self.cursor_x:]
+                    self.buffer.set_line(self.cursor_y, new_line)
+                    self.cursor_x += len(self.clipboard[0])
+                    self.preferred_x = self.cursor_x
+                else:
+                    # Multi-line paste
+                    # First line: combine with first part of current line
+                    new_first_line = current_line[:self.cursor_x] + self.clipboard[0]
+                    self.buffer.set_line(self.cursor_y, new_first_line)
+                    
+                    # Middle lines: insert as new lines
+                    for i in range(1, len(self.clipboard) - 1):
+                        self.buffer.insert_line(self.cursor_y + i, self.clipboard[i])
+                    
+                    # Last line: combine with second part of current line
+                    last_clipboard_line = self.clipboard[-1]
+                    new_last_line = last_clipboard_line + current_line[self.cursor_x:]
+                    self.buffer.insert_line(self.cursor_y + len(self.clipboard) - 1, new_last_line)
+                    
+                    # Move cursor to end of pasted content
+                    self.cursor_y += len(self.clipboard) - 1
+                    self.cursor_x = len(last_clipboard_line)
+                    self.preferred_x = self.cursor_x
+                
+                # Store updated version in history
+                self.history.add_version(self.buffer.get_lines())
+                self.set_status_message(f"Pasted {len(self.clipboard)} lines")
         
         elif key == ord('h') or key == curses.KEY_LEFT:
             # Move cursor left
@@ -837,6 +915,13 @@ class Editor:
             selection_text = self.buffer.get_selection_text()
             self.clipboard = selection_text.split('\n')
             
+            # Ensure the clipboard isn't empty (can happen with empty selections)
+            if not self.clipboard:
+                self.clipboard = [""]
+                
+            # Log the clipboard contents for debugging
+            logging.info(f"Clipboard contents: {self.clipboard}")
+            
             # Return to normal mode
             self.mode = "NORMAL"
             self.buffer.end_selection()
@@ -1123,8 +1208,13 @@ class Editor:
             f"{self.status_message}"
         )
         
-        # Update mode indicator
-        self.display.update_mode(self.mode)
+        # Get the current AI model information
+        model_info = None
+        if hasattr(self, 'ai_service'):
+            model_info = self.ai_service.get_current_model_info()
+        
+        # Update mode indicator with model info
+        self.display.update_mode(self.mode, model_info)
         
         # Update text content
         self.display.update_text(
@@ -1184,11 +1274,21 @@ class Editor:
         curses.cbreak()           # No line buffering
         curses.noecho()           # Don't echo typed characters
         
-        # Initial status message
-        if self.filename:
-            self.set_status_message(f"Editing: {self.filename}")
+        # Show config status if available
+        if hasattr(self, 'ai_service'):
+            config_status = self.ai_service.get_config_status()
+            model_info = self.ai_service.get_current_model_info()
+            
+            if config_status["loaded"]:
+                self.set_status_message(f"Config loaded from {config_status['path']}. Using model: {model_info}")
+            else:
+                self.set_status_message(f"{config_status['message']}. Using model: {model_info}")
         else:
-            self.set_status_message("No file opened")
+            # Default initial status message if AI service isn't initialized
+            if self.filename:
+                self.set_status_message(f"Editing: {self.filename}")
+            else:
+                self.set_status_message("No file opened")
             
         # Performance optimization message has been removed as requested
     
