@@ -104,26 +104,31 @@ AIVim provides the following AI-specific commands:
    - Review the modifications in the diff view
    - To apply the changes, switch back to the original tab and confirm
    - A backup of the original file is automatically created with a timestamp
-4. Generate code with `:generate 5 "Create a function that calculates factorial"`
+4. Generate code with `:generate 5 "Create a function that calculates factorial"` - It will be inserted at the line 5 of your current file.
 5. Analyze code with `:analyze 10 20` to identify complexity issues and potential bugs
-6. Ask questions with `:ai How does this algorithm work?`
+6. Ask questions with `:ai query How does this algorithm work?`
 7. Switch between AI providers with `:set model=openai`, `:set model=claude`, or `:set model=local`
 
-## Installation
+## Installation from GitHub/Source
 
 To install AIVim:
 
 ```bash
 # Install from source
-git clone https://github.com/yourusername/aivim.git
-cd aivim
-pip install -e .
+git clone https://github.com/danimoya/aivim-editor.git
+cd AIVim-Editor
+pip install -r requirements.txt
 
 # Run AIVim
-python -m aivim.run_editor file.py
+python run_editor.py <file>
 ```
 
-### System-wide Installation
+To make an alias for current session or install in .bash_profile, try something like:
+```bash
+alias aivim="python ${PWD}/run_editor.py"
+```
+
+#### System-wide Installation
 
 To make AIVim available as a system-wide command (`aivim`), follow these steps:
 
@@ -149,6 +154,16 @@ sudo chmod +x /usr/local/bin/aivim
 
 # Now you can run AIVim from anywhere
 aivim myfile.py
+```
+
+### VENV Installation
+
+To isolate "aivim" from system Python libraries, do the following:
+
+```bash
+python -m venv aivim
+source aivim/bin/activate
+pip install aivim
 ```
 
 ### Configuration File
@@ -242,14 +257,3 @@ embed_editor()
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## Publishing to PyPI
-
-AIVim can be published to PyPI using the GitHub Actions workflow. For detailed instructions, see [docs/publishing.md](docs/publishing.md).
-
-```bash
-# Install from PyPI (once published)
-pip install aivim
-
-# Run the editor
-aivim myfile.py
-```
