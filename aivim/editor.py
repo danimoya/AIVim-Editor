@@ -368,7 +368,7 @@ class Editor:
             self.mode = "INSERT"
             self.set_status_message("-- INSERT --")
             
-        elif key == ord('S'):
+        elif key == ord('s'):
             # Delete current character and enter insert mode
             line = self.buffer.get_line(self.cursor_y)
             if self.cursor_x < len(line):

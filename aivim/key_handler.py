@@ -82,6 +82,18 @@ class KeyHandler:
             self.editor.mode = self.editor.INSERT_MODE
             self.editor.set_status_message("-- INSERT --")
         
+        elif key == ord('s'):
+            # Delete current character and enter insert mode
+            line = self.editor.buffer.get_line(self.editor.cursor_y)
+            if self.editor.cursor_x < len(line):
+                # Delete character under cursor
+                new_line = line[:self.editor.cursor_x] + line[self.editor.cursor_x+1:]
+                self.editor.buffer.set_line(self.editor.cursor_y, new_line)
+                
+                # Enter insert mode
+                self.editor.mode = self.editor.INSERT_MODE
+                self.editor.set_status_message("-- INSERT --")
+        
         elif key == ord('v'):
             # Enter visual mode
             self.editor.mode = self.editor.VISUAL_MODE

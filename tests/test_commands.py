@@ -33,7 +33,7 @@ class TestCommandHandler(unittest.TestCase):
     def test_write_as_command(self):
         """Test write as command"""
         self.handler.execute("w test.txt")
-        self.editor.save_file_as.assert_called_once_with("test.txt")
+        self.editor.save_file.assert_called_once_with("test.txt")
     
     def test_quit_command(self):
         """Test quit command"""

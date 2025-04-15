@@ -70,6 +70,7 @@ AIVim provides the following AI-specific commands:
 | `o` | Open new line below cursor and enter insert mode |
 | `O` | Open new line above cursor and enter insert mode |
 | `x` | Delete character under cursor |
+| `s` | Delete character under cursor and enter insert mode |
 | `u` | Undo last change |
 | `Ctrl+r` | Redo |
 | `i` | Enter insert mode |
