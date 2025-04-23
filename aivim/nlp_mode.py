@@ -2,6 +2,7 @@
 """
 Natural Language Programming mode for AIVim
 """
+import curses
 import logging
 import re
 import threading
@@ -48,10 +49,112 @@ class NLPHandler:
         Returns:
             True if the key was handled, False otherwise
         """
+        # Check for Ctrl+Enter - sends entire script with other tabs as context
+        if key == 10 and (curses.keyname(key).decode().lower() == '^j'):  # Ctrl+Enter/Ctrl+J
+            self.handle_ctrl_enter()
+            return True
+            
         # Let the editor handle most keys normally (like in INSERT mode)
         # but schedule an update when content changes
         self.schedule_update()
         return False  # Let the editor's normal INSERT mode handle the key
+        
+    def handle_ctrl_enter(self) -> None:
+        """
+        Handle Ctrl+Enter in NLP mode - sends entire script with all tabs as context
+        This is a special mode that provides maximum context to the AI
+        """
+        if self.processing:
+            self.editor.set_status_message("Already processing NLP request, please wait...")
+            return
+            
+        self.processing = True
+        self.editor.set_status_message("Processing entire script with all tabs as context...")
+        
+        # Start processing in a separate thread
+        thread = threading.Thread(
+            target=self._process_entire_script_thread
+        )
+        thread.daemon = True
+        thread.start()
+        
+    def _process_entire_script_thread(self) -> None:
+        """Thread function to process the entire script with all tabs as context"""
+        try:
+            # Get all lines in the current buffer
+            lines = self.editor.buffer.get_lines()
+            script_text = "\n".join(lines)
+            
+            # Get all open tabs for context
+            file_contexts = self._get_tab_contexts()
+            
+            # Prepare a context string with all other open files
+            file_context_text = ""
+            for filename, content in file_contexts.items():
+                file_context_text += f"\n--- {filename} ---\n{content}\n"
+                
+            # Prepare the system prompt for full script processing
+            system_prompt = (
+                "You are a Natural Language Programming assistant with deep coding expertise. "
+                "Your task is to analyze the entire script and its context, then implement any "
+                "requested changes or additions as commented in the script. "
+                "Format code clearly with appropriate comments explaining your implementation. "
+                "Return the entire updated script with your changes integrated."
+            )
+            
+            # Prepare the user prompt
+            user_prompt = f"""
+# Current script:
+```
+{script_text}
+```
+
+# Other files in the project for context:
+{file_context_text}
+
+Analyze this entire script and implement any natural language requests marked with #nlp comments.
+Preserve the overall structure and functionality while making the requested changes.
+Return the complete updated script with your implementations.
+"""
+            
+            # Use the AI service to process
+            translated_code = None
+            try:
+                if self.editor.ai_service:
+                    translated_code = self.editor.ai_service._create_completion(system_prompt, user_prompt)
+            except Exception as e:
+                logging.error(f"Error processing entire script: {str(e)}")
+                
+            if translated_code and self.processing:
+                # Update the buffer with the translated code
+                with self.editor.thread_lock:
+                    # Store the current version in history
+                    self.editor.history.add_version(self.editor.buffer.get_lines())
+                    
+                    # Split the translated code into lines
+                    new_lines = translated_code.strip().split("\n")
+                    
+                    # Replace the entire buffer
+                    self.editor.buffer.clear()
+                    for i, line in enumerate(new_lines):
+                        self.editor.buffer.insert_line(i, line)
+                        
+                    # Store the updated version in history
+                    self.editor.history.add_version(
+                        self.editor.buffer.get_lines(),
+                        {"action": "nlp_full_script", "start_line": 0, "end_line": len(new_lines) - 1}
+                    )
+                    
+                    # Set status message
+                    self.editor.set_status_message("Full script processed with all context")
+                
+        except Exception as e:
+            logging.error(f"Error in _process_entire_script_thread: {str(e)}")
+            with self.editor.thread_lock:
+                self.editor.set_status_message(f"Error processing script: {str(e)}")
+                
+        finally:
+            self.processing = False
         
     def schedule_update(self) -> None:
         """Schedule an asynchronous update after typing stops"""
@@ -93,24 +196,47 @@ class NLPHandler:
             self.processing = False
             
     def scan_buffer_for_nlp_sections(self) -> None:
-        """Scan the buffer to identify NLP sections marked with special comments"""
+        """
+        Scan the buffer to identify NLP sections marked with inline #nlp format
+        
+        New format:
+        - Single line: '#nlp <query>' processes just that single line
+        - Multi-line: Multiple '#nlp' marks scattered in file define a section
+        """
         self.nlp_sections = []
         lines = self.editor.buffer.get_lines()
         
+        # Track single-line queries with specific instructions
+        for i, line in enumerate(lines):
+            # Check for #nlp with query on same line
+            if "#nlp " in line:
+                # This is a single-line query with instructions
+                query = line.split("#nlp ", 1)[1]
+                self.nlp_sections.append((i, i, query))
+            elif "//nlp " in line:
+                query = line.split("//nlp ", 1)[1]
+                self.nlp_sections.append((i, i, query))
+            elif "<!--nlp " in line:
+                query = line.split("<!--nlp ", 1)[1].split("-->", 1)[0]
+                self.nlp_sections.append((i, i, query))
+            
+        # Track multi-line sections marked with just #nlp
         in_nlp_section = False
         start_line = 0
         
         for i, line in enumerate(lines):
-            # Check for NLP section markers
-            if "# NLP-BEGIN" in line or "// NLP-BEGIN" in line or "<!-- NLP-BEGIN -->" in line:
-                in_nlp_section = True
-                start_line = i
-            elif "# NLP-END" in line or "// NLP-END" in line or "<!-- NLP-END -->" in line:
-                if in_nlp_section:
+            # Check for lone #nlp markers (without trailing space and query)
+            if line.strip() == "#nlp" or line.strip() == "//nlp" or line.strip() == "<!--nlp-->":
+                if not in_nlp_section:
+                    # Start of multi-line section
+                    in_nlp_section = True
+                    start_line = i
+                else:
+                    # End of multi-line section
                     self.nlp_sections.append((start_line, i))
                     in_nlp_section = False
                     
-        # Handle case where a section was started but not ended
+        # Handle case where a multi-line section was started but not ended
         if in_nlp_section:
             self.nlp_sections.append((start_line, len(lines) - 1))
             
@@ -188,10 +314,19 @@ class NLPHandler:
             file_contexts = self._get_tab_contexts()
             
             # Process each NLP section
-            for start_line, end_line in self.nlp_sections:
+            for section in self.nlp_sections:
                 if not self.processing:
                     # Processing was canceled
                     break
+                    
+                # Check for tuple format: (start_line, end_line) or (start_line, end_line, query)
+                if len(section) == 2:
+                    start_line, end_line = section
+                    user_query = None
+                elif len(section) == 3:
+                    start_line, end_line, user_query = section
+                else:
+                    continue  # Invalid format
                     
                 # Get the text of this section
                 lines = self.editor.buffer.get_lines()
@@ -211,7 +346,8 @@ class NLPHandler:
                     context_before, 
                     context_after,
                     file_contexts,
-                    is_comment_section
+                    is_comment_section,
+                    user_query
                 )
                 
                 if translated_code and self.processing:
@@ -223,6 +359,12 @@ class NLPHandler:
                         # Split the translated code into lines
                         new_lines = translated_code.strip().split("\n")
                         
+                        # For single-line queries with user query, append comment 
+                        # "AI Done: <user_query>" before the code
+                        if user_query:
+                            comment_line = f"# AI Done: {user_query}"
+                            new_lines.insert(0, comment_line)
+                            
                         # Replace the section with the translated code
                         for _ in range(end_line - start_line + 1):
                             self.editor.buffer.delete_line(start_line)
@@ -243,9 +385,15 @@ class NLPHandler:
                         delta = new_length - old_length
                         
                         # Adjust the remaining sections
-                        for i, (s, e) in enumerate(self.nlp_sections):
-                            if s > end_line:
-                                self.nlp_sections[i] = (s + delta, e + delta)
+                        for i, section_to_adjust in enumerate(self.nlp_sections):
+                            if len(section_to_adjust) == 2:
+                                s, e = section_to_adjust
+                                if s > end_line:
+                                    self.nlp_sections[i] = (s + delta, e + delta)
+                            elif len(section_to_adjust) == 3:
+                                s, e, q = section_to_adjust
+                                if s > end_line:
+                                    self.nlp_sections[i] = (s + delta, e + delta, q)
             
             # Processing complete
             with self.editor.thread_lock:
@@ -297,7 +445,8 @@ class NLPHandler:
                               context_before: str, 
                               context_after: str,
                               file_contexts: Dict[str, str],
-                              is_comment_section: bool) -> str:
+                              is_comment_section: bool,
+                              user_query: Optional[str] = None) -> Optional[str]:
         """
         Translate natural language to code using the AI service
         
@@ -307,9 +456,10 @@ class NLPHandler:
             context_after: The code context after the NLP section
             file_contexts: Dictionary mapping filenames to their content
             is_comment_section: Whether this is a comment section
+            user_query: Optional explicit query from inline #nlp format
             
         Returns:
-            Translated code
+            Translated code or None if translation failed
         """
         if not self.editor.ai_service:
             return nlp_text  # No AI service available

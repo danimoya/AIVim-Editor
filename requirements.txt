@@ -10,5 +10,3 @@ python-dotenv
 gunicorn
 replit
 pytest
-openai
-anthropic

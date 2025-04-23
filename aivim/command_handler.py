@@ -41,6 +41,8 @@ class CommandHandler:
             r'^generate\s+(\d+)\s+(.+)$': self._cmd_generate,
             r'^ai\s+(.+)$': self._cmd_ai_query,
             r'^set\s+(.+)$': self._cmd_set_option,
+            r'^model$': self._cmd_model_selector,
+            r'^model\s+(.+)$': self._cmd_set_model,
             r'^y$': self._cmd_confirm_yes,
             r'^n$': self._cmd_next_tab,    # Changed from nexttab back to n as requested
             r'^help$': self._cmd_help,
@@ -258,7 +260,7 @@ class CommandHandler:
         Returns:
             True if successful, False otherwise
         """
-        # Handle AI model selection
+        # Handle AI model selection (for backward compatibility)
         if option.lower() in ["openai", "claude", "local"]:
             try:
                 self.editor.set_ai_model(option.lower())
@@ -269,6 +271,44 @@ class CommandHandler:
                 return False
         else:
             self.editor.set_status_message(f"Unknown option: {option}")
+            return False
+    
+    def _cmd_model_selector(self) -> bool:
+        """
+        Handle the model selector command (:model).
+        Shows a dialog to select an AI model.
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            self.editor.show_model_selector()
+            return True
+        except Exception as e:
+            self.editor.set_status_message(f"Error showing model selector: {str(e)}")
+            return False
+    
+    def _cmd_set_model(self, model_name: str) -> bool:
+        """
+        Handle the set model command (:model name).
+        Sets the AI model directly.
+
+        Args:
+            model_name: The name of the model to set ('openai', 'claude', 'local')
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Check if the model name is valid
+            if model_name.lower() in ["openai", "claude", "local"]:
+                self.editor.set_ai_model(model_name.lower())
+                return True
+            else:
+                self.editor.set_status_message(f"Unknown model: {model_name}. Valid options: openai, claude, local")
+                return False
+        except Exception as e:
+            self.editor.set_status_message(f"Error setting AI model: {str(e)}")
             return False
             
 
@@ -424,18 +464,20 @@ class CommandHandler:
             "  :analyze s e   - Analyze code complexity and bugs in lines s through e",
             "  :generate l d  - Generate code at line l based on description d",
             "  :ai query      - Ask AI about the current code",
-            "  :set model     - Set AI model (openai, claude, local)",
+            "  :model         - Show AI model selector popup with arrow key navigation",
+            "  :model name    - Set AI model directly (openai, claude, local)",
+            "  :set model     - Legacy command to set AI model (openai, claude, local)",
             "  :y             - Create a new tab with AI improved code",
             "  :n             - Reject AI suggestion",
             "",
             "NLP Mode:",
             "  :nlp           - Enter Natural Language Programming mode",
             "  nl (in normal) - Enter NLP mode (press 'n' then 'l')",
-            "  Ctrl+X Ctrl+N  - Switch to NLP mode from insert mode",
             "  :nlpmark s e   - Mark lines s through e as NLP section",
             "  :nlptranslate  - Force translation of NLP sections",
-            "  # NLP-BEGIN    - Mark beginning of NLP section in code",
-            "  # NLP-END      - Mark end of NLP section in code",
+            "  #nlp <query>   - Single line AI query",
+            "  #nlp           - Mark lines for multi-line AI query (multiple #nlp marks can be scattered in file)",
+            "  Ctrl+Enter     - In NLP mode, sends entire script with context to AI",
             "",
             "Navigation:",
             "  Arrow keys     - Move cursor (primary method)",

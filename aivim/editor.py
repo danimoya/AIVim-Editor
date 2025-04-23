@@ -348,6 +348,27 @@ class Editor:
             # Allow escape key to cancel AI processing in the future
             return
         
+        # Check if a model selector dialog is open and process keypress
+        if self.display and self.display.is_dialog_open() and hasattr(self.display, 'model_callback'):
+            # Process key and check if a model was selected
+            model_selected = self.handle_model_selector_keypress(key)
+            if model_selected:
+                self.set_status_message(f"AI model set to: {model_selected}")
+            return
+            
+        # Check if any regular dialog is open
+        if self.display and self.display.is_dialog_open():
+            # Handle dialog navigation keys
+            if key == ord('d'):
+                self.display.close_dialog()
+                return
+            elif key == curses.KEY_LEFT and curses.keyname(key).decode("utf-8").startswith("^"):
+                self.display.prev_dialog_view()
+                return
+            elif key == curses.KEY_RIGHT and curses.keyname(key).decode("utf-8").startswith("^"):
+                self.display.next_dialog_view()
+                return
+                
         # Skip too frequent key processing (throttle keyboard repeat)
         if hasattr(self, '_last_input_time') and current_time - self._last_input_time < 0.01:
             # Skip if less than 10ms has passed since last input (very rapid typing)
@@ -763,14 +784,7 @@ class Editor:
             self.history.add_version(self.buffer.get_lines())
             self.set_status_message("")
             
-        elif key == 24:  # Ctrl+X
-            # Check for Ctrl+X Ctrl+N for NLP mode
-            next_key = self.display.stdscr.getch()
-            if next_key == 14:  # Ctrl+N
-                # Switch to NLP mode
-                self.mode = "NLP"
-                # NLP handler will be initialized when handling input
-                self.set_status_message("-- NLP MODE --")
+        # Ctrl+X + Ctrl+N shortcut removed as requested
                 
         elif key == 22:  # Ctrl+V (22 is ASCII for SYN - synchronous idle, typically sent by Ctrl+V)
             # Paste from clipboard in insert mode
@@ -2011,6 +2025,32 @@ class Editor:
                 self.set_status_message(f"Failed to set AI model to {model_name}. Check logs for details.")
         else:
             self.set_status_message(f"Unknown model: {model_name}. Valid options: openai, claude, local")
+            
+    def show_model_selector(self) -> None:
+        """
+        Show a dialog for selecting an AI model
+        """
+        if self.display:
+            current_model = self.current_ai_model or "openai"
+            self.display.show_model_selector(current_model, self.set_ai_model)
+            
+    def handle_model_selector_keypress(self, key: int) -> bool:
+        """
+        Handle key presses in the model selector dialog
+        
+        Args:
+            key: The pressed key code
+            
+        Returns:
+            True if the key was processed, False otherwise
+        """
+        if self.display:
+            result = self.display.process_model_selector_keypress(key)
+            # Check if Enter was pressed and a model was selected
+            if result is not None and isinstance(result, str):
+                self.set_ai_model(result)
+                return True
+        return False
             
     def confirm_ai_action(self, confirmed: bool, create_new_tab: bool = False) -> None:
         """

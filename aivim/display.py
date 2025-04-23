@@ -441,6 +441,182 @@ class Display:
     def is_dialog_open(self) -> bool:
         """Check if a dialog is currently open"""
         return self.dialog_win is not None
+    
+    def show_model_selector(self, current_model: str, callback) -> None:
+        """
+        Show a dialog with selectable model options
+        
+        Args:
+            current_model: Currently selected model
+            callback: Function to call with the selected model
+        """
+        # Create model options
+        models = [
+            {"id": "openai", "name": "OpenAI", "description": "GPT-4o: The latest OpenAI model"},
+            {"id": "claude", "name": "Claude", "description": "Claude 3.5 Sonnet: Anthropic's newest model"},
+            {"id": "local", "name": "Local", "description": "Run local LLMs through llama-cpp-python"}
+        ]
+        
+        # Highlight the current model
+        for model in models:
+            if model["id"] == current_model:
+                model["name"] = f"● {model['name']} (current)"
+        
+        self.dialog_title = "AI Model Selector"
+        self.dialog_content = []
+        self.dialog_options = models
+        self.selected_index = 0
+        
+        # Find index of current model
+        for i, model in enumerate(models):
+            if model["id"] == current_model:
+                self.selected_index = i
+                break
+        
+        # Build content
+        for i, model in enumerate(models):
+            if i == self.selected_index:
+                self.dialog_content.append(f"→ {model['name']}")
+            else:
+                self.dialog_content.append(f"  {model['name']}")
+            
+            if model.get("description"):
+                self.dialog_content.append(f"    {model['description']}")
+            
+            # Add a blank line between options
+            if i < len(models) - 1:
+                self.dialog_content.append("")
+        
+        # Add instructions
+        self.dialog_content.append("")
+        self.dialog_content.append("Use ↑/↓ to select, Enter to confirm, Esc to cancel")
+        
+        # Calculate dialog dimensions
+        dialog_height = min(len(self.dialog_content) + 4, self.height - 4)
+        dialog_width = min(max(max(len(line) for line in self.dialog_content) + 4, 40), self.width - 4)
+        
+        # Center the dialog
+        dialog_y = (self.height - dialog_height) // 2
+        dialog_x = (self.width - dialog_width) // 2
+        
+        # Create dialog window
+        self.dialog_win = curses.newwin(dialog_height, dialog_width, dialog_y, dialog_x)
+        self.dialog_win.keypad(True)  # Enable keypad for navigation
+        
+        # Store callback
+        self.model_callback = callback
+        
+        # Draw the selector
+        self._draw_model_selector()
+    
+    def _draw_model_selector(self) -> None:
+        """Draw the model selector dialog"""
+        if not self.dialog_win:
+            return
+        
+        self.dialog_win.clear()
+        self.dialog_win.bkgd(' ', self.COLOR_DIALOG)
+        
+        # Draw border
+        self.dialog_win.box()
+        
+        # Draw title
+        title = f" {self.dialog_title} "
+        title_x = (self.dialog_win.getmaxyx()[1] - len(title)) // 2
+        self.dialog_win.addstr(0, title_x, title, self.COLOR_DIALOG_TITLE)
+        
+        # Draw content
+        max_content_width = self.dialog_win.getmaxyx()[1] - 4
+        visible_lines = min(len(self.dialog_content), self.dialog_win.getmaxyx()[0] - 2)
+        
+        for i in range(visible_lines):
+            if i >= len(self.dialog_content):
+                break
+                
+            line = self.dialog_content[i]
+            if len(line) > max_content_width:
+                line = line[:max_content_width-3] + "..."
+            
+            # If this is a model line (starts with → or spaces followed by a non-space)
+            if line.startswith("→ ") or (line.startswith("  ") and len(line) > 2 and line[2] != " "):
+                # Bold for model names
+                self.dialog_win.addstr(i + 1, 2, line, curses.A_BOLD)
+            else:
+                # Normal for descriptions and other text
+                self.dialog_win.addstr(i + 1, 2, line)
+        
+        self.dialog_win.refresh()
+    
+    def process_model_selector_keypress(self, key: int) -> Optional[str]:
+        """
+        Process keypress in the model selector
+        
+        Args:
+            key: Key code
+            
+        Returns:
+            Selected model ID or None if cancelled
+        """
+        if key in [27, ord('q')]:  # ESC or 'q'
+            self.close_dialog()
+            return None
+            
+        elif key == curses.KEY_UP:
+            # Get the number of model options
+            num_models = len(self.dialog_options)
+            if self.selected_index > 0:
+                self.selected_index -= 1
+                
+                # Update content with new selection
+                content_idx = 0
+                for i, model in enumerate(self.dialog_options):
+                    # Update the arrow for the selected item
+                    if i == self.selected_index:
+                        self.dialog_content[content_idx] = f"→ {model['name']}"
+                    else:
+                        self.dialog_content[content_idx] = f"  {model['name']}"
+                    
+                    # Skip description and blank line
+                    content_idx += 1
+                    if "description" in model:
+                        content_idx += 1
+                    if i < num_models - 1:
+                        content_idx += 1
+                
+                self._draw_model_selector()
+                
+        elif key == curses.KEY_DOWN:
+            # Get the number of model options
+            num_models = len(self.dialog_options)
+            if self.selected_index < num_models - 1:
+                self.selected_index += 1
+                
+                # Update content with new selection
+                content_idx = 0
+                for i, model in enumerate(self.dialog_options):
+                    # Update the arrow for the selected item
+                    if i == self.selected_index:
+                        self.dialog_content[content_idx] = f"→ {model['name']}"
+                    else:
+                        self.dialog_content[content_idx] = f"  {model['name']}"
+                    
+                    # Skip description and blank line
+                    content_idx += 1
+                    if "description" in model:
+                        content_idx += 1
+                    if i < num_models - 1:
+                        content_idx += 1
+                
+                self._draw_model_selector()
+                
+        elif key in [10, curses.KEY_ENTER]:  # Enter key
+            selected_model = self.dialog_options[self.selected_index]["id"]
+            if self.model_callback:
+                self.model_callback(selected_model)
+            self.close_dialog()
+            return selected_model
+            
+        return None
         
     def show_multi_view_dialog(self, views: List[Dict[str, Any]], explanation: Optional[List[str]] = None, default_view: int = 0) -> None:
         """

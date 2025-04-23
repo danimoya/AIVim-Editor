@@ -49,9 +49,15 @@ AIVim provides the following AI-specific commands:
 | `:generate <line> <description>` | Generate code at `line` based on the `description` |
 | `:analyze <start> <end>` | Analyze code complexity and detect bugs in lines `start` through `end` |
 | `:ai <query>` | Ask a custom question about the current file |
-| `:set model=<provider>` | Set the AI model provider (openai, claude, local) |
+| `:model` | Show AI model selector popup with arrow key navigation |
+| `:model <provider>` | Set the AI model provider directly (openai, claude, local) |
+| `:set model=<provider>` | Legacy command to set the AI model provider |
 | `:nlp` | Enter NLP mode |
-| `:nlpmark <start> <end>` | Mark lines `start` through `end` as an NLP section |
+| `nl` | Enter NLP mode by pressing 'n' then 'l' in normal mode |
+| `#nlp <query>` | Single line AI query |
+| `#nlp` | Mark lines for multi-line AI query |
+| `Ctrl+Enter` | In NLP mode, sends entire script with context to AI |
+| `:nlpmark <start> <end>` | Mark lines `start` through `end` as an NLP section (legacy) |
 | `:nlptranslate` | Force translation of NLP sections |
 
 ## Tab Navigation Commands
@@ -131,7 +137,12 @@ AIVim provides the following AI-specific commands:
 4. Generate code with `:generate 5 "Create a function that calculates factorial"` - It will be inserted at the line 5 of your current file.
 5. Analyze code with `:analyze 10 20` to identify complexity issues and potential bugs
 6. Ask questions with `:ai query How does this algorithm work?`
-7. Switch between AI providers with `:set model=openai`, `:set model=claude`, or `:set model=local`
+7. Switch between AI providers:
+   - Use `:model` to open an interactive model selector with arrow key navigation
+   - Use `:model openai` to directly switch to OpenAI
+   - Use `:model claude` to directly switch to Anthropic Claude
+   - Use `:model local` to directly switch to local LLM
+   - Legacy: `:set model=openai`, `:set model=claude`, or `:set model=local`
 
 ## Installation from GitHub/Source
 
@@ -144,12 +155,12 @@ cd AIVim-Editor
 pip install -r requirements.txt
 
 # Run AIVim
-python run_editor.py <file>
+python -m aivim.run_editor <file>
 ```
 
 To make an alias for current session or install in .bash_profile, try something like:
 ```bash
-alias aivim="python ${PWD}/run_editor.py"
+alias aivim="python -m aivim.run_editor"
 ```
 
 #### System-wide Installation
@@ -188,6 +199,7 @@ To isolate "aivim" from system Python libraries, do the following:
 python -m venv aivim
 source aivim/bin/activate
 pip install aivim
+pip install anthropic llama-cpp-python
 ```
 
 ### Configuration File
@@ -251,7 +263,7 @@ python download_local_model.py --model tinyllama
 python download_local_model.py --list
 
 # Once downloaded, you can use it by setting the model:
-# Inside AIVim: :set model=local
+# Inside AIVim: :model local (or :model to show the selector)
 ```
 
 The download_local_model.py script supports several small models suitable for local execution:
