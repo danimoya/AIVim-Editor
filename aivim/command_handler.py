@@ -49,6 +49,10 @@ class CommandHandler:
             r'^tabnew$': self._cmd_tab_new,
             r'^tabnew\s+(.+)$': self._cmd_tab_new_file,
             r'^tabclose$': self._cmd_tab_close,
+            # NLP mode commands
+            r'^nlp$': self._cmd_enter_nlp_mode,
+            r'^nlpmark\s+(\d+)\s+(\d+)$': self._cmd_mark_nlp_section,
+            r'^nlptranslate$': self._cmd_translate_nlp,
         }
         
         return commands
@@ -424,6 +428,15 @@ class CommandHandler:
             "  :y             - Create a new tab with AI improved code",
             "  :n             - Reject AI suggestion",
             "",
+            "NLP Mode:",
+            "  :nlp           - Enter Natural Language Programming mode",
+            "  nl (in normal) - Enter NLP mode (press 'n' then 'l')",
+            "  Ctrl+X Ctrl+N  - Switch to NLP mode from insert mode",
+            "  :nlpmark s e   - Mark lines s through e as NLP section",
+            "  :nlptranslate  - Force translation of NLP sections",
+            "  # NLP-BEGIN    - Mark beginning of NLP section in code",
+            "  # NLP-END      - Mark end of NLP section in code",
+            "",
             "Navigation:",
             "  Arrow keys     - Move cursor (primary method)",
             "  h,j,k,l        - Alternative cursor movement",
@@ -440,3 +453,85 @@ class CommandHandler:
         
         self.editor.display.show_dialog("Help", help_text)
         return True
+        
+    def _cmd_enter_nlp_mode(self) -> bool:
+        """
+        Handle the command to enter NLP mode (:nlp).
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            self.editor.mode = "NLP"
+            # NLP handler will be initialized when handling input
+            self.editor.set_status_message("-- NLP MODE --")
+            return True
+        except Exception as e:
+            self.editor.set_status_message(f"Error entering NLP mode: {str(e)}")
+            return False
+            
+    def _cmd_mark_nlp_section(self, start_line: str, end_line: str) -> bool:
+        """
+        Handle the command to mark an NLP section (:nlpmark start end).
+        
+        Args:
+            start_line: Starting line number (1-based)
+            end_line: Ending line number (1-based)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Convert to 0-based
+            start = int(start_line) - 1
+            end = int(end_line) - 1
+            
+            # Validate range
+            if start < 0 or end >= len(self.editor.buffer.get_lines()) or start > end:
+                self.editor.set_status_message("Invalid line range")
+                return False
+                
+            # Insert NLP markers
+            start_marker = "# NLP-BEGIN"
+            end_marker = "# NLP-END"
+            
+            # Check if we need to adapt the markers to file type
+            filename = self.editor.filename
+            if filename:
+                ext = os.path.splitext(filename)[1].lower()
+                if ext in ['.js', '.ts', '.jsx', '.tsx', '.java', '.c', '.cpp', '.cs']:
+                    start_marker = "// NLP-BEGIN"
+                    end_marker = "// NLP-END"
+                elif ext in ['.html', '.xml', '.svg']:
+                    start_marker = "<!-- NLP-BEGIN -->"
+                    end_marker = "<!-- NLP-END -->"
+                    
+            # Add the markers
+            self.editor.buffer.insert_line(start, start_marker)
+            self.editor.buffer.insert_line(end + 2, end_marker)  # +2 because we inserted a line
+            
+            self.editor.set_status_message(f"Marked lines {start+1}-{end+1} as NLP section")
+            return True
+        except Exception as e:
+            self.editor.set_status_message(f"Error marking NLP section: {str(e)}")
+            return False
+            
+    def _cmd_translate_nlp(self) -> bool:
+        """
+        Handle the command to force translation of NLP sections (:nlptranslate).
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Make sure NLP handler is initialized
+            if not self.editor.nlp_handler:
+                from aivim.nlp_mode import NLPHandler
+                self.editor.nlp_handler = NLPHandler(self.editor)
+                
+            # Process NLP sections
+            self.editor.nlp_handler.process_nlp_sections()
+            return True
+        except Exception as e:
+            self.editor.set_status_message(f"Error translating NLP sections: {str(e)}")
+            return False

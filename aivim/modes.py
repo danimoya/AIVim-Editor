@@ -10,3 +10,4 @@ class Mode(Enum):
     INSERT = 2  # Mode for inserting text
     VISUAL = 3  # Mode for selecting text
     COMMAND = 4  # Mode for entering commands in the command line
+    NLP = 5     # Natural Language Programming mode

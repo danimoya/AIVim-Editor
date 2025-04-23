@@ -79,11 +79,14 @@ class Editor:
         self.clipboard = []
         self.should_quit = False
         
-        # Mode (NORMAL, INSERT, VISUAL, COMMAND)
+        # Mode (NORMAL, INSERT, VISUAL, COMMAND, NLP)
         self.mode = "NORMAL"
         
         # For handling terminal resize events
         self.resize_timer = None
+        
+        # For NLP mode
+        self.nlp_handler = None  # Will be initialized on demand
         
         # For AI operations
         self.ai_processing = False
@@ -360,6 +363,17 @@ class Editor:
             self._handle_visual_mode(key)
         elif self.mode == "COMMAND":
             self._handle_command_mode(key)
+        elif self.mode == "NLP":
+            # Initialize NLP handler on demand
+            if not self.nlp_handler:
+                from .nlp_mode import NLPHandler
+                self.nlp_handler = NLPHandler(self)
+                self.nlp_handler.enter_nlp_mode()
+                
+            # Let NLP handler process the key first
+            if not self.nlp_handler.handle_key(key):
+                # If not handled, process as in INSERT mode
+                self._handle_insert_mode(key)
     
     def _handle_normal_mode(self, key: int) -> None:
         """Handle keypresses in normal mode"""
@@ -367,6 +381,18 @@ class Editor:
             # Enter insert mode
             self.mode = "INSERT"
             self.set_status_message("-- INSERT --")
+            
+        elif key == ord('n'):
+            # Check if next key is 'l' for NLP mode
+            next_key = self.display.stdscr.getch()
+            if next_key == ord('l'):
+                # Enter NLP mode
+                self.mode = "NLP"
+                # NLP handler will be initialized when handling input
+                self.set_status_message("-- NLP MODE --")
+            else:
+                # Put the key back in the input queue
+                curses.ungetch(next_key)
             
         elif key == ord('s'):
             # Delete current character and enter insert mode
@@ -736,6 +762,15 @@ class Editor:
             # Add current buffer state to history
             self.history.add_version(self.buffer.get_lines())
             self.set_status_message("")
+            
+        elif key == 24:  # Ctrl+X
+            # Check for Ctrl+X Ctrl+N for NLP mode
+            next_key = self.display.stdscr.getch()
+            if next_key == 14:  # Ctrl+N
+                # Switch to NLP mode
+                self.mode = "NLP"
+                # NLP handler will be initialized when handling input
+                self.set_status_message("-- NLP MODE --")
         
         elif key == curses.KEY_BACKSPACE or key == 127:
             # Backspace
@@ -1214,7 +1249,12 @@ class Editor:
             model_info = self.ai_service.get_current_model_info()
         
         # Update mode indicator with model info
-        self.display.update_mode(self.mode, model_info)
+        if self.mode == "NLP":
+            # For NLP mode, add an indicator
+            mode_display = f"{self.mode} [NL→CODE]"
+            self.display.update_mode(mode_display, model_info)
+        else:
+            self.display.update_mode(self.mode, model_info)
         
         # Update text content
         self.display.update_text(
