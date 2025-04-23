@@ -771,6 +771,51 @@ class Editor:
                 self.mode = "NLP"
                 # NLP handler will be initialized when handling input
                 self.set_status_message("-- NLP MODE --")
+                
+        elif key == 22:  # Ctrl+V (22 is ASCII for SYN - synchronous idle, typically sent by Ctrl+V)
+            # Paste from clipboard in insert mode
+            if self.clipboard:
+                # Store current version in history before paste
+                self.history.add_version(self.buffer.get_lines())
+                
+                # Get the current line
+                current_line = self.buffer.get_line(self.cursor_y)
+                
+                if len(self.clipboard) == 1:
+                    # Single line paste - insert at cursor position on current line
+                    new_line = current_line[:self.cursor_x] + self.clipboard[0] + current_line[self.cursor_x:]
+                    self.buffer.set_line(self.cursor_y, new_line)
+                    self.cursor_x += len(self.clipboard[0])
+                    self.preferred_x = self.cursor_x
+                else:
+                    # Multi-line paste
+                    # First line: combine with first part of current line
+                    new_first_line = current_line[:self.cursor_x] + self.clipboard[0]
+                    self.buffer.set_line(self.cursor_y, new_first_line)
+                    
+                    # Middle lines: insert as new lines
+                    for i in range(1, len(self.clipboard) - 1):
+                        self.buffer.insert_line(self.cursor_y + i, self.clipboard[i])
+                    
+                    # Last line: combine with second part of current line
+                    last_clipboard_line = self.clipboard[-1]
+                    new_last_line = last_clipboard_line + current_line[self.cursor_x:]
+                    self.buffer.insert_line(self.cursor_y + len(self.clipboard) - 1, new_last_line)
+                    
+                    # Move cursor to end of pasted content
+                    self.cursor_y += len(self.clipboard) - 1
+                    self.cursor_x = len(last_clipboard_line)
+                    self.preferred_x = self.cursor_x
+                
+                # Store updated version in history
+                self.history.add_version(self.buffer.get_lines())
+                self.set_status_message(f"Pasted {len(self.clipboard)} lines")
+        
+        elif key == 65:  # ASCII 'A' (likely Shift+A)
+            # Go to end of line and remain in insert mode (Shift+A equivalent)
+            line = self.buffer.get_line(self.cursor_y)
+            self.cursor_x = len(line)
+            self.preferred_x = self.cursor_x
         
         elif key == curses.KEY_BACKSPACE or key == 127:
             # Backspace
@@ -1244,9 +1289,9 @@ class Editor:
         )
         
         # Get the current AI model information
-        model_info = None
+        model_info = ""
         if hasattr(self, 'ai_service'):
-            model_info = self.ai_service.get_current_model_info()
+            model_info = self.ai_service.get_current_model_info() or ""
         
         # Update mode indicator with model info
         if self.mode == "NLP":
@@ -2003,6 +2048,13 @@ class Editor:
                         # Convert new code to lines
                         new_lines = new_code.split("\n")
                         
+                        # Check if we need to create a new tab
+                        # Always create a new tab for Local LLM results
+                        is_local_llm = False
+                        if hasattr(self, 'ai_service') and self.ai_service.current_model == "local":
+                            is_local_llm = True
+                            create_new_tab = True
+                            
                         if create_new_tab:
                             # Create a new tab with the improved content
                             # Generate a new filename based on the current filename
@@ -2034,7 +2086,14 @@ class Editor:
                             
                             # Switch to the new tab
                             self.switch_to_tab(tab_index)
-                            self.set_status_message(f"Created new tab with improved code ({len(new_lines)} lines)")
+                            
+                            # Add model info to status message if available
+                            model_info = ""
+                            if hasattr(self, 'ai_service'):
+                                model_info = self.ai_service.get_current_model_info()
+                                model_info = f" using {model_info}"
+                                
+                            self.set_status_message(f"Created new tab with improved code{model_info} ({len(new_lines)} lines)")
                         else:
                             # Apply to current buffer
                             # Save current buffer state to history for undo/redo
@@ -2051,7 +2110,14 @@ class Editor:
                             # Save the updated state in history
                             metadata = self.pending_ai_action.get("metadata", {})
                             self.history.add_version(self.buffer.get_lines(), metadata)
-                            self.set_status_message(f"AI improvement applied ({len(new_lines)} lines)")
+                            
+                            # Add model info to status message if available
+                            model_info = ""
+                            if hasattr(self, 'ai_service'):
+                                model_info = self.ai_service.get_current_model_info()
+                                model_info = f" using {model_info}"
+                                
+                            self.set_status_message(f"AI improvement applied{model_info} ({len(new_lines)} lines)")
                     else:
                         self.set_status_message("Invalid AI action data")
                 else:

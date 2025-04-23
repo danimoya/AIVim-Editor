@@ -64,6 +64,16 @@ def start_editor(stdscr, filename: Optional[str] = None, model: Optional[str] = 
         if ai_service:
             ai_service.set_model(model)
     
+    # Show config status on startup
+    if hasattr(editor, 'ai_service') and editor.ai_service is not None:
+        config_status = editor.ai_service.config_status
+        if config_status.get("loaded", False):
+            config_message = f"Config loaded from: {config_status.get('path', 'unknown')}"
+        else:
+            config_message = config_status.get("message", "Config not loaded")
+        
+        editor.set_status_message(config_message)
+    
     editor.start(stdscr)
 
 

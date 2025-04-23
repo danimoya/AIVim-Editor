@@ -159,6 +159,8 @@ def main():
                         help='Specific test file(s) to run (can be specified multiple times)')
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='Increase verbosity')
+    parser.add_argument('-f', '--feature-tests', action='store_true',
+                        help='Run only the new feature tests')
     args = parser.parse_args()
     
     # Set log level
@@ -167,8 +169,19 @@ def main():
     
     logger.info("Starting AIVim tests")
     
-    # Discover and run tests
-    success = discover_and_run_tests(manual_tests=args.test)
+    # If feature tests flag is set, run only the new feature tests
+    if args.feature_tests:
+        logger.info("Running only new feature tests")
+        feature_tests = [
+            'tests/test_shift_a_command.py',
+            'tests/test_multiline_paste.py',
+            'tests/test_model_info_display.py',
+            'tests/test_local_llm_tabs.py'
+        ]
+        success = discover_and_run_tests(manual_tests=feature_tests)
+    else:
+        # Discover and run tests
+        success = discover_and_run_tests(manual_tests=args.test)
     
     # Exit with appropriate status code
     if success:

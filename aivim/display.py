@@ -239,7 +239,7 @@ class Display:
         
         self.status_win.refresh()
     
-    def update_mode(self, mode: str, model_info: str = None) -> None:
+    def update_mode(self, mode: str, model_info: Optional[str] = None) -> None:
         """
         Update the display to show the current mode and AI model
         
@@ -252,12 +252,22 @@ class Display:
         
         # Add AI model info if provided
         if model_info:
+            # Format for improved display
+            if "not configured" in model_info:
+                model_text = f"[AI: {model_info}] "
+            else:
+                model_text = f"[AI: {model_info}] "
+                
+            # If in an AI-related mode, make it more prominent
+            if mode in ["NLP"] or "AI" in mode:
+                model_text = f"[AI: {model_info}] "
+                
             # Position model info before the mode
-            model_text = f"[{model_info}] "
             model_pos = self.width - len(mode_text) - len(model_text) - 1
             if model_pos > 0:  # Make sure we don't go out of bounds
                 try:
-                    self.status_win.addstr(0, model_pos, model_text)
+                    # Use a different attribute to make it stand out
+                    self.status_win.addstr(0, model_pos, model_text, curses.A_BOLD)
                 except curses.error:
                     # Handle potential overflow
                     pass
