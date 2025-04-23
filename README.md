@@ -10,6 +10,7 @@ AIVim is an AI-enhanced version of Vim built in Python, offering intelligent cod
 - **Insert Mode**: Type and modify text directly
 - **Visual Mode**: Select text for operations 
 - **Command Mode**: Enter commands with the `:` prefix
+- **NLP Mode**: Edit code using natural language that's automatically translated to code
 
 ### AI-Powered Assistance
 - **Code Explanation**: Understand complex code with detailed explanations
@@ -17,6 +18,7 @@ AIVim is an AI-enhanced version of Vim built in Python, offering intelligent cod
 - **Code Generation**: Generate new code based on natural language descriptions
 - **Custom AI Queries**: Ask questions about your code and receive contextual answers
 - **Code Analysis**: Get complexity analysis and bug detection for your code
+- **Natural Language Programming**: Edit code using natural language that's automatically translated to code
 - **Multi-Provider Support**: Choose between OpenAI, Anthropic Claude, or local LLM models
 
 ### Editor Features
@@ -48,6 +50,9 @@ AIVim provides the following AI-specific commands:
 | `:analyze <start> <end>` | Analyze code complexity and detect bugs in lines `start` through `end` |
 | `:ai <query>` | Ask a custom question about the current file |
 | `:set model=<provider>` | Set the AI model provider (openai, claude, local) |
+| `:nlp` | Enter NLP mode |
+| `:nlpmark <start> <end>` | Mark lines `start` through `end` as an NLP section |
+| `:nlptranslate` | Force translation of NLP sections |
 
 ## Tab Navigation Commands
 
@@ -75,6 +80,8 @@ AIVim provides the following AI-specific commands:
 | `Ctrl+r` | Redo |
 | `i` | Enter insert mode |
 | `v` | Enter visual mode |
+| `nl` | Enter NLP mode (press 'n' then 'l') |
+| `Ctrl+X Ctrl+N` | Enter NLP mode from insert mode |
 | `gg` | Go to first line |
 | `G` | Go to last line |
 | `$` | Go to end of line |
@@ -96,6 +103,22 @@ AIVim provides the following AI-specific commands:
 - Search for text with `/pattern` (forward) or `?pattern` (backward)
 - Use `n` to find next match, `N` to find previous match
 - Replace text with `:%s/old/new/g` syntax
+
+### NLP Mode
+- Enter NLP mode with command `:nlp` or by pressing `n` then `l` in normal mode
+- In insert mode, use `Ctrl+X` then `Ctrl+N` to switch to NLP mode
+- Write code using natural language comments that will be automatically translated to code
+- Mark NLP sections in your code with special comments:
+  ```
+  # NLP-BEGIN
+  # Create a function that calculates the factorial of a number
+  # NLP-END
+  ```
+- The editor will automatically detect comment blocks and translate them to code
+- Changes are applied after you stop typing (debounce delay)
+- Use `:nlpmark <start> <end>` to manually mark a section for translation
+- Force immediate translation with `:nlptranslate` command
+- All open files in tabs are considered context for better code generation
 
 ### AI Features
 1. Navigate to the code you want to work with
