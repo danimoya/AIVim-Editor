@@ -570,10 +570,28 @@ class CommandHandler:
             if not self.editor.nlp_handler:
                 from aivim.nlp_mode import NLPHandler
                 self.editor.nlp_handler = NLPHandler(self.editor)
+            
+            # Show loading animation
+            if hasattr(self.editor.display, "start_loading_animation"):
+                self.editor.display.start_loading_animation("Processing NLP sections...")
+                
+            # First scan for any NLP sections
+            self.editor.nlp_handler.scan_buffer_for_nlp_sections()
+            
+            # Check if we found any sections
+            if not hasattr(self.editor.nlp_handler, "nlp_sections") or not self.editor.nlp_handler.nlp_sections:
+                if hasattr(self.editor.display, "stop_loading_animation"):
+                    self.editor.display.stop_loading_animation()
+                self.editor.set_status_message("No NLP sections found to translate")
+                return False
                 
             # Process NLP sections
             self.editor.nlp_handler.process_nlp_sections()
             return True
         except Exception as e:
+            # Make sure to stop the animation if there's an error
+            if hasattr(self.editor.display, "stop_loading_animation"):
+                self.editor.display.stop_loading_animation()
             self.editor.set_status_message(f"Error translating NLP sections: {str(e)}")
+            logging.error(f"Error executing nlptranslate command: {str(e)}")
             return False

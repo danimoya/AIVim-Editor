@@ -118,3 +118,10 @@ class Buffer:
         result.append(self.lines[end_y][:end_x])
         
         return "\n".join(result)
+        
+    def clear(self) -> None:
+        """Clear the buffer contents"""
+        self.lines = [""]
+        self.modified = True
+        self.selection_start = None
+        self.selection_end = None

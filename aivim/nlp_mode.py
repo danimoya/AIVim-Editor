@@ -49,9 +49,14 @@ class NLPHandler:
         Returns:
             True if the key was handled, False otherwise
         """
-        # Check for Ctrl+Enter - sends entire script with other tabs as context
+        # Check for Ctrl+Enter - sends entire script with all tabs as context
         if key == 10 and curses.keyname(key).decode().lower() in ['^j', '^m']:  # Ctrl+Enter (^J or ^M depending on terminal)
             self.handle_ctrl_enter()
+            return True
+            
+        # Check for Shift+Enter - process current section without other tabs as context
+        if key == 10 and curses.keyname(key).decode().lower() == 'key_enter':  # This identifies Shift+Enter in many terminals
+            self.handle_shift_enter()
             return True
         
         # Handle regular Enter key - just add a new line like in INSERT mode
@@ -64,6 +69,33 @@ class NLPHandler:
         # but schedule an update when content changes
         self.schedule_update()
         return False  # Let the editor's normal INSERT mode handle the key
+        
+    def handle_shift_enter(self) -> None:
+        """
+        Handle Shift+Enter in NLP mode - processes current section without other tabs as context
+        This provides more focused processing of just the current content
+        """
+        if self.processing:
+            self.editor.set_status_message("Already processing NLP request, please wait...")
+            return
+            
+        # Scan for NLP sections before processing
+        self.scan_buffer_for_nlp_sections()
+        
+        # If we found sections, process them
+        if self.nlp_sections:
+            self.processing = True
+            self.editor.set_status_message("Processing NLP sections (current file only)...")
+            
+            # Start processing in a separate thread
+            thread = threading.Thread(
+                target=self._process_nlp_sections_thread
+            )
+            thread.daemon = True
+            thread.start()
+        else:
+            self.editor.set_status_message("No NLP sections found to process")
+            self.cancel_pending_updates()
         
     def handle_ctrl_enter(self) -> None:
         """

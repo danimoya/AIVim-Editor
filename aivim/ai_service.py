@@ -535,20 +535,38 @@ class AIService:
 {user_prompt}
 <|assistant|>
 """
+            # Redirect stdout temporarily to capture perf context output
+            import io
+            import sys
+            original_stdout = sys.stdout
+            sys.stdout = io.StringIO()
+            
             # Generate completion with the local model
             start_time = time.time()
             logging.info("Starting local LLM inference...")
             
-            # Use the llama.cpp API to generate text
-            output = self.local_llm(
-                formatted_prompt,
-                max_tokens=1000,
-                stop=["<|user|>", "<|system|>"],  # Stop tokens
-                echo=False,            # Don't echo the prompt
-                temperature=0.2,       # Lower temp for more deterministic outputs
-                top_p=0.95,            # Nucleus sampling for more focused outputs
-                repeat_penalty=1.1     # Slight penalty for repetition
-            )
+            try:
+                # Use the llama.cpp API to generate text
+                output = self.local_llm(
+                    formatted_prompt,
+                    max_tokens=1000,
+                    stop=["<|user|>", "<|system|>"],  # Stop tokens
+                    echo=False,            # Don't echo the prompt
+                    temperature=0.2,       # Lower temp for more deterministic outputs
+                    top_p=0.95,            # Nucleus sampling for more focused outputs
+                    repeat_penalty=1.1     # Slight penalty for repetition
+                )
+                
+                # Capture the performance output
+                perf_output = sys.stdout.getvalue()
+                
+                # Log the performance output instead of printing to console
+                for line in perf_output.split('\n'):
+                    if line.strip():
+                        logging.info(f"Local LLM perf: {line.strip()}")
+            finally:
+                # Restore stdout
+                sys.stdout = original_stdout
             
             # Extract the generated text from the model output
             response = output["choices"][0]["text"].strip()

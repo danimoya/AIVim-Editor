@@ -11,6 +11,10 @@ AIVim is an AI-enhanced version of Vim built in Python, offering intelligent cod
 - **Visual Mode**: Select text for operations 
 - **Command Mode**: Enter commands with the `:` prefix
 - **NLP Mode**: Edit code using natural language that's automatically translated to code
+  - **Enhanced NLP Mode**: Now with improved keyboard handling:
+    - **Enter**: Creates a new line (like standard editing)
+    - **Shift+Enter**: Process current file NLP sections only
+    - **Ctrl+Enter**: Process entire script with all tabs as context
 
 ### AI-Powered Assistance
 - **Code Explanation**: Understand complex code with detailed explanations
@@ -20,6 +24,8 @@ AIVim is an AI-enhanced version of Vim built in Python, offering intelligent cod
 - **Code Analysis**: Get complexity analysis and bug detection for your code
 - **Natural Language Programming**: Edit code using natural language that's automatically translated to code
 - **Multi-Provider Support**: Choose between OpenAI, Anthropic Claude, or local LLM models
+  - **Model Selection UI**: Interactive dialog for selecting AI providers and specific models
+  - **Command-Line Control**: Use `:model` command to view and change AI models directly
 
 ### Editor Features
 - **Vim-Style Commands**: Familiar commands like `dd` (delete line), `yy` (yank line), `p` (paste)
@@ -28,6 +34,8 @@ AIVim is an AI-enhanced version of Vim built in Python, offering intelligent cod
 - **File Backups**: Automatic backup creation when applying improvements (with timestamps)
 - **Loading Indicators**: Visual feedback when AI operations are in progress
 - **Line Numbers**: Display line numbers for easier navigation and reference
+- **Enhanced Command Feedback**: Improved error handling and status messaging
+- **Performance Logging**: Better handling of model performance metrics and logs
 - **Status Line**: Displays current mode, filename, cursor position, and tab information
 - **Syntax Highlighting**: Basic syntax highlighting for improved code readability
 - **Animated Loading**: Visual indicators during AI operations to show progress
@@ -56,9 +64,11 @@ AIVim provides the following AI-specific commands:
 | `nl` | Enter NLP mode by pressing 'n' then 'l' in normal mode |
 | `#nlp <query>` | Single line AI query |
 | `#nlp` | Mark lines for multi-line AI query |
-| `Ctrl+Enter` | In NLP mode, sends entire script with context to AI |
-| `:nlpmark <start> <end>` | Mark lines `start` through `end` as an NLP section (legacy) |
-| `:nlptranslate` | Force translation of NLP sections |
+| `Enter` | In NLP mode, creates a new line just like in INSERT mode |
+| `Shift+Enter` | In NLP mode, processes only the current file NLP sections |
+| `Ctrl+Enter` | In NLP mode, sends entire script with all tabs as context to AI |
+| `:nlpmark <start> <end>` | Mark lines `start` through `end` as an NLP section |
+| `:nlptranslate` | Force translation of NLP sections (now with improved feedback) |
 
 ## Tab Navigation Commands
 
@@ -120,10 +130,18 @@ AIVim provides the following AI-specific commands:
   # Create a function that calculates the factorial of a number
   # NLP-END
   ```
+  Or with the new inline format:
+  ```
+  #nlp Calculate factorial of a number recursively
+  ```
 - The editor will automatically detect comment blocks and translate them to code
 - Changes are applied after you stop typing (debounce delay)
+- **Enhanced keyboard shortcuts**:
+  - `Enter` creates a new line just like in INSERT mode
+  - `Shift+Enter` processes only the current file's NLP sections
+  - `Ctrl+Enter` processes the entire script with all tabs as context
 - Use `:nlpmark <start> <end>` to manually mark a section for translation
-- Force immediate translation with `:nlptranslate` command
+- Force immediate translation with `:nlptranslate` command (improved with visual feedback)
 - All open files in tabs are considered context for better code generation
 
 ### AI Features
