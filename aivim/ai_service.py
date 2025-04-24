@@ -469,16 +469,34 @@ class AIService:
             # Log which model we're using
             logging.info(f"Using OpenAI model: {model_to_use}")
             
-            response = self.openai_client.chat.completions.create(
-                model=model_to_use,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=0.2,
-                max_tokens=1000
-            )
-            return response.choices[0].message.content
+            # Set timeout for the API call to prevent UI freezing in restricted network environments
+            import threading
+            from concurrent.futures import ThreadPoolExecutor, TimeoutError
+            
+            def api_call():
+                return self.openai_client.chat.completions.create(
+                    model=model_to_use,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    temperature=0.2,
+                    max_tokens=1000
+                )
+            
+            # Execute the API call with a timeout
+            with ThreadPoolExecutor() as executor:
+                future = executor.submit(api_call)
+                try:
+                    # 10 second timeout to prevent UI freezing
+                    response = future.result(timeout=10)
+                    return response.choices[0].message.content
+                except TimeoutError:
+                    # Cancel the future if possible
+                    future.cancel()
+                    logging.error("OpenAI API request timed out after 10 seconds")
+                    return "Error: Network request timed out. Please check your internet connection or try again later."
+                
         except Exception as e:
             logging.error(f"OpenAI API error: {str(e)}")
             return f"Error: {str(e)}"
