@@ -8,7 +8,7 @@ import datetime
 import json
 import configparser
 from pathlib import Path
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, List
 
 try:
     from openai import OpenAI
@@ -35,14 +35,29 @@ class AIService:
         # OpenAI setup
         self.openai_api_key = os.environ.get("OPENAI_API_KEY")
         self.openai_client = None
+        self.openai_models = [
+            {"id": "gpt-4o", "name": "GPT-4o", "description": "Latest multimodal OpenAI model (May 2024)"},
+            {"id": "gpt-4-turbo", "name": "GPT-4 Turbo", "description": "Powerful model with good balance of quality and speed"},
+            {"id": "gpt-3.5-turbo", "name": "GPT-3.5 Turbo", "description": "Fast and efficient language model"}
+        ]
+        self.current_openai_model = "gpt-4o"  # Default OpenAI model
         
         # Anthropic setup
         self.anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY")
         self.anthropic_client = None
+        self.anthropic_models = [
+            {"id": "claude-3-5-sonnet-20241022", "name": "Claude 3.5 Sonnet", "description": "Latest Claude model (Oct 2024)"},
+            {"id": "claude-3-opus-20240229", "name": "Claude 3 Opus", "description": "Anthropic's most powerful model"},
+            {"id": "claude-3-sonnet-20240229", "name": "Claude 3 Sonnet", "description": "Good balance of intelligence and speed"},
+            {"id": "claude-3-haiku-20240307", "name": "Claude 3 Haiku", "description": "Fast, efficient model for simpler tasks"}
+        ]
+        self.current_anthropic_model = "claude-3-5-sonnet-20241022"  # Default Anthropic model
         
         # Local LLM setup
         self.llama_model_path = os.environ.get("LLAMA_MODEL_PATH")
         self.local_llm = None
+        self.local_models = []  # Will be populated during initialization
+        self.current_local_model = ""  # Will be set during initialization
         
         # Default model provider
         self.current_model = "openai"  # Options: "openai", "claude", "local"
@@ -246,12 +261,18 @@ class AIService:
         """
         if self.current_model == "openai":
             if self.openai_client:
-                return "GPT-4o"
+                for model in self.openai_models:
+                    if model["id"] == self.current_openai_model:
+                        return model["name"]
+                return self.current_openai_model
             else:
                 return "OpenAI (not configured)"
         elif self.current_model == "claude":
             if self.anthropic_client:
-                return "Claude 3.5 Sonnet"
+                for model in self.anthropic_models:
+                    if model["id"] == self.current_anthropic_model:
+                        return model["name"]
+                return self.current_anthropic_model
             else:
                 return "Claude (not configured)"
         elif self.current_model == "local":
@@ -264,6 +285,136 @@ class AIService:
                 return "Local LLM (not configured)"
         else:
             return f"Unknown model: {self.current_model}"
+            
+    def get_available_submodels(self, provider: str) -> List[Dict[str, Any]]:
+        """
+        Get a list of available submodels for a specific provider
+        
+        Args:
+            provider: Name of the provider ("openai", "claude", "local")
+            
+        Returns:
+            List of submodel dictionaries with id, name, description
+        """
+        provider = provider.lower()
+        
+        if provider == "openai":
+            return self.openai_models
+        elif provider == "claude":
+            return self.anthropic_models
+        elif provider == "local":
+            # For local models, check if any are available
+            if self.local_llm:
+                # If we have a loaded model, return its info
+                model_path = getattr(self.local_llm, 'model_path', 'unknown')
+                model_name = os.path.basename(model_path) if model_path != 'unknown' else 'Local LLM'
+                return [{"id": model_path, "name": model_name, "description": "Locally loaded LLM"}]
+            
+            # Otherwise, scan for available models
+            available_models = []
+            
+            # Common locations to check for GGUF/GGML models
+            model_dirs = [
+                os.path.expanduser("~/.local/share/llama.cpp/models"),
+                os.path.expanduser("~/models"),
+                "./models"
+            ]
+            
+            for model_dir in model_dirs:
+                if os.path.exists(model_dir):
+                    for file in os.listdir(model_dir):
+                        if file.endswith((".gguf", ".bin")):
+                            model_path = os.path.join(model_dir, file)
+                            available_models.append({
+                                "id": model_path,
+                                "name": file,
+                                "description": f"Found in {model_dir}"
+                            })
+            
+            return available_models
+        else:
+            logging.warning(f"Unknown provider: {provider}")
+            return []
+    
+    def set_submodel(self, provider: str, submodel_id: str) -> bool:
+        """
+        Set a specific submodel for the provider
+        
+        Args:
+            provider: Name of the provider ("openai", "claude", "local")
+            submodel_id: ID of the submodel to set
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        provider = provider.lower()
+        
+        if provider == "openai":
+            # Verify this is a valid OpenAI model
+            valid_model = False
+            for model in self.openai_models:
+                if model["id"] == submodel_id:
+                    valid_model = True
+                    break
+                    
+            if valid_model:
+                self.current_openai_model = submodel_id
+                logging.info(f"Set OpenAI model to: {submodel_id}")
+                return True
+            else:
+                logging.error(f"Invalid OpenAI model: {submodel_id}")
+                return False
+                
+        elif provider == "claude":
+            # Verify this is a valid Claude model
+            valid_model = False
+            for model in self.anthropic_models:
+                if model["id"] == submodel_id:
+                    valid_model = True
+                    break
+                    
+            if valid_model:
+                self.current_anthropic_model = submodel_id
+                logging.info(f"Set Claude model to: {submodel_id}")
+                return True
+            else:
+                logging.error(f"Invalid Claude model: {submodel_id}")
+                return False
+                
+        elif provider == "local":
+            # For local models, we need to load the model if it's different
+            # from the currently loaded one
+            if self.local_llm and hasattr(self.local_llm, 'model_path'):
+                current_path = self.local_llm.model_path
+                if current_path == submodel_id:
+                    logging.info(f"Local model already set to: {submodel_id}")
+                    return True
+            
+            # Check if the model file exists
+            if not os.path.exists(submodel_id):
+                logging.error(f"Local model file not found: {submodel_id}")
+                return False
+                
+            # Try to load the new model
+            try:
+                if LLAMA_AVAILABLE:
+                    # Initialize with minimal settings
+                    self.local_llm = Llama(
+                        model_path=submodel_id,
+                        n_ctx=2048,  # Context window size
+                        n_threads=4   # Number of CPU threads to use
+                    )
+                    logging.info(f"Local LLM initialized with model: {submodel_id}")
+                    return True
+                else:
+                    logging.error("llama-cpp-python package not installed")
+                    return False
+            except Exception as e:
+                logging.error(f"Error loading local model: {str(e)}")
+                return False
+        else:
+            logging.error(f"Unknown provider: {provider}")
+            return False
             
     def is_model_configured(self) -> bool:
         """
@@ -310,11 +461,16 @@ class AIService:
             return "OpenAI API unavailable. Please set OPENAI_API_KEY environment variable."
         
         try:
-            # Use the gpt-4o model released after the knowledge cutoff
+            # Use the currently selected OpenAI model
             # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
             # do not change this unless explicitly requested by the user
+            model_to_use = self.current_openai_model
+            
+            # Log which model we're using
+            logging.info(f"Using OpenAI model: {model_to_use}")
+            
             response = self.openai_client.chat.completions.create(
-                model="gpt-4o",
+                model=model_to_use,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
@@ -333,9 +489,15 @@ class AIService:
             return "Anthropic Claude API unavailable. Please set ANTHROPIC_API_KEY environment variable."
         
         try:
-            # Use the claude-3-5-sonnet-20241022 model, the latest available
+            # Use the currently selected Claude model
+            model_to_use = self.current_anthropic_model
+            
+            # Log which model we're using
+            logging.info(f"Using Anthropic model: {model_to_use}")
+            # the newest Anthropic model is "claude-3-5-sonnet-20241022" which was released October 22, 2024
+            
             response = self.anthropic_client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model=model_to_use,
                 system=system_prompt,
                 messages=[
                     {"role": "user", "content": user_prompt}
@@ -358,6 +520,13 @@ class AIService:
                    "or place a supported model in ./models directory.")
             
         try:
+            # Log the model we're using
+            model_path = "unknown"
+            if hasattr(self.local_llm, 'model_path'):
+                model_path = self.local_llm.model_path
+            model_name = os.path.basename(model_path)
+            logging.info(f"Using local model: {model_name} ({model_path})")
+            
             # Format the prompt in a chat-like format that local models can understand
             formatted_prompt = f"""
 <|system|>

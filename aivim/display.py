@@ -442,13 +442,14 @@ class Display:
         """Check if a dialog is currently open"""
         return self.dialog_win is not None
     
-    def show_model_selector(self, current_model: str, callback) -> None:
+    def show_model_selector(self, current_model: str, callback, ai_service=None) -> None:
         """
         Show a dialog with selectable model options
         
         Args:
             current_model: Currently selected model
             callback: Function to call with the selected model
+            ai_service: Optional AI service instance for submodel information
         """
         # Create model options
         models = [
@@ -461,11 +462,20 @@ class Display:
         for model in models:
             if model["id"] == current_model:
                 model["name"] = f"● {model['name']} (current)"
+                # Add submodels if available
+                if ai_service and hasattr(ai_service, 'get_available_submodels'):
+                    submodels = ai_service.get_available_submodels(model["id"])
+                    model["submodels"] = submodels
         
         self.dialog_title = "AI Model Selector"
         self.dialog_content = []
         self.dialog_options = models
         self.selected_index = 0
+        self.in_submodel_selection = False
+        self.submodel_offset = 0  # Used to track where submodels start in dialog content
+        self.submodel_count = 0   # Number of submodels for the selected provider
+        self.selected_submodel_index = 0  # Currently selected submodel index
+        self.ai_service = ai_service  # Store the AI service reference
         
         # Find index of current model
         for i, model in enumerate(models):
@@ -489,11 +499,12 @@ class Display:
         
         # Add instructions
         self.dialog_content.append("")
-        self.dialog_content.append("Use ↑/↓ to select, Enter to confirm, Esc to cancel")
+        self.dialog_content.append("Use ↑/↓ to select, Enter to choose provider or configure submodel")
+        self.dialog_content.append("Press Tab to toggle between providers and submodels, Esc to cancel")
         
         # Calculate dialog dimensions
-        dialog_height = min(len(self.dialog_content) + 4, self.height - 4)
-        dialog_width = min(max(max(len(line) for line in self.dialog_content) + 4, 40), self.width - 4)
+        dialog_height = min(len(self.dialog_content) + 6, self.height - 4)  # Larger to accommodate submodels
+        dialog_width = min(max(max(len(line) for line in self.dialog_content) + 4, 60), self.width - 4)
         
         # Center the dialog
         dialog_y = (self.height - dialog_height) // 2
@@ -558,65 +569,205 @@ class Display:
             Selected model ID or None if cancelled
         """
         if key in [27, ord('q')]:  # ESC or 'q'
-            self.close_dialog()
-            return None
+            if self.in_submodel_selection:
+                # Return to main model selection
+                self._exit_submodel_selection()
+                return None
+            else:
+                # Close the dialog completely
+                self.close_dialog()
+                return None
             
+        elif key == 9:  # Tab key to toggle between providers and submodels
+            if self.in_submodel_selection:
+                # Exit submodel selection mode
+                self._exit_submodel_selection()
+                return None
+            else:
+                # Enter submodel selection mode if the current model has submodels
+                selected_model = self.dialog_options[self.selected_index]
+                if "submodels" in selected_model and len(selected_model["submodels"]) > 0:
+                    self._enter_submodel_selection(selected_model)
+                    return None
+                
         elif key == curses.KEY_UP:
-            # Get the number of model options
-            num_models = len(self.dialog_options)
-            if self.selected_index > 0:
-                self.selected_index -= 1
-                
-                # Update content with new selection
-                content_idx = 0
-                for i, model in enumerate(self.dialog_options):
-                    # Update the arrow for the selected item
-                    if i == self.selected_index:
-                        self.dialog_content[content_idx] = f"→ {model['name']}"
-                    else:
-                        self.dialog_content[content_idx] = f"  {model['name']}"
+            if self.in_submodel_selection:
+                # Navigate among submodels
+                if self.selected_submodel_index > 0:
+                    self.selected_submodel_index -= 1
+                    self._update_submodel_selection()
+            else:
+                # Navigate among main model providers
+                # Get the number of model options
+                num_models = len(self.dialog_options)
+                if self.selected_index > 0:
+                    self.selected_index -= 1
                     
-                    # Skip description and blank line
-                    content_idx += 1
-                    if "description" in model:
+                    # Update content with new selection
+                    content_idx = 0
+                    for i, model in enumerate(self.dialog_options):
+                        # Update the arrow for the selected item
+                        if i == self.selected_index:
+                            self.dialog_content[content_idx] = f"→ {model['name']}"
+                        else:
+                            self.dialog_content[content_idx] = f"  {model['name']}"
+                        
+                        # Skip description and blank line
                         content_idx += 1
-                    if i < num_models - 1:
-                        content_idx += 1
-                
-                self._draw_model_selector()
+                        if "description" in model:
+                            content_idx += 1
+                        if i < num_models - 1:
+                            content_idx += 1
+                    
+                    self._draw_model_selector()
                 
         elif key == curses.KEY_DOWN:
-            # Get the number of model options
-            num_models = len(self.dialog_options)
-            if self.selected_index < num_models - 1:
-                self.selected_index += 1
-                
-                # Update content with new selection
-                content_idx = 0
-                for i, model in enumerate(self.dialog_options):
-                    # Update the arrow for the selected item
-                    if i == self.selected_index:
-                        self.dialog_content[content_idx] = f"→ {model['name']}"
-                    else:
-                        self.dialog_content[content_idx] = f"  {model['name']}"
+            if self.in_submodel_selection:
+                # Navigate among submodels
+                selected_model = self.dialog_options[self.selected_index]
+                if "submodels" in selected_model and self.selected_submodel_index < len(selected_model["submodels"]) - 1:
+                    self.selected_submodel_index += 1
+                    self._update_submodel_selection()
+            else:
+                # Navigate among main model providers
+                # Get the number of model options
+                num_models = len(self.dialog_options)
+                if self.selected_index < num_models - 1:
+                    self.selected_index += 1
                     
-                    # Skip description and blank line
-                    content_idx += 1
-                    if "description" in model:
+                    # Update content with new selection
+                    content_idx = 0
+                    for i, model in enumerate(self.dialog_options):
+                        # Update the arrow for the selected item
+                        if i == self.selected_index:
+                            self.dialog_content[content_idx] = f"→ {model['name']}"
+                        else:
+                            self.dialog_content[content_idx] = f"  {model['name']}"
+                        
+                        # Skip description and blank line
                         content_idx += 1
-                    if i < num_models - 1:
-                        content_idx += 1
-                
-                self._draw_model_selector()
+                        if "description" in model:
+                            content_idx += 1
+                        if i < num_models - 1:
+                            content_idx += 1
+                    
+                    self._draw_model_selector()
                 
         elif key in [10, curses.KEY_ENTER]:  # Enter key
-            selected_model = self.dialog_options[self.selected_index]["id"]
-            if self.model_callback:
-                self.model_callback(selected_model)
-            self.close_dialog()
-            return selected_model
+            if self.in_submodel_selection:
+                # Select a specific submodel
+                selected_provider = self.dialog_options[self.selected_index]
+                selected_submodel = selected_provider["submodels"][self.selected_submodel_index]
+                
+                # Call the callback to set the provider and then set the submodel
+                if self.model_callback and self.ai_service:
+                    # First set the main model provider
+                    self.model_callback(selected_provider["id"])
+                    
+                    # Then set the specific submodel
+                    self.ai_service.set_submodel(selected_provider["id"], selected_submodel["id"])
+                    
+                    # Close the dialog
+                    self.close_dialog()
+                    return selected_provider["id"]
+            else:
+                # Check if the selected model has submodels
+                selected_model = self.dialog_options[self.selected_index]
+                if "submodels" in selected_model and len(selected_model["submodels"]) > 0:
+                    # Enter submodel selection instead of immediately selecting this provider
+                    self._enter_submodel_selection(selected_model)
+                    return None
+                else:
+                    # No submodels, just select the provider directly
+                    selected_provider_id = selected_model["id"]
+                    if self.model_callback:
+                        self.model_callback(selected_provider_id)
+                    self.close_dialog()
+                    return selected_provider_id
             
         return None
+        
+    def _enter_submodel_selection(self, selected_model):
+        """
+        Enter submodel selection mode
+        
+        Args:
+            selected_model: The selected provider model with submodels
+        """
+        self.in_submodel_selection = True
+        self.selected_submodel_index = 0
+        
+        # Remember original content to restore later
+        self.original_content = self.dialog_content.copy()
+        self.dialog_title = f"Select {selected_model['name'].replace('●', '').strip()} Model"
+        
+        # Create new content with just submodels
+        self.dialog_content = []
+        submodels = selected_model.get("submodels", [])
+        
+        for i, submodel in enumerate(submodels):
+            if i == self.selected_submodel_index:
+                self.dialog_content.append(f"→ {submodel['name']}")
+            else:
+                self.dialog_content.append(f"  {submodel['name']}")
+                
+            if submodel.get("description"):
+                self.dialog_content.append(f"    {submodel['description']}")
+                
+            # Add blank line between models
+            if i < len(submodels) - 1:
+                self.dialog_content.append("")
+                
+        # Add instructions
+        self.dialog_content.append("")
+        self.dialog_content.append("Use ↑/↓ to select, Enter to set model, Tab/Esc to go back")
+        
+        # Redraw the dialog
+        self._draw_model_selector()
+        
+    def _exit_submodel_selection(self):
+        """Exit submodel selection mode"""
+        self.in_submodel_selection = False
+        self.selected_submodel_index = 0
+        
+        # Restore original content
+        if hasattr(self, 'original_content'):
+            self.dialog_content = self.original_content
+            
+        # Restore original title
+        self.dialog_title = "AI Model Selector"
+        
+        # Redraw the dialog
+        self._draw_model_selector()
+        
+    def _update_submodel_selection(self):
+        """Update the submodel selection"""
+        if not self.in_submodel_selection:
+            return
+        
+        selected_model = self.dialog_options[self.selected_index]
+        submodels = selected_model.get("submodels", [])
+        
+        if not submodels:
+            return
+            
+        # Update dialog content with new selection
+        content_idx = 0
+        for i, submodel in enumerate(submodels):
+            if i == self.selected_submodel_index:
+                self.dialog_content[content_idx] = f"→ {submodel['name']}"
+            else:
+                self.dialog_content[content_idx] = f"  {submodel['name']}"
+                
+            # Skip description and blank line
+            content_idx += 1
+            if "description" in submodel:
+                content_idx += 1
+            if i < len(submodels) - 1:
+                content_idx += 1
+                
+        # Redraw the dialog
+        self._draw_model_selector()
         
     def show_multi_view_dialog(self, views: List[Dict[str, Any]], explanation: Optional[List[str]] = None, default_view: int = 0) -> None:
         """

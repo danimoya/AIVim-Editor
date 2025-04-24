@@ -2032,7 +2032,8 @@ class Editor:
         """
         if self.display:
             current_model = self.current_ai_model or "openai"
-            self.display.show_model_selector(current_model, self.set_ai_model)
+            # Pass the AI service instance to enable submodel selection
+            self.display.show_model_selector(current_model, self.set_ai_model, self.ai_service)
             
     def handle_model_selector_keypress(self, key: int) -> bool:
         """

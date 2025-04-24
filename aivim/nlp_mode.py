@@ -50,9 +50,15 @@ class NLPHandler:
             True if the key was handled, False otherwise
         """
         # Check for Ctrl+Enter - sends entire script with other tabs as context
-        if key == 10 and (curses.keyname(key).decode().lower() == '^j'):  # Ctrl+Enter/Ctrl+J
+        if key == 10 and curses.keyname(key).decode().lower() in ['^j', '^m']:  # Ctrl+Enter (^J or ^M depending on terminal)
             self.handle_ctrl_enter()
             return True
+        
+        # Handle regular Enter key - just add a new line like in INSERT mode
+        if key == 10:  # Regular Enter key
+            # Let the editor handle it in INSERT mode (don't process the whole script)
+            self.schedule_update()  # Still schedule an update for the changes
+            return False  # Let normal INSERT mode handle the new line
             
         # Let the editor handle most keys normally (like in INSERT mode)
         # but schedule an update when content changes
@@ -297,8 +303,9 @@ Return the complete updated script with your implementations.
             
         self.processing = True
         
-        # Set status message
+        # Set status message and start loading animation
         self.editor.set_status_message("Translating natural language to code...")
+        self.editor.display.start_loading_animation("Translating natural language to code")
         
         # Start processing in a separate thread
         self.processing_thread = threading.Thread(
@@ -356,53 +363,137 @@ Return the complete updated script with your implementations.
                         # Store the current version in history
                         self.editor.history.add_version(self.editor.buffer.get_lines())
                         
-                        # Split the translated code into lines
-                        new_lines = translated_code.strip().split("\n")
+                        # Import necessary modules at the beginning to avoid unbound errors
+                        import json
+                        import re
                         
-                        # For single-line queries with user query, append comment 
-                        # "AI Done: <user_query>" before the code
-                        if user_query:
-                            comment_line = f"# AI Done: {user_query}"
-                            new_lines.insert(0, comment_line)
+                        try:
+                            # Try to parse the response as JSON
+                            try:
+                                # First, try parsing directly
+                                response_data = json.loads(translated_code)
+                            except json.JSONDecodeError:
+                                # If direct parsing failed, try to extract JSON from markdown code blocks
+                                json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', translated_code)
+                                if json_match:
+                                    response_data = json.loads(json_match.group(1))
+                                else:
+                                    # Fallback: treat as regular text (backward compatibility)
+                                    raise ValueError("No valid JSON found in response")
                             
-                        # Replace the section with the translated code
-                        for _ in range(end_line - start_line + 1):
-                            self.editor.buffer.delete_line(start_line)
+                            # Handle the structured JSON response with line-specific insertions
+                            if "code_blocks" in response_data and isinstance(response_data["code_blocks"], list):
+                                # Sort code blocks by target line (highest first to avoid line number shifts)
+                                code_blocks = sorted(
+                                    response_data["code_blocks"], 
+                                    key=lambda block: block.get("target_line", 0),
+                                    reverse=True
+                                )
+                                
+                                # Process each code block
+                                for block in code_blocks:
+                                    target_line = block.get("target_line", start_line)
+                                    code = block.get("code", "")
+                                    replace_lines = block.get("replace_lines", 0)
+                                    
+                                    # Ensure valid line numbers
+                                    target_line = max(0, min(target_line, len(self.editor.buffer.get_lines())))
+                                    
+                                    # Delete lines to be replaced
+                                    for _ in range(replace_lines):
+                                        if target_line < len(self.editor.buffer.get_lines()):
+                                            self.editor.buffer.delete_line(target_line)
+                                    
+                                    # Split code into lines and insert
+                                    code_lines = code.strip().split("\n")
+                                    
+                                    # Add user query comment if applicable
+                                    if user_query and len(code_blocks) == 1:  # Only for single blocks
+                                        comment_line = f"# AI Done: {user_query}"
+                                        code_lines.insert(0, comment_line)
+                                    
+                                    # Insert the new code lines
+                                    for i, line in enumerate(code_lines):
+                                        self.editor.buffer.insert_line(target_line + i, line)
+                                
+                                # Store explanation if provided
+                                if "explanation" in response_data and isinstance(response_data["explanation"], str):
+                                    explanation = response_data["explanation"]
+                                    logging.info(f"NLP Translation Explanation: {explanation}")
+                                    
+                                # Store the updated version in history
+                                self.editor.history.add_version(
+                                    self.editor.buffer.get_lines(),
+                                    {"action": "nlp_translation_json", "query": user_query}
+                                )
+                                
+                            else:
+                                raise ValueError("Invalid JSON structure: missing code_blocks array")
+                                
+                        except (json.JSONDecodeError, ValueError) as json_error:
+                            # Fallback to the old method for backward compatibility
+                            logging.warning(f"Failed to parse JSON response: {str(json_error)}. Using legacy mode.")
                             
-                        for i, line in enumerate(new_lines):
-                            self.editor.buffer.insert_line(start_line + i, line)
+                            # Split the translated code into lines
+                            new_lines = translated_code.strip().split("\n")
                             
-                        # Store the updated version in history
-                        self.editor.history.add_version(
-                            self.editor.buffer.get_lines(),
-                            {"action": "nlp_translation", "start_line": start_line, "end_line": start_line + len(new_lines) - 1}
-                        )
+                            # For single-line queries with user query, append comment 
+                            # "AI Done: <user_query>" before the code
+                            if user_query:
+                                comment_line = f"# AI Done: {user_query}"
+                                new_lines.insert(0, comment_line)
+                                
+                            # Replace the section with the translated code
+                            for _ in range(end_line - start_line + 1):
+                                self.editor.buffer.delete_line(start_line)
+                                
+                            for i, line in enumerate(new_lines):
+                                self.editor.buffer.insert_line(start_line + i, line)
+                                
+                            # Store the updated version in history
+                            self.editor.history.add_version(
+                                self.editor.buffer.get_lines(),
+                                {"action": "nlp_translation", "start_line": start_line, "end_line": start_line + len(new_lines) - 1}
+                            )
                         
-                        # Update the list of NLP sections
-                        # The current section is now updated, so we need to adjust the indices
-                        old_length = end_line - start_line + 1
-                        new_length = len(new_lines)
-                        delta = new_length - old_length
+                        # We need to adjust the line numbers for the remaining NLP sections
+                        # Determine how many lines have been added/removed
+                        # This code is designed to avoid referencing problematic variables
                         
-                        # Adjust the remaining sections
-                        for i, section_to_adjust in enumerate(self.nlp_sections):
-                            if len(section_to_adjust) == 2:
-                                s, e = section_to_adjust
-                                if s > end_line:
-                                    self.nlp_sections[i] = (s + delta, e + delta)
-                            elif len(section_to_adjust) == 3:
-                                s, e, q = section_to_adjust
-                                if s > end_line:
-                                    self.nlp_sections[i] = (s + delta, e + delta, q)
+                        # Original length of the section
+                        original_section_length = end_line - start_line + 1
+                        
+                        # Current length (after modification) is the difference between
+                        # the current buffer size and original size, plus the original section size
+                        current_buffer_size = len(self.editor.buffer.get_lines())
+                        line_delta = current_buffer_size - len(lines) - original_section_length
+                        
+                        # Skip adjustment if line_delta is extreme (safety check)
+                        if abs(line_delta) < 100:  # Reasonable limit for code changes
+                            # Adjust sections after this one
+                            for i, section_to_adjust in enumerate(self.nlp_sections):
+                                if isinstance(section_to_adjust, tuple):
+                                    if len(section_to_adjust) == 2:
+                                        s, e = section_to_adjust
+                                        if s > end_line:
+                                            self.nlp_sections[i] = (s + line_delta, e + line_delta)
+                                    elif len(section_to_adjust) == 3:
+                                        s, e, q = section_to_adjust
+                                        if s > end_line:
+                                            self.nlp_sections[i] = (s + line_delta, e + line_delta, q)
             
             # Processing complete
             with self.editor.thread_lock:
                 if self.processing:
+                    # Stop loading animation
+                    self.editor.display.stop_loading_animation()
                     self.editor.set_status_message("Natural language translation complete")
                 
         except Exception as e:
             logging.error(f"Error processing NLP sections: {str(e)}")
             with self.editor.thread_lock:
+                # Stop loading animation on error
+                self.editor.display.stop_loading_animation()
                 self.editor.set_status_message(f"Error processing NLP: {str(e)}")
                 
         finally:
@@ -469,32 +560,73 @@ Return the complete updated script with your implementations.
         for filename, content in file_contexts.items():
             file_context_text += f"\n--- {filename} ---\n{content}\n"
             
-        # Prepare the system prompt
+        # Prepare the system prompt with JSON output format
         system_prompt = (
             "You are a Natural Language Programming assistant. "
             "Your task is to translate natural language instructions into code. "
             "Preserve any existing code and comments in the input. "
             "If the input is entirely comments, translate the comments into code that implements the described functionality. "
             "If the input is mixed with code and comments, update the code according to the natural language instructions. "
-            "Maintain the style and structure of the surrounding code for consistency."
+            "Maintain the style and structure of the surrounding code for consistency. "
+            "Your response must be a valid JSON object with the following structure: "
+            "{"
+            "  \"explanation\": \"Brief explanation of the code generation or changes\", "
+            "  \"code_blocks\": ["
+            "    {"
+            "      \"target_line\": 123, "  # Line number where this code should be inserted
+            "      \"code\": \"def example():\\n    return True\", "  # The code to insert
+            "      \"replace_lines\": 2 "  # Number of original lines to replace (0 for pure insertion)
+            "    }, "
+            "    {... more code blocks if needed ...}"
+            "  ]"
+            "}"
         )
         
-        # Prepare the user prompt
+        # Prepare the user prompt with line numbers
+        # Get all lines from buffer for line numbering context
+        all_lines = self.editor.buffer.get_lines()
+        
+        # Get line numbers for this section
+        # We're in _translate_nlp_to_code so we need to extract start/end line from text itself
+        # The caller will provide these as part of the context in the original section 
+        # processing loop where start_line and end_line are defined
+        section_line_count = len(nlp_text.split("\n"))
+        estimated_start_line = 0
+        
+        # Try to estimate the start line from the context
+        lines_before = len(context_before.split("\n")) if context_before else 0
+        if lines_before > 0:
+            estimated_start_line = max(0, lines_before)
+            
+        # Format section with line numbers
+        numbered_nlp_text = "\n".join([f"{estimated_start_line + i}: {line}" for i, line in enumerate(nlp_text.split("\n"))])
+        
+        # Format context before with line numbers
+        context_before_lines = context_before.split("\n")
+        start_before = max(0, estimated_start_line - len(context_before_lines))
+        numbered_context_before = "\n".join([f"{start_before + i}: {line}" for i, line in enumerate(context_before_lines)])
+        
+        # Format context after with line numbers
+        context_after_lines = context_after.split("\n")
+        estimated_end_line = estimated_start_line + section_line_count - 1
+        start_after = estimated_end_line + 1
+        numbered_context_after = "\n".join([f"{start_after + i}: {line}" for i, line in enumerate(context_after_lines)])
+        
         if is_comment_section:
             user_prompt = f"""
-# Natural language comments to translate to code:
+# Natural language comments to translate to code (with line numbers):
 ```
-{nlp_text}
-```
-
-# Context code before this section:
-```
-{context_before}
+{numbered_nlp_text}
 ```
 
-# Context code after this section:
+# Context code before this section (with line numbers):
 ```
-{context_after}
+{numbered_context_before}
+```
+
+# Context code after this section (with line numbers):
+```
+{numbered_context_after}
 ```
 
 # Other files in the project for context:
@@ -503,22 +635,26 @@ Return the complete updated script with your implementations.
 Translate the natural language comments into working code that implements the described functionality.
 If the comment refers to modifications of existing code, integrate those changes.
 Preserve important comments in the output but implement the described functionality in code.
+
+In your JSON response, specify the exact target_line for each code block, considering the original line numbers.
+For replacements, use 'replace_lines' to indicate how many original lines should be replaced.
+For insertions, set 'replace_lines' to 0.
 """
         else:
             user_prompt = f"""
-# Natural language and code section to process:
+# Natural language and code section to process (with line numbers):
 ```
-{nlp_text}
-```
-
-# Context code before this section:
-```
-{context_before}
+{numbered_nlp_text}
 ```
 
-# Context code after this section:
+# Context code before this section (with line numbers):
 ```
-{context_after}
+{numbered_context_before}
+```
+
+# Context code after this section (with line numbers):
+```
+{numbered_context_after}
 ```
 
 # Other files in the project for context:
@@ -527,6 +663,10 @@ Preserve important comments in the output but implement the described functional
 Translate any natural language instructions in this section into working code.
 Preserve existing code unless the natural language instructions specifically ask to modify it.
 Preserve important comments but implement the described functionality in code.
+
+In your JSON response, specify the exact target_line for each code block, considering the original line numbers.
+For replacements, use 'replace_lines' to indicate how many original lines should be replaced.
+For insertions, set 'replace_lines' to 0.
 """
         
         # Use the AI service to translate
