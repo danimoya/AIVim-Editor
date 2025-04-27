@@ -161,7 +161,8 @@ class CommandHandler:
             start = int(start_line) - 1
             end = int(end_line) - 1
             
-            self.editor.ai_explain(start, end)
+            # Use non-blocking mode by default
+            self.editor.ai_explain(start, end, blocking=False)
             return True
         except Exception as e:
             self.editor.set_status_message(f"Error executing explain command: {str(e)}")
@@ -183,7 +184,8 @@ class CommandHandler:
             start = int(start_line) - 1
             end = int(end_line) - 1
             
-            self.editor.ai_improve(start, end)
+            # Use non-blocking mode by default
+            self.editor.ai_improve(start, end, blocking=False)
             return True
         except Exception as e:
             self.editor.set_status_message(f"Error executing improve command: {str(e)}")
@@ -206,7 +208,8 @@ class CommandHandler:
             start = int(start_line) - 1
             end = int(end_line) - 1
             
-            self.editor.ai_analyze_code(start, end)
+            # Use non-blocking mode by default
+            self.editor.ai_analyze_code(start, end, blocking=False)
             return True
         except Exception as e:
             self.editor.set_status_message(f"Error executing analyze command: {str(e)}")
@@ -227,7 +230,8 @@ class CommandHandler:
             # Convert to 0-based
             start = int(start_line) - 1
             
-            self.editor.ai_generate(start, description)
+            # Use non-blocking mode by default
+            self.editor.ai_generate(start, description, blocking=False)
             return True
         except Exception as e:
             self.editor.set_status_message(f"Error executing generate command: {str(e)}")
@@ -244,7 +248,8 @@ class CommandHandler:
             True if successful, False otherwise
         """
         try:
-            self.editor.ai_custom_query(query)
+            # Use non-blocking mode by default
+            self.editor.ai_custom_query(query, blocking=False)
             return True
         except Exception as e:
             self.editor.set_status_message(f"Error executing AI query: {str(e)}")

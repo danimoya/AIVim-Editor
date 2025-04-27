@@ -89,12 +89,14 @@ class Editor:
         self.nlp_handler = None  # Will be initialized on demand
         
         # For AI operations
-        self.ai_processing = False
+        self.ai_processing = False        # True if AI is currently processing a request
+        self.ai_blocking = False          # True if AI operation should block the UI
         self.ai_thread = None
         self.thread_lock = threading.RLock()
         self.current_ai_model = "openai"  # Default AI model
         self.pending_ai_action = None     # For storing AI suggestions awaiting confirmation
         self.chat_history = []            # For storing chat conversation history
+        self.last_ai_status_update = 0    # Timestamp of last AI status update
         
         # For search and replace functionality
         self.search_pattern = ""          # Current search pattern
@@ -343,10 +345,25 @@ class Editor:
             self._handle_resize()
             return
             
-        # Skip processing if we're in the middle of AI processing
+        # Check if we're in the middle of AI processing
         if self.ai_processing:
-            # Allow escape key to cancel AI processing in the future
-            return
+            # Allow Escape key to cancel AI processing 
+            if key == 27:  # ESC key
+                self._cancel_ai_processing()
+                return
+                
+            # If AI processing is set to be blocking, block all other input
+            if self.ai_blocking:
+                return
+                
+            # If non-blocking, show status update periodically
+            current_time = time.time()
+            if (current_time - self.last_ai_status_update) > 2.0:  # Show update every 2 seconds
+                elapsed_time = int(current_time - self.last_ai_status_update)
+                self.set_status_message(f"AI processing in background... ({elapsed_time}s elapsed, press ESC to cancel)")
+                self.last_ai_status_update = current_time
+                
+            # Continue processing input for non-blocking AI operations
         
         # Check if a model selector dialog is open and process keypress
         if self.display and self.display.is_dialog_open() and hasattr(self.display, 'model_callback'):
@@ -1452,8 +1469,15 @@ class Editor:
         if self.display:
             self.display.show_diff_dialog(title, diff_lines)
     
-    def run_ai_command(self, command: str, args: List[str]) -> None:
-        """Run an AI-related command in a separate thread"""
+    def run_ai_command(self, command: str, args: List[str], blocking: bool = False) -> None:
+        """
+        Run an AI-related command in a separate thread
+        
+        Args:
+            command: The AI command to run (generate, explain, improve, query)
+            args: Arguments for the command
+            blocking: If True, AI operations will block UI input until complete
+        """
         if self.ai_processing:
             self.set_status_message("AI is already processing a request")
             return
@@ -1462,28 +1486,33 @@ class Editor:
         if command == "generate" and len(args) >= 2:
             line_num = int(args[0]) - 1  # Convert to 0-based
             description = " ".join(args[1:])
-            self.ai_generate(line_num, description)
+            self.ai_generate(line_num, description, blocking=blocking)
         elif command == "explain" and len(args) >= 2:
             start_line = int(args[0]) - 1  # Convert to 0-based
             end_line = int(args[1]) - 1  # Convert to 0-based
-            self.ai_explain(start_line, end_line)
+            self.ai_explain(start_line, end_line, blocking=blocking)
         elif command == "improve" and len(args) >= 2:
             start_line = int(args[0]) - 1  # Convert to 0-based
             end_line = int(args[1]) - 1  # Convert to 0-based
-            self.ai_improve(start_line, end_line)
+            self.ai_improve(start_line, end_line, blocking=blocking)
         elif command == "query":
             query = " ".join(args)
-            self.ai_custom_query(query)
+            self.ai_custom_query(query, blocking=blocking)
+        elif command == "analyze" and len(args) >= 2:
+            start_line = int(args[0]) - 1  # Convert to 0-based
+            end_line = int(args[1]) - 1  # Convert to 0-based
+            self.ai_analyze_code(start_line, end_line, blocking=blocking)
         else:
             self.set_status_message(f"Unknown AI command: {command}")
     
-    def ai_generate(self, start_line: int, description: str) -> None:
+    def ai_generate(self, start_line: int, description: str, blocking: bool = False) -> None:
         """
         Generate code at the specified line based on description
         
         Args:
             start_line: Line number where code should be inserted (0-based)
             description: Description of what to generate
+            blocking: If True, block UI until AI completes, otherwise allow editing
         """
         if self.ai_processing:
             self.set_status_message("AI is already processing a request")
@@ -1502,12 +1531,15 @@ class Editor:
         
         # Mark as processing
         self.ai_processing = True
+        self.ai_blocking = blocking
+        self.last_ai_status_update = time.time()
         
         # Start loading animation
         if self.display:
             self.display.start_loading_animation("AI generating code")
         else:
-            self.set_status_message("AI generating code...")
+            status_msg = "AI generating code..." + (" (blocking)" if blocking else " (background)")
+            self.set_status_message(status_msg)
         
         # Run in a separate thread
         self.ai_thread = threading.Thread(
@@ -1553,13 +1585,14 @@ class Editor:
                 self.set_status_message(f"Error generating code: {str(e)}")
             logging.error(f"AI generation error: {str(e)}")
     
-    def ai_explain(self, start_line: int, end_line: int) -> None:
+    def ai_explain(self, start_line: int, end_line: int, blocking: bool = False) -> None:
         """
         Explain code in the specified line range
         
         Args:
             start_line: Starting line number (0-based)
             end_line: Ending line number (0-based)
+            blocking: If True, block UI until AI completes, otherwise allow editing
         """
         if self.ai_processing:
             self.set_status_message("AI is already processing a request")
@@ -1586,12 +1619,15 @@ class Editor:
         
         # Mark as processing
         self.ai_processing = True
+        self.ai_blocking = blocking
+        self.last_ai_status_update = time.time()
         
         # Start loading animation
         if self.display:
             self.display.start_loading_animation("AI explaining code")
         else:
-            self.set_status_message("AI explaining code...")
+            status_msg = "AI explaining code..." + (" (blocking)" if blocking else " (background)")
+            self.set_status_message(status_msg)
         
         # Run in a separate thread
         self.ai_thread = threading.Thread(
@@ -1632,13 +1668,14 @@ class Editor:
                 self.set_status_message(f"Error explaining code: {str(e)}")
             logging.error(f"AI explanation error: {str(e)}")
     
-    def ai_improve(self, start_line: int, end_line: int) -> None:
+    def ai_improve(self, start_line: int, end_line: int, blocking: bool = False) -> None:
         """
         Improve code in the specified line range
         
         Args:
             start_line: Starting line number (0-based)
             end_line: Ending line number (0-based)
+            blocking: If True, block UI until AI completes, otherwise allow editing
         """
         if self.ai_processing:
             self.set_status_message("AI is already processing a request")
@@ -1665,12 +1702,15 @@ class Editor:
         
         # Mark as processing
         self.ai_processing = True
+        self.ai_blocking = blocking
+        self.last_ai_status_update = time.time()
         
         # Start loading animation
         if self.display:
             self.display.start_loading_animation("AI improving code")
         else:
-            self.set_status_message("AI improving code...")
+            status_msg = "AI improving code..." + (" (blocking)" if blocking else " (background)")
+            self.set_status_message(status_msg)
         
         # Run in a separate thread
         self.ai_thread = threading.Thread(
@@ -1788,13 +1828,14 @@ class Editor:
                 self.set_status_message(f"Error improving code: {str(e)}")
             logging.error(f"AI improvement error: {str(e)}")
     
-    def ai_analyze_code(self, start_line: int, end_line: int) -> None:
+    def ai_analyze_code(self, start_line: int, end_line: int, blocking: bool = False) -> None:
         """
         Analyze code complexity and identify potential bugs in the specified line range
         
         Args:
             start_line: Starting line number (0-based)
             end_line: Ending line number (0-based)
+            blocking: If True, block UI until AI completes, otherwise allow editing
         """
         if self.ai_processing:
             self.set_status_message("AI is already processing a request")
@@ -1825,12 +1866,15 @@ class Editor:
         
         # Mark as processing
         self.ai_processing = True
+        self.ai_blocking = blocking
+        self.last_ai_status_update = time.time()
         
         # Start loading animation
         if self.display:
             self.display.start_loading_animation("AI analyzing code complexity and bugs")
         else:
-            self.set_status_message("AI analyzing code...")
+            status_msg = "AI analyzing code..." + (" (blocking)" if blocking else " (background)")
+            self.set_status_message(status_msg)
         
         # Run in a separate thread
         self.ai_thread = threading.Thread(
@@ -1871,12 +1915,13 @@ class Editor:
                 self.set_status_message(f"Error analyzing code: {str(e)}")
             logging.error(f"AI analysis error: {str(e)}")
     
-    def ai_custom_query(self, query: str) -> None:
+    def ai_custom_query(self, query: str, blocking: bool = False) -> None:
         """
         Run a custom AI query on the current buffer
         
         Args:
             query: The query string
+            blocking: If True, block UI until AI completes, otherwise allow editing
         """
         if self.ai_processing:
             self.set_status_message("AI is already processing a request")
@@ -1893,12 +1938,14 @@ class Editor:
         
         # Mark as processing
         self.ai_processing = True
+        self.ai_blocking = blocking
+        self.last_ai_status_update = time.time()
         
         # Start loading animation
         if self.display:
             self.display.start_loading_animation("AI processing query")
         else:
-            self.set_status_message("AI processing query...")
+            self.set_status_message("AI processing query..." + (" (blocking)" if blocking else " (background)"))
         
         # Run in a separate thread
         self.ai_thread = threading.Thread(
@@ -1938,6 +1985,24 @@ class Editor:
                 self.ai_processing = False
                 self.set_status_message(f"Error processing query: {str(e)}")
             logging.error(f"AI query error: {str(e)}")
+    
+    def _cancel_ai_processing(self) -> None:
+        """Cancel current AI processing operation"""
+        if self.ai_processing:
+            # Stop the loading animation if it's active
+            if self.display:
+                self.display.stop_loading_animation()
+                
+            # Set status message
+            self.set_status_message("AI operation cancelled")
+            
+            # Reset AI processing flags
+            self.ai_processing = False
+            self.ai_blocking = False
+            
+            # Note: We can't really stop the thread, but we can mark it as cancelled
+            # The thread functions will check for this flag and exit early if possible
+            logging.info("AI operation cancelled by user")
     
     def quit(self, force: bool = False) -> None:
         """Quit the editor"""
