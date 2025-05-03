@@ -197,13 +197,20 @@ Return the complete updated script with your implementations.
     def schedule_update(self) -> None:
         """Schedule an asynchronous update after typing stops"""
         current_time = time.time() * 1000  # Convert to milliseconds
+        
+        # Set a minimum delay between scheduling attempts to prevent excessive refresh
+        last_schedule_time = getattr(self, '_last_schedule_time', 0)
+        if (current_time - last_schedule_time) < 50:  # Skip if less than 50ms since last schedule
+            return
+            
+        self._last_schedule_time = current_time
         self.last_update_time = current_time
         
         # Cancel any pending timer
         if self.update_timer:
             self.update_timer.cancel()
             
-        # Set a new timer
+        # Set a new timer with a longer delay to reduce processing frequency
         self.update_timer = threading.Timer(
             self.update_debounce_ms / 1000.0,  # Convert back to seconds
             self._check_and_process_update
@@ -543,27 +550,53 @@ Return the complete updated script with your implementations.
                 if self.processing:
                     # Stop loading animation
                     self.editor.display.stop_loading_animation()
-                    # Provide clear notification that processing is done
-                    self.editor.set_status_message("✓ NLP translation complete - Press any key to continue editing")
+                    
+                    # Play a sound to alert the user that processing is complete (if supported)
+                    try:
+                        curses.beep()  # Makes a beep sound if terminal supports it
+                    except:
+                        pass  # Ignore if beep is not supported
+                    
+                    # Provide very clear notification that processing is done
+                    self.editor.set_status_message("✓ NLP TRANSLATION COMPLETE - Press any key to continue editing")
+                    
+                    # Flash the screen briefly to get user's attention
+                    try:
+                        curses.flash()  # Flash the screen once
+                    except:
+                        pass  # Ignore if flash is not supported
                     
                     # Also show a dialog to indicate completion if no dialog is already open
                     if not self.editor.display.is_dialog_open():
-                        self.editor.show_dialog(
-                            "NLP Translation Complete",
-                            [
-                                "Your natural language has been converted to code.",
-                                "",
-                                "Press 'd' to close this dialog and continue editing.",
-                            ]
-                        )
+                        completion_message = [
+                            "Your natural language has been converted to code.",
+                            "",
+                            "✓ Processing complete",
+                            "",
+                            "Press 'd' to close this dialog and continue editing.",
+                        ]
+                        self.editor.show_dialog("NLP Translation Complete", completion_message)
                 
         except Exception as e:
             logging.error(f"Error processing NLP sections: {str(e)}")
             with self.editor.thread_lock:
                 # Stop loading animation on error
                 self.editor.display.stop_loading_animation()
-                error_msg = f"Error processing NLP: {str(e)}"
+                
+                # Play a sound to alert the user of the error (if supported)
+                try:
+                    curses.beep()  # Makes a beep sound if terminal supports it
+                except:
+                    pass  # Ignore if beep is not supported
+                
+                error_msg = f"ERROR PROCESSING NLP: {str(e)}"
                 self.editor.set_status_message(error_msg)
+                
+                # Flash the screen briefly to get user's attention for the error
+                try:
+                    curses.flash()  # Flash the screen once
+                except:
+                    pass  # Ignore if flash is not supported
                 
                 # Show a dialog with more detailed error info if no dialog is already open
                 if not self.editor.display.is_dialog_open():

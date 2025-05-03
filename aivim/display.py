@@ -139,8 +139,26 @@ class Display:
         if self.is_dialog_open():
             return
         
-        self.text_win.clear()
-        self.text_win.bkgd(' ', self.COLOR_NORMAL)
+        # Store current state to determine if we need to redraw
+        self._last_cursor_pos = getattr(self, '_last_cursor_pos', None)
+        self._last_scroll_y = getattr(self, '_last_scroll_y', None)
+        current_cursor_pos = (cursor_y, cursor_x)
+        
+        # Optimize: Only clear and redraw if something significant changed
+        need_full_redraw = (
+            self._last_cursor_pos != current_cursor_pos or
+            self._last_scroll_y != scroll_y or
+            not hasattr(self, '_has_drawn_initial_screen')
+        )
+        
+        # Update saved state
+        self._last_cursor_pos = current_cursor_pos
+        self._last_scroll_y = scroll_y
+        self._has_drawn_initial_screen = True
+        
+        if need_full_redraw:
+            self.text_win.clear()
+            self.text_win.bkgd(' ', self.COLOR_NORMAL)
         
         # Number of lines to display
         display_lines = min(self.max_text_height, len(lines) - scroll_y)

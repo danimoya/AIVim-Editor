@@ -387,8 +387,10 @@ class Editor:
                 return
                 
         # Skip too frequent key processing (throttle keyboard repeat)
-        if hasattr(self, '_last_input_time') and current_time - self._last_input_time < 0.01:
-            # Skip if less than 10ms has passed since last input (very rapid typing)
+        # Increase the throttle time to reduce screen refreshes
+        if hasattr(self, '_last_input_time') and current_time - self._last_input_time < 0.03:
+            # Skip if less than 30ms has passed since last input (very rapid typing)
+            # This improves performance and reduces screen flickering
             return
         self._last_input_time = current_time
             
@@ -1295,9 +1297,31 @@ class Editor:
             
         # Prevent too frequent updates (debouncing)
         current_time = time.time()
-        if hasattr(self, '_last_update_time') and current_time - self._last_update_time < 0.05:
-            # Skip update if less than 50ms has passed since last update
+        if hasattr(self, '_last_update_time') and current_time - self._last_update_time < 0.1:
+            # Skip update if less than 100ms has passed since last update
+            # This significantly reduces screen flicker during rapid typing
+            # A longer delay is acceptable for display updates since they're less critical than input handling
             return
+        
+        # Check if current state is the same as the last update (content, cursor, scroll position)
+        if hasattr(self, '_last_display_state'):
+            current_state = (
+                self.cursor_y, self.cursor_x, self.scroll_y,
+                self.mode, len(self.buffer.get_lines()),
+                self.buffer.is_modified()
+            )
+            if self._last_display_state == current_state:
+                # Skip update if nothing significant has changed
+                return
+            self._last_display_state = current_state
+        else:
+            # Initialize state tracking
+            self._last_display_state = (
+                self.cursor_y, self.cursor_x, self.scroll_y,
+                self.mode, len(self.buffer.get_lines()),
+                self.buffer.is_modified()
+            )
+            
         self._last_update_time = current_time
         
         # Update status line with tab information
