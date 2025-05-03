@@ -311,14 +311,32 @@ Return the complete updated script with your implementations.
                 # End of a comment block
                 if i - comment_start > 2:  # Longer comment blocks are likely natural language
                     # Only add if not already inside an NLP section
-                    if not any(start <= comment_start <= end for start, end in self.nlp_sections):
+                    # We need to handle both 2-tuple and 3-tuple formats
+                    inside_existing_section = False
+                    for section in self.nlp_sections:
+                        if len(section) >= 2:  # Could be 2 or 3 elements
+                            section_start, section_end = section[0], section[1]
+                            if section_start <= comment_start <= section_end:
+                                inside_existing_section = True
+                                break
+                    
+                    if not inside_existing_section:
                         self.nlp_sections.append((comment_start, i - 1))
                 comment_start = None
                 
         # Handle case where a comment block goes to the end of the file
         if comment_start is not None:
             if len(lines) - comment_start > 2:  # Longer comment blocks
-                if not any(start <= comment_start <= end for start, end in self.nlp_sections):
+                # We need to handle both 2-tuple and 3-tuple formats
+                inside_existing_section = False
+                for section in self.nlp_sections:
+                    if len(section) >= 2:  # Could be 2 or 3 elements
+                        section_start, section_end = section[0], section[1]
+                        if section_start <= comment_start <= section_end:
+                            inside_existing_section = True
+                            break
+                
+                if not inside_existing_section:
                     self.nlp_sections.append((comment_start, len(lines) - 1))
     
     def process_nlp_sections(self) -> None:

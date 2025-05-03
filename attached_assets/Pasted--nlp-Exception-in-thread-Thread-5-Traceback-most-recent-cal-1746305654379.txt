@@ -1,0 +1,26 @@
+#nlp Exception in thread Thread-5:
+                                      Traceback (most recent call last):
+                                                                          File "/usr/lib64/python3.9/threading.py", line 980, in _bootstrap_inner
+                                                                                                                                                     self.run()
+                                                                                                                                                                 File "/usr/lib64/python3.9/threading.py", line 1306, in run
+                                   self.function(*self.args, **self.kwargs)
+                                                                             File "/root/git/venv/aivim-editor-PyPi/lib64/python3.9/site-packages/aivim/nlp_mode.py", line 189, in _check_and_process_update
+                   self.process_nlp_sections()
+                                                File "/root/git/venv/aivim-editor-PyPi/lib64/python3.9/site-packages/aivim/nlp_mode.py", line 299, in process_nlp_sections
+                                                                                                                                                                              self.scan_buffer_for_nlp_sections()
+                      File "/root/git/venv/aivim-editor-PyPi/lib64/python3.9/site-packages/aivim/nlp_mode.py", line 250, in scan_buffer_for_nlp_sections
+                                                                                                                                                            self._identify_comment_blocks(lines)
+     File "/root/git/venv/aivim-editor-PyPi/lib64/python3.9/site-packages/aivim/nlp_mode.py", line 282, in _identify_comment_blocks
+                                                                                                                                       if not any(start <= comment_start <= end for start, end in self.nlp_sections):
+                          File "/root/git/venv/aivim-editor-PyPi/lib64/python3.9/site-packages/aivim/nlp_mode.py", line 282, in <genexpr>
+                                                                                                                                             if not any(start <= comment_start <= end for start, end in self.nlp_sections):
+                              ValueError: too many values to unpack (expected 2)
+
+
+
+
+
+
+
+
+check_proc.bash [+] Line 29/29 Col 6 -- NLP MODE -- (Natural Language Programming)                                         [AI: Local: TinyLlama-1.1B-Chat-v1.0.Q4_K_M.gguf]  NLP [NL→CODE]
