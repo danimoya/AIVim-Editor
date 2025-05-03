@@ -54,22 +54,22 @@ class TestCommandHandler(unittest.TestCase):
     def test_explain_command(self):
         """Test explain command"""
         self.handler.execute("explain 1 2")
-        self.editor.ai_explain.assert_called_once_with(0, 1)
+        self.editor.ai_explain.assert_called_once_with(0, 1, blocking=False)
     
     def test_improve_command(self):
         """Test improve command"""
         self.handler.execute("improve 1 2")
-        self.editor.ai_improve.assert_called_once_with(0, 1)
+        self.editor.ai_improve.assert_called_once_with(0, 1, blocking=False)
     
     def test_generate_command(self):
         """Test generate command"""
         self.handler.execute("generate 2 Create a function to calculate GCD")
-        self.editor.ai_generate.assert_called_once_with(1, "Create a function to calculate GCD")
+        self.editor.ai_generate.assert_called_once_with(1, "Create a function to calculate GCD", blocking=False)
     
     def test_ai_query_command(self):
         """Test AI query command"""
         self.handler.execute("ai How can I optimize this code?")
-        self.editor.ai_custom_query.assert_called_once_with("How can I optimize this code?")
+        self.editor.ai_custom_query.assert_called_once_with("How can I optimize this code?", blocking=False)
 
 
 if __name__ == "__main__":

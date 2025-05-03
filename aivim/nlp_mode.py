@@ -314,8 +314,11 @@ Return the complete updated script with your implementations.
                     # We need to handle both 2-tuple and 3-tuple formats
                     inside_existing_section = False
                     for section in self.nlp_sections:
+                        # Handle both 2-tuple and 3-tuple formats safely
                         if len(section) >= 2:  # Could be 2 or 3 elements
-                            section_start, section_end = section[0], section[1]
+                            # Access by index rather than unpacking to avoid ValueError
+                            section_start = section[0]
+                            section_end = section[1]
                             if section_start <= comment_start <= section_end:
                                 inside_existing_section = True
                                 break
@@ -330,8 +333,11 @@ Return the complete updated script with your implementations.
                 # We need to handle both 2-tuple and 3-tuple formats
                 inside_existing_section = False
                 for section in self.nlp_sections:
+                    # Handle both 2-tuple and 3-tuple formats safely
                     if len(section) >= 2:  # Could be 2 or 3 elements
-                        section_start, section_end = section[0], section[1]
+                        # Access by index rather than unpacking to avoid ValueError
+                        section_start = section[0]
+                        section_end = section[1]
                         if section_start <= comment_start <= section_end:
                             inside_existing_section = True
                             break

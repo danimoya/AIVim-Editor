@@ -77,6 +77,42 @@ def get_model_info():
         "is_configured": is_configured
     })
 
+@app.route('/api/set-model', methods=['POST'])
+def set_model():
+    """Set the AI model to use"""
+    data = request.json
+    model_name = data.get('model')
+    
+    if not model_name:
+        return jsonify({"success": False, "message": "Model name is required"}), 400
+        
+    # Validate model name
+    valid_models = ['openai', 'claude', 'local']
+    if model_name not in valid_models:
+        return jsonify({"success": False, "message": f"Invalid model. Must be one of: {', '.join(valid_models)}"}), 400
+    
+    try:
+        # Create an instance of the AI service
+        from aivim.ai_service import AIService
+        ai_service = AIService()
+        
+        # Set the model
+        ai_service.set_model(model_name)
+        
+        # Save the model setting for future sessions
+        # Note: AIService might not have save_config method in all versions
+        try:
+            if hasattr(ai_service, 'save_config') and callable(getattr(ai_service, 'save_config')):
+                ai_service.save_config()
+        except Exception as e:
+            logging.warning(f"Could not save model configuration: {str(e)}")
+            # Continue anyway as the model will be set for this session
+        
+        return jsonify({"success": True, "model": model_name})
+    except Exception as e:
+        logging.error(f"Error setting model: {str(e)}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
 @app.route('/static/<path:path>')
 def send_static(path):
     """Serve static files"""

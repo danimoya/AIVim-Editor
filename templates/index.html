@@ -115,7 +115,19 @@
                         Please set the <code>OPENAI_API_KEY</code> environment variable to use AI capabilities.
                     </div>
                     <div id="model-info" class="alert alert-info api-key-alert">
-                        <strong>Current Model:</strong> <span id="current-model">Loading...</span>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>Current Model:</strong> <span id="current-model">Loading...</span>
+                            </div>
+                            <div>
+                                <label for="model-selector" class="me-2">Select AI Model:</label>
+                                <select id="model-selector" class="form-select form-select-sm" style="width: auto; display: inline-block;">
+                                    <option value="openai">OpenAI</option>
+                                    <option value="claude">Claude</option>
+                                    <option value="local">Local LLM</option>
+                                </select>
+                            </div>
+                        </div>
                         <div id="config-status" class="mt-2"></div>
                     </div>
                 </div>
@@ -239,27 +251,78 @@ if __name__ == "__main__":
             // Get model information
             const currentModelSpan = document.getElementById('current-model');
             const configStatusDiv = document.getElementById('config-status');
+            const modelSelector = document.getElementById('model-selector');
             
-            fetch('/api/model-info')
+            // Function to update model information display
+            function updateModelInfo() {
+                fetch('/api/model-info')
+                    .then(response => response.json())
+                    .then(data => {
+                        // Update model information
+                        currentModelSpan.textContent = data.model;
+                        
+                        // Set the current model in the selector
+                        if (data.model.toLowerCase().includes('openai')) {
+                            modelSelector.value = 'openai';
+                        } else if (data.model.toLowerCase().includes('claude')) {
+                            modelSelector.value = 'claude';
+                        } else if (data.model.toLowerCase().includes('local')) {
+                            modelSelector.value = 'local';
+                        }
+                        
+                        // Show config status
+                        if (data.config_status.loaded) {
+                            configStatusDiv.innerHTML = `<small class="text-success">Configuration loaded from: ${data.config_status.path}</small>`;
+                        } else if (data.is_configured) {
+                            configStatusDiv.innerHTML = `<small class="text-info">Using environment variables for AI configuration</small>`;
+                        } else {
+                            configStatusDiv.innerHTML = `<small class="text-warning">${data.config_status.message}</small>`;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching model info:', error);
+                        currentModelSpan.textContent = 'Error loading model info';
+                        configStatusDiv.innerHTML = `<small class="text-danger">Could not retrieve model information</small>`;
+                    });
+            }
+            
+            // Call initially to set up the display
+            updateModelInfo();
+            
+            // Handle model selection changes
+            modelSelector.addEventListener('change', function() {
+                const selectedModel = this.value;
+                
+                // Show loading state
+                currentModelSpan.textContent = 'Switching model...';
+                modelSelector.disabled = true;
+                
+                // Send request to change the model
+                fetch('/api/set-model', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ model: selectedModel })
+                })
                 .then(response => response.json())
                 .then(data => {
-                    // Update model information
-                    currentModelSpan.textContent = data.model;
-                    
-                    // Show config status
-                    if (data.config_status.loaded) {
-                        configStatusDiv.innerHTML = `<small class="text-success">Configuration loaded from: ${data.config_status.path}</small>`;
-                    } else if (data.is_configured) {
-                        configStatusDiv.innerHTML = `<small class="text-info">Using environment variables for AI configuration</small>`;
+                    if (data.success) {
+                        // Update the UI with the new model info
+                        updateModelInfo();
                     } else {
-                        configStatusDiv.innerHTML = `<small class="text-warning">${data.config_status.message}</small>`;
+                        throw new Error(data.message || 'Failed to change model');
                     }
                 })
                 .catch(error => {
-                    console.error('Error fetching model info:', error);
-                    currentModelSpan.textContent = 'Error loading model info';
-                    configStatusDiv.innerHTML = `<small class="text-danger">Could not retrieve model information</small>`;
+                    console.error('Error changing model:', error);
+                    currentModelSpan.textContent = 'Error changing model';
+                    configStatusDiv.innerHTML = `<small class="text-danger">Error: ${error.message}</small>`;
+                })
+                .finally(() => {
+                    modelSelector.disabled = false;
                 });
+            });
             
             // Handle action selection changes
             actionSelect.addEventListener('change', function() {
