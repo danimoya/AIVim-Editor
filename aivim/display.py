@@ -160,55 +160,114 @@ class Display:
             selection_start = (start_y, start_x)
             selection_end = (end_y, end_x)
         
+        # Get window dimensions to prevent writing outside the window
+        max_y, max_x = self.text_win.getmaxyx()
+        
         # Display lines
         for i in range(display_lines):
             line_num = scroll_y + i
             line = lines[line_num]
             
+            # Check if we're at the bottom edge of the window
+            if i >= max_y:
+                break
+                
             # Display line number
             gutter = f"{line_num+1:3d} "
-            self.text_win.addstr(i, 0, gutter, self.COLOR_LINENO)
+            try:
+                self.text_win.addstr(i, 0, gutter, self.COLOR_LINENO)
+            except curses.error:
+                # Skip if we can't write the line number (shouldn't happen)
+                continue
             
-            # Display line content
+            # Calculate available width for text (don't draw past edge)
+            available_width = max_x - self.gutter_width - 1  # Leave 1 char margin
+            
+            # If the line is too long, truncate it
+            display_line = line
+            if len(display_line) > available_width:
+                display_line = display_line[:available_width]
+            
+            # Handle displaying line content with or without selection
+            # Each section has its own try/except to handle potential curses errors safely
             if not selection_start or not selection_end:
                 # No selection, simple display
-                self.text_win.addstr(i, self.gutter_width, line)
+                try:
+                    self.text_win.addstr(i, self.gutter_width, display_line)
+                except curses.error:
+                    pass
             else:
-                # Handle display with selection
+                # With selection - determine which case applies
                 if line_num < selection_start[0] or line_num > selection_end[0]:
                     # Line is outside selection
-                    self.text_win.addstr(i, self.gutter_width, line)
+                    try:
+                        self.text_win.addstr(i, self.gutter_width, display_line)
+                    except curses.error:
+                        pass
+                        
                 elif line_num == selection_start[0] and line_num == selection_end[0]:
                     # Selection starts and ends on this line
-                    if selection_start[1] < len(line):
-                        self.text_win.addstr(i, self.gutter_width, line[:selection_start[1]])
-                    
-                    selected_text = line[selection_start[1]:selection_end[1]]
-                    if selected_text:
-                        self.text_win.addstr(i, self.gutter_width + selection_start[1], 
-                                           selected_text, self.COLOR_SELECTION)
-                    
-                    if selection_end[1] < len(line):
-                        self.text_win.addstr(i, self.gutter_width + selection_end[1], 
-                                           line[selection_end[1]:])
+                    try:
+                        # Calculate safe bounds
+                        sel_start = min(selection_start[1], len(display_line))
+                        sel_end = min(selection_end[1], len(display_line))
+                        
+                        # Display pre-selection segment
+                        if sel_start > 0:
+                            self.text_win.addstr(i, self.gutter_width, display_line[:sel_start])
+                        
+                        # Display selected segment
+                        selected_text = display_line[sel_start:sel_end]
+                        if selected_text:
+                            self.text_win.addstr(i, self.gutter_width + sel_start, 
+                                               selected_text, self.COLOR_SELECTION)
+                        
+                        # Display post-selection segment
+                        if sel_end < len(display_line):
+                            self.text_win.addstr(i, self.gutter_width + sel_end, 
+                                               display_line[sel_end:])
+                    except curses.error:
+                        pass
+                        
                 elif line_num == selection_start[0]:
                     # Selection starts on this line
-                    if selection_start[1] < len(line):
-                        self.text_win.addstr(i, self.gutter_width, line[:selection_start[1]])
-                        self.text_win.addstr(i, self.gutter_width + selection_start[1], 
-                                           line[selection_start[1]:], self.COLOR_SELECTION)
+                    try:
+                        sel_start = min(selection_start[1], len(display_line))
+                        
+                        # Display pre-selection segment
+                        if sel_start > 0:
+                            self.text_win.addstr(i, self.gutter_width, display_line[:sel_start])
+                        
+                        # Display selected segment
+                        if sel_start < len(display_line):
+                            self.text_win.addstr(i, self.gutter_width + sel_start, 
+                                               display_line[sel_start:], self.COLOR_SELECTION)
+                    except curses.error:
+                        pass
+                        
                 elif line_num == selection_end[0]:
                     # Selection ends on this line
-                    if selection_end[1] > 0:
-                        self.text_win.addstr(i, self.gutter_width, line[:selection_end[1]], 
-                                           self.COLOR_SELECTION)
-                    
-                    if selection_end[1] < len(line):
-                        self.text_win.addstr(i, self.gutter_width + selection_end[1], 
-                                           line[selection_end[1]:])
+                    try:
+                        sel_end = min(selection_end[1], len(display_line))
+                        
+                        # Display selected segment
+                        if sel_end > 0:
+                            self.text_win.addstr(i, self.gutter_width, display_line[:sel_end], 
+                                               self.COLOR_SELECTION)
+                        
+                        # Display post-selection segment
+                        if sel_end < len(display_line):
+                            self.text_win.addstr(i, self.gutter_width + sel_end, 
+                                               display_line[sel_end:])
+                    except curses.error:
+                        pass
+                        
                 else:
                     # Line is fully selected
-                    self.text_win.addstr(i, self.gutter_width, line, self.COLOR_SELECTION)
+                    try:
+                        self.text_win.addstr(i, self.gutter_width, display_line, self.COLOR_SELECTION)
+                    except curses.error:
+                        pass
         
         # Position cursor
         if cursor_y >= scroll_y and cursor_y < scroll_y + self.max_text_height:

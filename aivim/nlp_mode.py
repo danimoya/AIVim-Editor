@@ -543,14 +543,40 @@ Return the complete updated script with your implementations.
                 if self.processing:
                     # Stop loading animation
                     self.editor.display.stop_loading_animation()
-                    self.editor.set_status_message("Natural language translation complete")
+                    # Provide clear notification that processing is done
+                    self.editor.set_status_message("✓ NLP translation complete - Press any key to continue editing")
+                    
+                    # Also show a dialog to indicate completion if no dialog is already open
+                    if not self.editor.display.is_dialog_open():
+                        self.editor.show_dialog(
+                            "NLP Translation Complete",
+                            [
+                                "Your natural language has been converted to code.",
+                                "",
+                                "Press 'd' to close this dialog and continue editing.",
+                            ]
+                        )
                 
         except Exception as e:
             logging.error(f"Error processing NLP sections: {str(e)}")
             with self.editor.thread_lock:
                 # Stop loading animation on error
                 self.editor.display.stop_loading_animation()
-                self.editor.set_status_message(f"Error processing NLP: {str(e)}")
+                error_msg = f"Error processing NLP: {str(e)}"
+                self.editor.set_status_message(error_msg)
+                
+                # Show a dialog with more detailed error info if no dialog is already open
+                if not self.editor.display.is_dialog_open():
+                    error_details = [
+                        "An error occurred during NLP processing:",
+                        "",
+                        f"{str(e)}",
+                        "",
+                        "This may be due to network issues, API limits, or syntax problems.",
+                        "You can still continue editing normally.",
+                        "Press 'd' to dismiss this message."
+                    ]
+                    self.editor.show_dialog("NLP Processing Error", error_details)
                 
         finally:
             self.processing = False
