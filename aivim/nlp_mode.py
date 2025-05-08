@@ -163,6 +163,62 @@ Return the complete updated script with your implementations.
             except Exception as e:
                 logging.error(f"Error processing entire script: {str(e)}")
                 
+                # Show a popup dialog with detailed error information
+                with self.editor.thread_lock:
+                    if not self.editor.display.is_dialog_open():
+                        # Determine error type and provide useful information
+                        error_message = str(e)
+                        error_title = "NLP Error: Network Issue"
+                        error_details = []
+                        
+                        if "timeout" in error_message.lower() or "timed out" in error_message.lower():
+                            error_title = "NLP Error: Network Timeout"
+                            error_details = [
+                                "The request to the AI service timed out.",
+                                "",
+                                f"Error details: {error_message}",
+                                "",
+                                "Possible solutions:",
+                                "- Check your internet connection",
+                                "- Try again when the AI service is less busy",
+                                "- Consider using a different AI model",
+                                "",
+                                "Your script has not been modified.",
+                                "Press 'd' to dismiss this message."
+                            ]
+                        elif "api key" in error_message.lower() or "apikey" in error_message.lower() or "authentication" in error_message.lower():
+                            error_title = "NLP Error: API Key Issue"
+                            error_details = [
+                                "There was a problem with your AI service API key.",
+                                "",
+                                f"Error details: {error_message}",
+                                "",
+                                "Please check your API key configuration:",
+                                "- Ensure your API key is valid and not expired",
+                                "- Verify you have sufficient credits/quota",
+                                "- Check that the key has the necessary permissions",
+                                "",
+                                "Your script has not been modified.",
+                                "Press 'd' to dismiss this message."
+                            ]
+                        else:
+                            error_title = "NLP Error: AI Service Issue"
+                            error_details = [
+                                "An error occurred while communicating with the AI service.",
+                                "",
+                                f"Error details: {error_message}",
+                                "",
+                                "Possible solutions:",
+                                "- Check your internet connection",
+                                "- Verify the AI service is operational",
+                                "- Try using a different AI model",
+                                "",
+                                "Your script has not been modified.",
+                                "Press 'd' to dismiss this message."
+                            ]
+                        
+                        self.editor.show_dialog(error_title, error_details)
+                
             if translated_code and self.processing:
                 # Update the buffer with the translated code
                 with self.editor.thread_lock:
@@ -189,7 +245,40 @@ Return the complete updated script with your implementations.
         except Exception as e:
             logging.error(f"Error in _process_entire_script_thread: {str(e)}")
             with self.editor.thread_lock:
-                self.editor.set_status_message(f"Error processing script: {str(e)}")
+                # Set error status message
+                self.editor.set_status_message("Error processing script - See popup for details")
+                
+                # Show a popup dialog with detailed error information
+                if not self.editor.display.is_dialog_open():
+                    error_details = [
+                        "An unexpected error occurred while processing the script.",
+                        "",
+                        f"Error details: {str(e)}",
+                        "",
+                        "This may be due to:",
+                        "- Syntax errors in the script",
+                        "- Unexpected input format",
+                        "- Internal processing error",
+                        "",
+                        "Your script has not been modified.",
+                        "Press 'd' to dismiss this message."
+                    ]
+                    self.editor.show_dialog("NLP Error: Processing Failed", error_details)
+                
+                # Stop loading animation
+                self.editor.display.stop_loading_animation()
+                
+                # Play a sound to alert the user of the error (if supported)
+                try:
+                    curses.beep()  # Makes a beep sound if terminal supports it
+                except:
+                    pass  # Ignore if beep is not supported
+                
+                # Flash the screen briefly to get user's attention for the error
+                try:
+                    curses.flash()  # Flash the screen once
+                except:
+                    pass  # Ignore if flash is not supported
                 
         finally:
             self.processing = False
@@ -790,4 +879,62 @@ For insertions, set 'replace_lines' to 0.
             return translated_code
         except Exception as e:
             logging.error(f"Error translating NLP to code: {str(e)}")
-            return None
+            
+            # Show a popup dialog with detailed error information
+            with self.editor.thread_lock:
+                if not self.editor.display.is_dialog_open():
+                    # Determine error type and provide useful information
+                    error_message = str(e)
+                    error_title = "NLP Error: Network Issue"
+                    error_details = []
+                    
+                    if "timeout" in error_message.lower() or "timed out" in error_message.lower():
+                        error_title = "NLP Error: Network Timeout"
+                        error_details = [
+                            "The request to the AI service timed out.",
+                            "",
+                            f"Error details: {error_message}",
+                            "",
+                            "Possible solutions:",
+                            "- Check your internet connection",
+                            "- Try again when the AI service is less busy",
+                            "- Consider using a different AI model",
+                            "",
+                            "The original text has been preserved.",
+                            "Press 'd' to dismiss this message."
+                        ]
+                    elif "api key" in error_message.lower() or "apikey" in error_message.lower() or "authentication" in error_message.lower():
+                        error_title = "NLP Error: API Key Issue"
+                        error_details = [
+                            "There was a problem with your AI service API key.",
+                            "",
+                            f"Error details: {error_message}",
+                            "",
+                            "Please check your API key configuration:",
+                            "- Ensure your API key is valid and not expired",
+                            "- Verify you have sufficient credits/quota",
+                            "- Check that the key has the necessary permissions",
+                            "",
+                            "The original text has been preserved.",
+                            "Press 'd' to dismiss this message."
+                        ]
+                    else:
+                        error_title = "NLP Error: AI Service Issue"
+                        error_details = [
+                            "An error occurred while communicating with the AI service.",
+                            "",
+                            f"Error details: {error_message}",
+                            "",
+                            "Possible solutions:",
+                            "- Check your internet connection",
+                            "- Verify the AI service is operational",
+                            "- Try using a different AI model",
+                            "",
+                            "The original text has been preserved.",
+                            "Press 'd' to dismiss this message."
+                        ]
+                    
+                    self.editor.show_dialog(error_title, error_details)
+            
+            # Return the original text, so we don't modify the user's content
+            return nlp_text

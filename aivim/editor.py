@@ -1109,6 +1109,9 @@ class Editor:
     
     def _handle_command_mode(self, key: int) -> None:
         """Handle keypresses in command mode"""
+        # Ensure the command line is visible
+        self.display.update_command_line(self.command_buffer, self.command_cursor)
+        
         if key == 27:  # Escape key
             # Return to normal mode
             self.mode = "NORMAL"
@@ -1124,24 +1127,34 @@ class Editor:
                     self.command_buffer[self.command_cursor:]
                 )
                 self.command_cursor -= 1
+                # Immediately show the change
+                self.display.update_command_line(self.command_buffer, self.command_cursor)
         
         elif key == curses.KEY_LEFT:
             # Move cursor left
             if self.command_cursor > 1:  # Don't move past the initial character
                 self.command_cursor -= 1
+                # Immediately show the change
+                self.display.update_command_line(self.command_buffer, self.command_cursor)
         
         elif key == curses.KEY_RIGHT:
             # Move cursor right
             if self.command_cursor < len(self.command_buffer):
                 self.command_cursor += 1
+                # Immediately show the change
+                self.display.update_command_line(self.command_buffer, self.command_cursor)
         
         elif key == curses.KEY_HOME:
             # Move to beginning of command (after the initial character)
             self.command_cursor = 1
+            # Immediately show the change
+            self.display.update_command_line(self.command_buffer, self.command_cursor)
         
         elif key == curses.KEY_END:
             # Move to end of command
             self.command_cursor = len(self.command_buffer)
+            # Immediately show the change
+            self.display.update_command_line(self.command_buffer, self.command_cursor)
         
         elif key == ord('\n') or key == curses.KEY_ENTER:
             # Execute command
@@ -1156,6 +1169,8 @@ class Editor:
                 self.command_buffer[self.command_cursor:]
             )
             self.command_cursor += 1
+            # Immediately show the change
+            self.display.update_command_line(self.command_buffer, self.command_cursor)
     
     def _process_command(self) -> None:
         """Process entered command"""
