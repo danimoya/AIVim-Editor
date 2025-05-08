@@ -369,6 +369,9 @@ class Display:
         self.command_win.clear()
         self.command_win.bkgd(' ', self.COLOR_MESSAGE)
         
+        # Always display cursor even with empty command
+        curses.curs_set(1)
+        
         # Truncate command if too long
         if len(command) > self.width - 1:
             visible_start = max(0, cursor_pos - (self.width // 2))
@@ -380,10 +383,23 @@ class Display:
         else:
             visible_command = command
         
-        self.command_win.addstr(0, 0, visible_command)
-        self.command_win.move(0, min(cursor_pos, self.width - 1))
-        
+        try:
+            self.command_win.addstr(0, 0, visible_command)
+            self.command_win.move(0, min(cursor_pos, self.width - 1))
+        except curses.error:
+            # Handle potential errors when writing to the command window
+            pass
+            
+        # Ensure visibility by refreshing the window 
         self.command_win.refresh()
+        
+        # Ensure cursor is visible for empty commands
+        if not command:
+            try:
+                # Make cursor more noticeable for empty command
+                curses.flash()
+            except:
+                pass
     
     def show_dialog(self, title: str, content: List[str]) -> None:
         """

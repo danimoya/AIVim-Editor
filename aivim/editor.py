@@ -445,6 +445,21 @@ class Editor:
                 # Enter insert mode
                 self.mode = "INSERT"
                 self.set_status_message("-- INSERT --")
+        
+        elif key == ord('G') or (key == ord('g') and curses.keyname(key).decode("utf-8").startswith("S-")):
+            # Go to last line of the file (Shift+G)
+            last_line_idx = len(self.buffer.get_lines()) - 1
+            self.cursor_y = last_line_idx
+            
+            # Move cursor to the beginning of the line
+            self.cursor_x = 0
+            self.preferred_x = self.cursor_x
+            
+            # Update scroll position if necessary
+            if self.cursor_y >= self.scroll_y + self.display.max_text_height:
+                self.scroll_y = max(0, self.cursor_y - self.display.max_text_height + 1)
+                
+            self.set_status_message(f"Line {self.cursor_y + 1} of {last_line_idx + 1}")
                 
         elif key == ord('A') or (key == ord('a') and (curses.keyname(key).decode("utf-8").startswith("^") or curses.keyname(key).decode("utf-8").startswith("S-"))):
             # Go to end of line and enter insert mode (Shift+A)

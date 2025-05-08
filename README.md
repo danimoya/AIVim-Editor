@@ -99,7 +99,7 @@ AIVim provides the following AI-specific commands:
 | `nl` | Enter NLP mode (press 'n' then 'l') |
 | `Ctrl+X Ctrl+N` | Enter NLP mode from insert mode |
 | `gg` | Go to first line |
-| `G` | Go to last line |
+| `G` or `Shift+G` | Go to last line |
 | `$` | Go to end of line |
 | `/pattern` | Search forward for pattern |
 | `?pattern` | Search backward for pattern |
@@ -115,7 +115,7 @@ AIVim provides the following AI-specific commands:
 - Press `i` to enter insert mode, `ESC` to return to normal mode
 - Use `:w` to save, `:q` to quit, `:wq` to save and quit
 - Navigation works with arrow keys (primary) or `h`, `j`, `k`, `l` keys (alternative)
-- Jump to specific lines with `:1`, `:14` or `:$` (last line)
+- Jump to specific lines with `:1`, `:14`, `:$`, or use `G`/`Shift+G` (last line)
 - Search for text with `/pattern` (forward) or `?pattern` (backward)
 - Use `n` to find next match, `N` to find previous match
 - Replace text with `:%s/old/new/g` syntax
