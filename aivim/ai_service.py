@@ -62,6 +62,11 @@ class AIService:
         # Default model provider
         self.current_model = "openai"  # Options: "openai", "claude", "local"
         
+        # Timeout and debug settings
+        self.ai_timeout = 30  # Default 30 second timeout for AI calls
+        self.debug_logging = False  # Debug logging disabled by default
+        self.debug_log_file = None  # Will be set when debug logging is enabled
+        
         # Load config if available
         self.load_config()
         
@@ -143,6 +148,60 @@ class AIService:
             Dict with config status information
         """
         return self.config_status
+        
+    def enable_debug_logging(self) -> str:
+        """
+        Enable debug logging for AI calls
+        
+        Returns:
+            Path to the debug log file
+        """
+        import tempfile
+        
+        self.debug_logging = True
+        # Create a temporary file for debug logging
+        fd, temp_file = tempfile.mkstemp(prefix="aivim_debug_", suffix=".log")
+        os.close(fd)  # Close the file descriptor
+        self.debug_log_file = temp_file
+        
+        # Log that debug is enabled
+        self._debug_log(f"Debug logging enabled at {datetime.datetime.now()}")
+        self._debug_log(f"Debug log file: {self.debug_log_file}")
+        
+        return self.debug_log_file
+        
+    def disable_debug_logging(self) -> None:
+        """Disable debug logging for AI calls"""
+        self.debug_logging = False
+        self._debug_log(f"Debug logging disabled at {datetime.datetime.now()}")
+        
+    def _debug_log(self, message: str) -> None:
+        """Write a message to the debug log if enabled"""
+        if self.debug_logging and self.debug_log_file:
+            try:
+                with open(self.debug_log_file, 'a') as f:
+                    f.write(f"{message}\n")
+            except Exception as e:
+                logging.error(f"Error writing to debug log: {e}")
+                
+    def _log_ai_call(self, provider: str, model: str, system_prompt: str, user_prompt: str, response: str, elapsed_time: float) -> None:
+        """Log details of an AI call if debug logging is enabled"""
+        if not self.debug_logging:
+            return
+            
+        self._debug_log("="*80)
+        self._debug_log(f"AI Call at {datetime.datetime.now()}")
+        self._debug_log(f"Provider: {provider}")
+        self._debug_log(f"Model: {model}")
+        self._debug_log(f"Elapsed Time: {elapsed_time:.2f} seconds")
+        self._debug_log("\n--- System Prompt ---")
+        self._debug_log(system_prompt)
+        self._debug_log("\n--- User Prompt ---")
+        self._debug_log(user_prompt)
+        self._debug_log("\n--- Response ---")
+        self._debug_log(response)
+        self._debug_log("="*80)
+        self._debug_log("")
         
     def _initialize_clients(self):
         """Initialize available AI clients based on API keys"""
@@ -286,6 +345,45 @@ class AIService:
         else:
             return f"Unknown model: {self.current_model}"
             
+    def refresh_available_models(self) -> None:
+        """Refresh the list of available models from all providers"""
+        # Refresh OpenAI models
+        if self.openai_client:
+            try:
+                models = self.openai_client.models.list()
+                # Filter for chat models only
+                chat_models = []
+                for model in models.data:
+                    if 'gpt' in model.id.lower():
+                        chat_models.append({
+                            "id": model.id, 
+                            "name": model.id.upper().replace('-', ' '),
+                            "description": f"OpenAI model: {model.id}"
+                        })
+                
+                # Update the list if we got models
+                if chat_models:
+                    self.openai_models = sorted(chat_models, key=lambda x: x['id'], reverse=True)[:5]  # Keep top 5
+                    logging.info(f"Retrieved {len(chat_models)} OpenAI models")
+            except Exception as e:
+                logging.error(f"Error retrieving OpenAI models: {e}")
+                # Keep the default list if retrieval fails
+        
+        # For Anthropic, the models are not available via API, so we keep the hardcoded list
+        # but we could check if the models are accessible
+        if self.anthropic_client:
+            # Test if the default model works
+            try:
+                # Just validate that we can make a simple call
+                test_response = self.anthropic_client.messages.create(
+                    model=self.current_anthropic_model,
+                    messages=[{"role": "user", "content": "Hi"}],
+                    max_tokens=10
+                )
+                logging.info("Anthropic models validated")
+            except Exception as e:
+                logging.error(f"Error validating Anthropic models: {e}")
+                
     def get_available_submodels(self, provider: str) -> List[Dict[str, Any]]:
         """
         Get a list of available submodels for a specific provider
@@ -485,17 +583,24 @@ class AIService:
                 )
             
             # Execute the API call with a timeout
+            start_time = time.time()
             with ThreadPoolExecutor() as executor:
                 future = executor.submit(api_call)
                 try:
-                    # 10 second timeout to prevent UI freezing
-                    response = future.result(timeout=10)
-                    return response.choices[0].message.content
+                    # Use configurable timeout
+                    response = future.result(timeout=self.ai_timeout)
+                    elapsed_time = time.time() - start_time
+                    result = response.choices[0].message.content
+                    
+                    # Log the call if debug logging is enabled
+                    self._log_ai_call("OpenAI", model_to_use, system_prompt, user_prompt, result, elapsed_time)
+                    
+                    return result
                 except TimeoutError:
                     # Cancel the future if possible
                     future.cancel()
-                    logging.error("OpenAI API request timed out after 10 seconds")
-                    return "Error: Network request timed out. Please check your internet connection or try again later."
+                    logging.error(f"OpenAI API request timed out after {self.ai_timeout} seconds")
+                    return f"Error: Network request timed out after {self.ai_timeout} seconds. Please check your internet connection or try again later."
                 
         except Exception as e:
             logging.error(f"OpenAI API error: {str(e)}")
@@ -514,16 +619,40 @@ class AIService:
             logging.info(f"Using Anthropic model: {model_to_use}")
             # the newest Anthropic model is "claude-3-5-sonnet-20241022" which was released October 22, 2024
             
-            response = self.anthropic_client.messages.create(
-                model=model_to_use,
-                system=system_prompt,
-                messages=[
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=0.2,
-                max_tokens=1000
-            )
-            return response.content[0].text
+            # Use ThreadPoolExecutor for timeout support
+            from concurrent.futures import ThreadPoolExecutor, TimeoutError
+            
+            def api_call():
+                return self.anthropic_client.messages.create(
+                    model=model_to_use,
+                    system=system_prompt,
+                    messages=[
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    temperature=0.2,
+                    max_tokens=1000
+                )
+            
+            # Execute the API call with a timeout
+            start_time = time.time()
+            with ThreadPoolExecutor() as executor:
+                future = executor.submit(api_call)
+                try:
+                    # Use configurable timeout
+                    response = future.result(timeout=self.ai_timeout)
+                    elapsed_time = time.time() - start_time
+                    result = response.content[0].text
+                    
+                    # Log the call if debug logging is enabled
+                    self._log_ai_call("Anthropic", model_to_use, system_prompt, user_prompt, result, elapsed_time)
+                    
+                    return result
+                except TimeoutError:
+                    # Cancel the future if possible
+                    future.cancel()
+                    logging.error(f"Anthropic API request timed out after {self.ai_timeout} seconds")
+                    return f"Error: Network request timed out after {self.ai_timeout} seconds. Please check your internet connection or try again later."
+                    
         except Exception as e:
             logging.error(f"Anthropic API error: {str(e)}")
             return f"Error: {str(e)}"
@@ -594,6 +723,9 @@ class AIService:
             
             # Save the response to a file 
             self._save_local_model_response(system_prompt, user_prompt, response, elapsed_time)
+            
+            # Log the call if debug logging is enabled
+            self._log_ai_call("Local LLM", model_name, system_prompt, user_prompt, response, elapsed_time)
             
             return response
         except Exception as e:

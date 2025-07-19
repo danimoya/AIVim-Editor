@@ -40,19 +40,38 @@ class TestLocalLLMLogging(unittest.TestCase):
     @patch('time.time')
     def test_local_llm_stdout_capture(self, mock_time):
         """Test that local LLM stdout output is captured and logged"""
-        # Set up time.time() to return predictable values
-        mock_time.side_effect = [100, 105]  # Start time and end time
+        # Set up time.time() to return predictable values using a generator
+        # This prevents StopIteration errors
+        times = [100, 105]
+        time_index = 0
+        def time_generator():
+            nonlocal time_index
+            if time_index < len(times):
+                value = times[time_index]
+                time_index += 1
+                return value
+            return 105  # Default value after list is exhausted
+        
+        mock_time.side_effect = time_generator
         
         # Set up a test string that the LLM will print to stdout
         test_perf_output = "llama_print_timings: load time = 1234.56 ms\nllama_model_context: estimated tokens: 42\n"
         
-        # Create a patched version of sys.stdout that will be temporarily replaced
+        # Create a patched version of sys.stdout that will capture writes
         mock_stdout = io.StringIO()
-        mock_stdout.write(test_perf_output)
-        mock_stdout.seek(0)  # Reset to beginning so it can be read
         
         # Execute local completion with the mocked stdout
         with patch('sys.stdout', mock_stdout):
+            # The LLM mock will be called, and we need to simulate stdout output
+            # This happens during the model call
+            def llm_side_effect(*args, **kwargs):
+                # Write the performance output to the mocked stdout
+                mock_stdout.write(test_perf_output)
+                # Return the expected model output
+                return {"choices": [{"text": "This is the model's response"}]}
+            
+            self.mock_llm.side_effect = llm_side_effect
+            
             self.ai_service._local_completion(
                 system_prompt="Test system prompt",
                 user_prompt="Test user prompt"

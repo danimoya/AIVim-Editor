@@ -39,13 +39,17 @@ class NLPHandler:
         self.live_nlp_regions = []  # Detected NLP regions in live mode
         self.processing_queue = []  # Queue of regions to process
         self.visual_indicators = {}  # Visual feedback for live processing
-        self.smart_detection_enabled = True  # Enable intelligent NLP detection
         self.last_processed_content = {}  # Track what's been processed to avoid duplicates
         self.live_update_interval = 500  # Check for changes every 500ms in live mode
+        self.live_mode_timeout = 30000  # 30 second timeout for live mode processing (configurable)
+        self.force_submission_key = 343  # F9 key for force submission
         
     def enter_nlp_mode(self) -> None:
         """Enter NLP mode and set up the environment"""
-        self.editor.set_status_message("-- NLP LIVE MODE -- (Natural Language Programming)")
+        status_msg = "-- NLP LIVE MODE -- (Natural Language Programming)"
+        if self.live_mode_enabled:
+            status_msg += " [Auto-detect ON]"
+        self.editor.set_status_message(status_msg)
         self.scan_buffer_for_nlp_sections()
         
         # Start live detection if enabled
@@ -67,6 +71,11 @@ class NLPHandler:
         Returns:
             True if the key was handled, False otherwise
         """
+        # Check for F9 key - force submission of current content
+        if key == self.force_submission_key:  # F9 key
+            self.force_submit()
+            return True
+            
         # Check for Ctrl+Enter - sends entire script with all tabs as context
         if key == 10 and curses.keyname(key).decode().lower() in ['^j', '^m']:  # Ctrl+Enter (^J or ^M depending on terminal)
             self.handle_ctrl_enter()
@@ -88,6 +97,34 @@ class NLPHandler:
         self.schedule_update()
         return False  # Let the editor's normal INSERT mode handle the key
         
+    def force_submit(self) -> None:
+        """
+        Force submit the current NLP content for processing (F9 key).
+        This bypasses the normal debounce timing and processes immediately.
+        """
+        if self.processing:
+            self.editor.set_status_message("Already processing NLP request, please wait...")
+            return
+            
+        # Cancel any pending updates
+        self.cancel_pending_updates()
+        
+        # Process all queued regions immediately
+        if self.processing_queue:
+            self.editor.set_status_message("Force processing NLP regions...")
+            self._process_queued_regions()
+        else:
+            # If no queued regions, scan and process all NLP sections
+            self.scan_buffer_for_nlp_sections()
+            if self.nlp_sections:
+                self.processing = True
+                self.editor.set_status_message("Force processing all NLP sections...")
+                thread = threading.Thread(target=self._process_nlp_sections_thread)
+                thread.daemon = True
+                thread.start()
+            else:
+                self.editor.set_status_message("No NLP content to process")
+                
     def handle_shift_enter(self) -> None:
         """
         Handle Shift+Enter in NLP mode - processes current section without other tabs as context
@@ -1027,7 +1064,7 @@ For insertions, set 'replace_lines' to 0.
                     'confidence': 1.0
                 })
         
-        if not self.smart_detection_enabled:
+        if not self.live_mode_enabled:
             return
             
         # Smart detection: Look for patterns that indicate natural language
@@ -1221,25 +1258,16 @@ For insertions, set 'replace_lines' to 0.
                 self.editor.set_status_message(f"Processing NLP section (lines {region['start']+1}-{region['end']+1})")
                 
     def toggle_live_mode(self) -> None:
-        """Toggle live NLP detection on/off"""
+        """Toggle live NLP detection on/off (includes smart detection)"""
         self.live_mode_enabled = not self.live_mode_enabled
         
         if self.live_mode_enabled:
             self._start_live_detection()
-            self.editor.set_status_message("NLP Live Mode: ON - Auto-detecting natural language")
+            self.editor.set_status_message("NLP Live Mode: ON - Auto-detecting natural language with smart detection")
         else:
             self._stop_live_detection()
             self.editor.set_status_message("NLP Live Mode: OFF - Manual processing only")
-            
-    def toggle_smart_detection(self) -> None:
-        """Toggle smart NLP detection on/off"""
-        self.smart_detection_enabled = not self.smart_detection_enabled
-        
-        if self.smart_detection_enabled:
-            self.editor.set_status_message("Smart NLP Detection: ON - Intelligent language detection")
-        else:
-            self.editor.set_status_message("Smart NLP Detection: OFF - Explicit markers only")
-            self.live_nlp_regions = [r for r in self.live_nlp_regions if r['type'] == 'explicit']
+            self.live_nlp_regions = []  # Clear all detected regions
             
     def _process_queued_regions(self) -> None:
         """Process regions queued from live detection"""

@@ -19,9 +19,39 @@ AIVim is an advanced AI-powered Vim clone that revolutionizes code editing throu
 - **AI Integration**: Support for OpenAI, Anthropic, and other AI providers
 - **Natural Language Programming**: Enhanced NLP Live Mode with intelligent detection
 
-## Recent Changes (2025-01-09)
+## Recent Changes (2025-01-19)
 
-### Enhanced NLP Live Mode Implementation
+### Major Improvements to NLP Live Mode
+Based on user feedback, the following enhancements were implemented:
+
+1. **Integrated Smart Detection within Live Mode**:
+   - Removed separate `:nlpsmart` command
+   - Smart detection is now an integral part of live mode
+   - Single `:nlplive` command toggles both features together
+   - Clearer status messages showing when auto-detect is active
+
+2. **Configurable Timeout and Force Submission**:
+   - Added 30-second configurable timeout for AI calls
+   - F9 key now forces immediate submission of queued NLP content
+   - Timeout prevents UI freezing during network issues
+   - Force submission bypasses debounce timing for urgent processing
+
+3. **Enhanced AI Service Features**:
+   - Added `refresh_available_models()` to fetch models from providers
+   - OpenAI model list now dynamically retrieved from API
+   - Debug logging capability with `enable_debug_logging()`
+   - All AI calls logged to temporary file when debug enabled
+   - Configurable timeout (default 30s) for all AI providers
+
+4. **Technical Improvements**:
+   - Timeout support added to OpenAI, Anthropic, and local LLM calls
+   - Debug logs include system prompts, user prompts, responses, and timing
+   - Better error handling with specific timeout messages
+   - Maintains backward compatibility with existing features
+
+### Previous Implementation (2025-01-09)
+
+#### Enhanced NLP Live Mode Implementation
 Implemented a revolutionary NLP Live Mode that provides:
 
 1. **Intelligent NLP Detection**: 
@@ -39,22 +69,14 @@ Implemented a revolutionary NLP Live Mode that provides:
    - Includes all open tabs for comprehensive understanding
    - Maintains code structure and style consistency
 
-4. **New Commands**:
-   - `:nlplive` - Toggle live NLP detection on/off
-   - `:nlpsmart` - Toggle intelligent detection on/off
-
-### Technical Implementation Details
-- Added `_start_live_detection()` and `_stop_live_detection()` for background thread management
-- Implemented `_detect_nlp_regions_smart()` for intelligent language detection
-- Created `_is_natural_language_line()` with confidence scoring
-- Added queue-based processing with `_process_queued_regions()`
-- Maintains backward compatibility with existing NLP features
-
 ### User Preferences
 - Live NLP detection enabled by default in NLP mode
-- Smart detection identifies natural language patterns automatically
+- Smart detection integrated within live mode (not separate)
 - Processing happens after 1 second of typing pause
 - High-confidence regions (>60%) are processed automatically
+- F9 key for force submission of NLP content
+- 30-second timeout for AI calls
+- Debug logging available on demand
 
 ## Testing
 All existing tests continue to pass:
