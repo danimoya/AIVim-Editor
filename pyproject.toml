@@ -4,11 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aivim"
-version = "0.3.1"
+version = "0.3.2"
 description = "AI-enhanced Vim-like text editor with code assistance and generation"
 readme = "README.md"
-author = "Daniel Moya"
-author_email = "daniel.moya@dimensigon.com"
+authors = [
+    {name = "Daniel Moya", email = "daniel.moya@dimensigon.com"}
+]
 license = {text = "MIT"}
 classifiers = [
     "Development Status :: 5 - Production/Stable",
