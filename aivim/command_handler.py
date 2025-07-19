@@ -55,6 +55,8 @@ class CommandHandler:
             r'^nlp$': self._cmd_enter_nlp_mode,
             r'^nlpmark\s+(\d+)\s+(\d+)$': self._cmd_mark_nlp_section,
             r'^nlptranslate$': self._cmd_translate_nlp,
+            r'^nlplive$': self._cmd_toggle_nlp_live_mode,
+            r'^nlpsmart$': self._cmd_toggle_nlp_smart_detection,
         }
         
         return commands
@@ -599,4 +601,58 @@ class CommandHandler:
                 self.editor.display.stop_loading_animation()
             self.editor.set_status_message(f"Error translating NLP sections: {str(e)}")
             logging.error(f"Error executing nlptranslate command: {str(e)}")
+            return False
+    
+    def _cmd_toggle_nlp_live_mode(self) -> bool:
+        """
+        Handle the command to toggle NLP live mode (:nlplive).
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Make sure we're in NLP mode
+            if self.editor.mode != "NLP":
+                self.editor.set_status_message("NLP Live Mode can only be toggled while in NLP mode")
+                return False
+                
+            # Make sure NLP handler is initialized
+            if not self.editor.nlp_handler:
+                from aivim.nlp_mode import NLPHandler
+                self.editor.nlp_handler = NLPHandler(self.editor)
+                
+            # Toggle live mode
+            self.editor.nlp_handler.toggle_live_mode()
+            return True
+            
+        except Exception as e:
+            self.editor.set_status_message(f"Error toggling NLP live mode: {str(e)}")
+            logging.error(f"Error executing nlplive command: {str(e)}")
+            return False
+            
+    def _cmd_toggle_nlp_smart_detection(self) -> bool:
+        """
+        Handle the command to toggle NLP smart detection (:nlpsmart).
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Make sure we're in NLP mode
+            if self.editor.mode != "NLP":
+                self.editor.set_status_message("NLP Smart Detection can only be toggled while in NLP mode")
+                return False
+                
+            # Make sure NLP handler is initialized
+            if not self.editor.nlp_handler:
+                from aivim.nlp_mode import NLPHandler
+                self.editor.nlp_handler = NLPHandler(self.editor)
+                
+            # Toggle smart detection
+            self.editor.nlp_handler.toggle_smart_detection()
+            return True
+            
+        except Exception as e:
+            self.editor.set_status_message(f"Error toggling NLP smart detection: {str(e)}")
+            logging.error(f"Error executing nlpsmart command: {str(e)}")
             return False

@@ -13,6 +13,7 @@ class NLPHandler:
     """
     Handler for Natural Language Programming mode
     Translates natural language to code while preserving comments and structure
+    Enhanced with live detection and real-time processing capabilities
     """
     def __init__(self, editor):
         """
@@ -30,14 +31,31 @@ class NLPHandler:
         self.update_timer = None
         self.nlp_sections = []  # List of (start_line, end_line) tuples for NLP sections
         
+        # Enhanced live mode features
+        self.live_mode_enabled = True  # Enable live NLP detection by default
+        self.live_detection_thread = None
+        self.last_content_hash = None
+        self.nlp_context_cache = {}  # Cache for tab contexts
+        self.live_nlp_regions = []  # Detected NLP regions in live mode
+        self.processing_queue = []  # Queue of regions to process
+        self.visual_indicators = {}  # Visual feedback for live processing
+        self.smart_detection_enabled = True  # Enable intelligent NLP detection
+        self.last_processed_content = {}  # Track what's been processed to avoid duplicates
+        self.live_update_interval = 500  # Check for changes every 500ms in live mode
+        
     def enter_nlp_mode(self) -> None:
         """Enter NLP mode and set up the environment"""
-        self.editor.set_status_message("-- NLP MODE -- (Natural Language Programming)")
+        self.editor.set_status_message("-- NLP LIVE MODE -- (Natural Language Programming)")
         self.scan_buffer_for_nlp_sections()
+        
+        # Start live detection if enabled
+        if self.live_mode_enabled:
+            self._start_live_detection()
         
     def exit_nlp_mode(self) -> None:
         """Exit NLP mode and clean up"""
         self.cancel_pending_updates()
+        self._stop_live_detection()
         
     def handle_key(self, key: int) -> bool:
         """
@@ -313,8 +331,13 @@ Return the complete updated script with your implementations.
         time_since_last_update = current_time - self.last_update_time
         
         if time_since_last_update >= self.update_debounce_ms:
-            # Typing has stopped for the debounce period, process the update
-            self.process_nlp_sections()
+            # Typing has stopped for the debounce period
+            if self.processing_queue:
+                # Process queued regions from live mode
+                self._process_queued_regions()
+            else:
+                # Fall back to standard NLP section processing
+                self.process_nlp_sections()
         else:
             # Still typing, reschedule
             self.schedule_update()
@@ -938,3 +961,449 @@ For insertions, set 'replace_lines' to 0.
             
             # Return the original text, so we don't modify the user's content
             return nlp_text
+    
+    def _start_live_detection(self) -> None:
+        """Start the live NLP detection thread"""
+        if self.live_detection_thread and self.live_detection_thread.is_alive():
+            return  # Already running
+            
+        self.live_detection_thread = threading.Thread(
+            target=self._live_detection_loop,
+            daemon=True
+        )
+        self.live_detection_thread.start()
+        
+    def _stop_live_detection(self) -> None:
+        """Stop the live NLP detection thread"""
+        self.live_mode_enabled = False
+        if self.live_detection_thread:
+            self.live_detection_thread.join(timeout=1.0)
+            
+    def _live_detection_loop(self) -> None:
+        """Background thread for live NLP detection"""
+        while self.live_mode_enabled and self.editor.mode == "NLP":
+            try:
+                # Get current buffer content
+                current_lines = self.editor.buffer.get_lines()
+                current_content = "\n".join(current_lines)
+                
+                # Calculate content hash to detect changes
+                import hashlib
+                content_hash = hashlib.md5(current_content.encode()).hexdigest()
+                
+                # Only process if content has changed
+                if content_hash != self.last_content_hash:
+                    self.last_content_hash = content_hash
+                    
+                    # Detect NLP regions intelligently
+                    self._detect_nlp_regions_smart(current_lines)
+                    
+                    # Process detected regions
+                    self._process_live_nlp_regions()
+                    
+                # Sleep before next check
+                time.sleep(self.live_update_interval / 1000.0)
+                
+            except Exception as e:
+                logging.error(f"Error in live detection loop: {str(e)}")
+                time.sleep(1.0)  # Sleep longer on error
+                
+    def _detect_nlp_regions_smart(self, lines: List[str]) -> None:
+        """
+        Intelligently detect NLP regions in the buffer
+        This method differentiates between natural language and code
+        """
+        self.live_nlp_regions = []
+        
+        # First, check for explicit NLP markers (backward compatibility)
+        self.scan_buffer_for_nlp_sections()
+        for section in self.nlp_sections:
+            if len(section) >= 2:
+                self.live_nlp_regions.append({
+                    'start': section[0],
+                    'end': section[1],
+                    'type': 'explicit',
+                    'query': section[2] if len(section) > 2 else None,
+                    'confidence': 1.0
+                })
+        
+        if not self.smart_detection_enabled:
+            return
+            
+        # Smart detection: Look for patterns that indicate natural language
+        in_potential_nlp = False
+        potential_start = 0
+        nlp_indicators = 0
+        
+        for i, line in enumerate(lines):
+            # Skip empty lines
+            if not line.strip():
+                continue
+                
+            # Check if line looks like natural language
+            is_nlp_line, confidence = self._is_natural_language_line(line)
+            
+            if is_nlp_line and not in_potential_nlp:
+                # Start of potential NLP region
+                in_potential_nlp = True
+                potential_start = i
+                nlp_indicators = 1
+            elif is_nlp_line and in_potential_nlp:
+                # Continue NLP region
+                nlp_indicators += 1
+            elif not is_nlp_line and in_potential_nlp:
+                # End of NLP region
+                if nlp_indicators >= 2:  # At least 2 lines of NLP
+                    # Check if this region overlaps with existing explicit regions
+                    overlaps = False
+                    for region in self.live_nlp_regions:
+                        if (potential_start <= region['end'] and i - 1 >= region['start']):
+                            overlaps = True
+                            break
+                            
+                    if not overlaps:
+                        self.live_nlp_regions.append({
+                            'start': potential_start,
+                            'end': i - 1,
+                            'type': 'smart',
+                            'query': None,
+                            'confidence': min(nlp_indicators * 0.2, 0.9)  # Max 90% confidence
+                        })
+                        
+                in_potential_nlp = False
+                nlp_indicators = 0
+                
+        # Handle case where NLP region extends to end of file
+        if in_potential_nlp and nlp_indicators >= 2:
+            overlaps = False
+            for region in self.live_nlp_regions:
+                if potential_start <= region['end']:
+                    overlaps = True
+                    break
+                    
+            if not overlaps:
+                self.live_nlp_regions.append({
+                    'start': potential_start,
+                    'end': len(lines) - 1,
+                    'type': 'smart',
+                    'query': None,
+                    'confidence': min(nlp_indicators * 0.2, 0.9)
+                })
+                
+    def _is_natural_language_line(self, line: str) -> Tuple[bool, float]:
+        """
+        Determine if a line is natural language rather than code
+        Returns (is_nlp, confidence)
+        """
+        stripped = line.strip()
+        
+        # Empty lines are not NLP
+        if not stripped:
+            return False, 0.0
+            
+        # Check for explicit code patterns (definitely not NLP)
+        code_patterns = [
+            r'^\s*import\s+',  # Import statements
+            r'^\s*from\s+\w+\s+import',  # From imports
+            r'^\s*def\s+\w+\s*\(',  # Function definitions
+            r'^\s*class\s+\w+',  # Class definitions
+            r'^\s*(if|elif|else|for|while|try|except|finally|with)\s*[:\(]',  # Control structures
+            r'^\s*return\s+',  # Return statements
+            r'^\s*\w+\s*=\s*',  # Variable assignments
+            r'^\s*\w+\.\w+\(',  # Method calls
+            r'^\s*[\{\}\[\]\(\)]',  # Brackets
+            r'^\s*[+-/*%=<>!&|~^]+$',  # Operators only
+        ]
+        
+        for pattern in code_patterns:
+            if re.match(pattern, line):
+                return False, 0.0
+                
+        # Check if it's a comment that looks like natural language
+        if self._is_comment_line(line):
+            # Remove comment markers
+            comment_text = stripped
+            for marker in ['#', '//', '/*', '*/', '<!--', '-->', '"""', "'''"]:
+                comment_text = comment_text.replace(marker, '').strip()
+                
+            # Check for natural language indicators in comments
+            nlp_comment_indicators = [
+                r'^(create|make|add|implement|build|design|write)',  # Action verbs
+                r'^(todo|fixme|note|hack|bug|issue)',  # Development markers
+                r'(should|must|need|want|require)',  # Modal verbs
+                r'(please|ensure|make sure|be sure)',  # Polite requests
+                r'\?$',  # Questions
+                r'^(this|these|that|those)\s+(is|are|should|must)',  # Demonstratives
+                r'(function|method|class|module|variable)\s+(that|which)',  # Technical descriptions
+            ]
+            
+            confidence = 0.3  # Base confidence for comments
+            for pattern in nlp_comment_indicators:
+                if re.search(pattern, comment_text, re.IGNORECASE):
+                    confidence += 0.2
+                    
+            return True, min(confidence, 0.9)
+            
+        # Check for prose-like patterns (not in comments)
+        prose_indicators = [
+            r'^[A-Z][a-z]+\s+',  # Starts with capitalized word
+            r'\.$',  # Ends with period
+            r'[,;]\s+\w+',  # Contains commas or semicolons with words after
+            r'\s+(and|or|but|with|for|to|from|by|in|on|at)\s+',  # Common English connectives
+            r'^(The|This|That|These|Those|It|We|You|They)\s+',  # Common pronouns
+        ]
+        
+        confidence = 0.0
+        matches = 0
+        for pattern in prose_indicators:
+            if re.search(pattern, stripped):
+                matches += 1
+                
+        if matches >= 2:  # At least 2 prose indicators
+            confidence = min(matches * 0.3, 0.8)
+            return True, confidence
+            
+        return False, 0.0
+        
+    def _process_live_nlp_regions(self) -> None:
+        """Process detected NLP regions in live mode"""
+        import hashlib
+        
+        # Filter regions that haven't been processed yet
+        regions_to_process = []
+        
+        for region in self.live_nlp_regions:
+            # Create a unique key for this region
+            region_key = f"{region['start']}-{region['end']}-{region['type']}"
+            
+            # Get content of the region
+            lines = self.editor.buffer.get_lines()
+            region_content = "\n".join(lines[region['start']:region['end']+1])
+            content_hash = hashlib.md5(region_content.encode()).hexdigest()
+            
+            # Check if this region has been processed with the same content
+            if region_key not in self.last_processed_content or self.last_processed_content[region_key] != content_hash:
+                regions_to_process.append(region)
+                self.last_processed_content[region_key] = content_hash
+                
+        # Process regions with high confidence first
+        regions_to_process.sort(key=lambda r: r['confidence'], reverse=True)
+        
+        for region in regions_to_process:
+            if region['confidence'] >= 0.6:  # Only process high-confidence regions automatically
+                self._queue_region_for_processing(region)
+                
+    def _queue_region_for_processing(self, region: Dict[str, Any]) -> None:
+        """Queue a region for asynchronous processing"""
+        # Add visual indicator
+        self._add_visual_indicator(region)
+        
+        # Add to processing queue
+        self.processing_queue.append(region)
+        
+        # Schedule processing if not already processing
+        if not self.processing:
+            self.schedule_update()
+            
+    def _add_visual_indicator(self, region: Dict[str, Any]) -> None:
+        """Add visual feedback for regions being processed"""
+        # Store visual indicator info
+        self.visual_indicators[f"{region['start']}-{region['end']}"] = {
+            'type': 'processing',
+            'start_time': time.time()
+        }
+        
+        # Update status message
+        with self.editor.thread_lock:
+            if region['type'] == 'smart':
+                self.editor.set_status_message(f"Detected NLP region (lines {region['start']+1}-{region['end']+1})")
+            else:
+                self.editor.set_status_message(f"Processing NLP section (lines {region['start']+1}-{region['end']+1})")
+                
+    def toggle_live_mode(self) -> None:
+        """Toggle live NLP detection on/off"""
+        self.live_mode_enabled = not self.live_mode_enabled
+        
+        if self.live_mode_enabled:
+            self._start_live_detection()
+            self.editor.set_status_message("NLP Live Mode: ON - Auto-detecting natural language")
+        else:
+            self._stop_live_detection()
+            self.editor.set_status_message("NLP Live Mode: OFF - Manual processing only")
+            
+    def toggle_smart_detection(self) -> None:
+        """Toggle smart NLP detection on/off"""
+        self.smart_detection_enabled = not self.smart_detection_enabled
+        
+        if self.smart_detection_enabled:
+            self.editor.set_status_message("Smart NLP Detection: ON - Intelligent language detection")
+        else:
+            self.editor.set_status_message("Smart NLP Detection: OFF - Explicit markers only")
+            self.live_nlp_regions = [r for r in self.live_nlp_regions if r['type'] == 'explicit']
+            
+    def _process_queued_regions(self) -> None:
+        """Process regions queued from live detection"""
+        if not self.processing_queue or self.processing:
+            return
+            
+        self.processing = True
+        
+        # Process the first region in the queue
+        region = self.processing_queue.pop(0)
+        
+        # Set status message and start loading animation
+        self.editor.set_status_message(f"Processing NLP region (lines {region['start']+1}-{region['end']+1})...")
+        self.editor.display.start_loading_animation("Processing natural language...")
+        
+        # Start processing in a separate thread
+        self.processing_thread = threading.Thread(
+            target=self._process_single_region_thread,
+            args=(region,)
+        )
+        self.processing_thread.daemon = True
+        self.processing_thread.start()
+        
+    def _process_single_region_thread(self, region: Dict[str, Any]) -> None:
+        """Thread function to process a single NLP region"""
+        try:
+            # Get all open tabs for context
+            file_contexts = self._get_tab_contexts()
+            
+            # Get the text of this region
+            lines = self.editor.buffer.get_lines()
+            start_line = region['start']
+            end_line = region['end']
+            section_lines = lines[start_line:end_line+1]
+            section_text = "\n".join(section_lines)
+            
+            # Check if this is a comment section
+            is_comment_section = all(self._is_comment_line(line) for line in section_lines if line.strip())
+            
+            # Generate appropriate context
+            context_before = "\n".join(lines[max(0, start_line-10):start_line])
+            context_after = "\n".join(lines[end_line+1:min(len(lines), end_line+11)])
+            
+            # Translate the NLP section to code
+            translated_code = self._translate_nlp_to_code(
+                section_text, 
+                context_before, 
+                context_after,
+                file_contexts,
+                is_comment_section,
+                region.get('query')
+            )
+            
+            if translated_code and self.processing:
+                # Update the buffer with the translated code
+                with self.editor.thread_lock:
+                    # Store the current version in history
+                    self.editor.history.add_version(self.editor.buffer.get_lines())
+                    
+                    # Process the translation result (same as existing code)
+                    import json
+                    import re
+                    
+                    try:
+                        # Try to parse as JSON (new format)
+                        try:
+                            response_data = json.loads(translated_code)
+                        except json.JSONDecodeError:
+                            # Extract JSON from markdown
+                            json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', translated_code)
+                            if json_match:
+                                response_data = json.loads(json_match.group(1))
+                            else:
+                                raise ValueError("No valid JSON found")
+                        
+                        # Handle structured response
+                        if "code_blocks" in response_data:
+                            self._apply_code_blocks(response_data, start_line, region.get('query'))
+                        else:
+                            raise ValueError("Invalid JSON structure")
+                            
+                    except (json.JSONDecodeError, ValueError):
+                        # Fallback to legacy processing
+                        self._apply_legacy_translation(translated_code, start_line, end_line, region.get('query'))
+                        
+                    # Remove visual indicator
+                    region_key = f"{region['start']}-{region['end']}"
+                    if region_key in self.visual_indicators:
+                        del self.visual_indicators[region_key]
+                        
+                    # Set completion message
+                    self.editor.set_status_message(f"Processed NLP region (lines {region['start']+1}-{region['end']+1})")
+                    
+        except Exception as e:
+            logging.error(f"Error processing NLP region: {str(e)}")
+            with self.editor.thread_lock:
+                self.editor.display.stop_loading_animation()
+                self.editor.set_status_message(f"Error processing NLP region: {str(e)}")
+                
+        finally:
+            self.processing = False
+            self.editor.display.stop_loading_animation()
+            
+            # Process next region if any
+            if self.processing_queue:
+                self.schedule_update()
+                
+    def _apply_code_blocks(self, response_data: Dict, base_line: int, user_query: Optional[str]) -> None:
+        """Apply code blocks from structured JSON response"""
+        code_blocks = sorted(
+            response_data["code_blocks"], 
+            key=lambda block: block.get("target_line", 0),
+            reverse=True
+        )
+        
+        for block in code_blocks:
+            target_line = block.get("target_line", base_line)
+            code = block.get("code", "")
+            replace_lines = block.get("replace_lines", 0)
+            
+            # Ensure valid line numbers
+            target_line = max(0, min(target_line, len(self.editor.buffer.get_lines())))
+            
+            # Delete lines to be replaced
+            for _ in range(replace_lines):
+                if target_line < len(self.editor.buffer.get_lines()):
+                    self.editor.buffer.delete_line(target_line)
+            
+            # Split code into lines and insert
+            code_lines = code.strip().split("\n")
+            
+            # Add user query comment if applicable
+            if user_query and len(code_blocks) == 1:
+                comment_line = f"# AI Done: {user_query}"
+                code_lines.insert(0, comment_line)
+            
+            # Insert the new code lines
+            for i, line in enumerate(code_lines):
+                self.editor.buffer.insert_line(target_line + i, line)
+        
+        # Store in history
+        self.editor.history.add_version(
+            self.editor.buffer.get_lines(),
+            {"action": "nlp_live_translation", "query": user_query}
+        )
+        
+    def _apply_legacy_translation(self, translated_code: str, start_line: int, end_line: int, user_query: Optional[str]) -> None:
+        """Apply translation using legacy format"""
+        new_lines = translated_code.strip().split("\n")
+        
+        # Add user query comment if applicable
+        if user_query:
+            comment_line = f"# AI Done: {user_query}"
+            new_lines.insert(0, comment_line)
+            
+        # Replace the section
+        for _ in range(end_line - start_line + 1):
+            self.editor.buffer.delete_line(start_line)
+            
+        for i, line in enumerate(new_lines):
+            self.editor.buffer.insert_line(start_line + i, line)
+            
+        # Store in history
+        self.editor.history.add_version(
+            self.editor.buffer.get_lines(),
+            {"action": "nlp_live_translation_legacy", "start_line": start_line, "end_line": start_line + len(new_lines) - 1}
+        )
