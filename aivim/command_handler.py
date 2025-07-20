@@ -56,6 +56,8 @@ class CommandHandler:
             r'^nlpmark\s+(\d+)\s+(\d+)$': self._cmd_mark_nlp_section,
             r'^nlptranslate$': self._cmd_translate_nlp,
             r'^nlplive$': self._cmd_toggle_nlp_live_mode,
+            # Debug mode command
+            r'^debug$': self._cmd_toggle_debug_mode,
         }
         
         return commands
@@ -481,9 +483,14 @@ class CommandHandler:
             "  nl (in normal) - Enter NLP mode (press 'n' then 'l')",
             "  :nlpmark s e   - Mark lines s through e as NLP section",
             "  :nlptranslate  - Force translation of NLP sections",
+            "  :nlplive       - Toggle NLP Live Mode (auto-detect natural language)",
             "  #nlp <query>   - Single line AI query",
             "  #nlp           - Mark lines for multi-line AI query (multiple #nlp marks can be scattered in file)",
             "  Ctrl+Enter     - In NLP mode, sends entire script with context to AI",
+            "  F9             - Force immediate submission of NLP content",
+            "",
+            "Debug Mode:",
+            "  :debug         - Toggle debug mode (logs AI calls to file)",
             "",
             "Navigation:",
             "  Arrow keys     - Move cursor (primary method)",
@@ -627,5 +634,26 @@ class CommandHandler:
         except Exception as e:
             self.editor.set_status_message(f"Error toggling NLP live mode: {str(e)}")
             logging.error(f"Error executing nlplive command: {str(e)}")
+            return False
+            
+    def _cmd_toggle_debug_mode(self) -> bool:
+        """
+        Handle the command to toggle debug mode (:debug).
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            if self.editor.ai_service:
+                status_msg = self.editor.ai_service.toggle_debug_mode()
+                self.editor.set_status_message(status_msg)
+                return True
+            else:
+                self.editor.set_status_message("AI service not available")
+                return False
+                
+        except Exception as e:
+            self.editor.set_status_message(f"Error toggling debug mode: {str(e)}")
+            logging.error(f"Error executing debug command: {str(e)}")
             return False
             
