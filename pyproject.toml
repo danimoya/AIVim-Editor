@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aivim"
-version = "0.3.3.2"
+version = "0.3.3.4"
 description = "AI-enhanced Vim-like text editor with code assistance and generation"
 readme = "README.md"
 authors = [
