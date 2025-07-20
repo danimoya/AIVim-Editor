@@ -832,7 +832,12 @@ Please explain this code in detail.
             "Analyze the provided code and suggest improvements. "
             "Maintain the original functionality while making enhancements for: "
             "performance, readability, maintainability, or error handling. "
-            "YOUR RESPONSE MUST USE THIS EXACT FORMAT with these section headers:\{code}
+            "YOUR RESPONSE MUST USE THIS EXACT FORMAT with these section headers:"
+        )
+        
+        user_prompt = f"""# Code to improve:
+```
+{code}
 ```
 
 # Context (surrounding code):
@@ -958,3 +963,8 @@ Please respond to this query considering the code context.
 # Context (surrounding code):
 ```
 {context}
+```
+"""
+
+        analysis = self._create_completion(system_prompt, user_prompt)
+        return analysis or "Failed to analyze code."
