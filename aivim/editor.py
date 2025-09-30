@@ -424,7 +424,10 @@ class Editor:
             
         elif key == ord('n'):
             # Check if next key is 'l' for NLP mode
-            next_key = self.display.stdscr.getch()
+            if self.display and self.display.stdscr:
+                next_key = self.display.stdscr.getch()
+            else:
+                return
             if next_key == ord('l'):
                 # Enter NLP mode
                 self.mode = "NLP"
@@ -456,7 +459,7 @@ class Editor:
             self.preferred_x = self.cursor_x
             
             # Update scroll position if necessary
-            if self.cursor_y >= self.scroll_y + self.display.max_text_height:
+            if self.display and self.cursor_y >= self.scroll_y + self.display.max_text_height:
                 self.scroll_y = max(0, self.cursor_y - self.display.max_text_height + 1)
                 
             self.set_status_message(f"Line {self.cursor_y + 1} of {last_line_idx + 1}")
@@ -584,7 +587,7 @@ class Editor:
                 self._adjust_cursor_x()
                 
                 # Scroll if needed
-                if self.cursor_y >= self.scroll_y + self.display.max_text_height:
+                if self.display and self.cursor_y >= self.scroll_y + self.display.max_text_height:
                     self.scroll_y = self.cursor_y - self.display.max_text_height + 1
         
         elif key == ord('k') or key == curses.KEY_UP:
@@ -604,21 +607,24 @@ class Editor:
                 self.cursor_x += 1
                 self.preferred_x = self.cursor_x
         
-        elif key == ord('d') and self.display.is_dialog_open():
+        elif key == ord('d') and self.display and self.display.is_dialog_open():
             # Close dialog with 'd' key
             self.display.close_dialog()
             
-        elif key == curses.KEY_LEFT and curses.keyname(key).decode("utf-8").startswith("^") and self.display.is_dialog_open():
+        elif key == curses.KEY_LEFT and curses.keyname(key).decode("utf-8").startswith("^") and self.display and self.display.is_dialog_open():
             # Navigate to previous dialog view with Ctrl+Left
             self.display.prev_dialog_view()
             
-        elif key == curses.KEY_RIGHT and curses.keyname(key).decode("utf-8").startswith("^") and self.display.is_dialog_open():
+        elif key == curses.KEY_RIGHT and curses.keyname(key).decode("utf-8").startswith("^") and self.display and self.display.is_dialog_open():
             # Navigate to next dialog view with Ctrl+Right
             self.display.next_dialog_view()
         
         elif key == ord('d'):
             # Delete operation - need another 'd' for line delete
-            next_key = self.display.stdscr.getch()
+            if self.display and self.display.stdscr:
+                next_key = self.display.stdscr.getch()
+            else:
+                return
             if next_key == ord('d'):
                 # Delete current line
                 # Store line count before deletion
@@ -792,7 +798,7 @@ class Editor:
             # Ensure match is visible
             if self.cursor_y < self.scroll_y:
                 self.scroll_y = self.cursor_y
-            elif self.cursor_y >= self.scroll_y + self.display.max_text_height:
+            elif self.display and self.cursor_y >= self.scroll_y + self.display.max_text_height:
                 self.scroll_y = self.cursor_y - self.display.max_text_height + 1
                 # Store current version in history before paste
                 self.history.add_version(self.buffer.get_lines())
@@ -931,7 +937,7 @@ class Editor:
                 self._adjust_cursor_x()
                 
                 # Scroll if needed
-                if self.cursor_y >= self.scroll_y + self.display.max_text_height:
+                if self.display and self.cursor_y >= self.scroll_y + self.display.max_text_height:
                     self.scroll_y = self.cursor_y - self.display.max_text_height + 1
         
         elif key == ord('\n') or key == curses.KEY_ENTER:
@@ -944,7 +950,7 @@ class Editor:
             self.preferred_x = 0
             
             # Scroll if needed
-            if self.cursor_y >= self.scroll_y + self.display.max_text_height:
+            if self.display and self.cursor_y >= self.scroll_y + self.display.max_text_height:
                 self.scroll_y = self.cursor_y - self.display.max_text_height + 1
         
         elif key == curses.KEY_HOME:
@@ -960,16 +966,26 @@ class Editor:
         
         elif key == curses.KEY_PPAGE:  # Page Up
             # Move up a page
-            self.cursor_y = max(0, self.cursor_y - self.display.max_text_height)
-            self.scroll_y = max(0, self.scroll_y - self.display.max_text_height)
+            if self.display:
+                self.cursor_y = max(0, self.cursor_y - self.display.max_text_height)
+                self.scroll_y = max(0, self.scroll_y - self.display.max_text_height)
+            else:
+                # Fallback when display is not available
+                self.cursor_y = max(0, self.cursor_y - 20)
+                self.scroll_y = max(0, self.scroll_y - 20)
             self._adjust_cursor_x()
         
         elif key == curses.KEY_NPAGE:  # Page Down
             # Move down a page
             max_y = len(self.buffer.get_lines()) - 1
-            self.cursor_y = min(max_y, self.cursor_y + self.display.max_text_height)
-            self.scroll_y = min(max_y - self.display.max_text_height + 1, 
-                               self.scroll_y + self.display.max_text_height)
+            if self.display:
+                self.cursor_y = min(max_y, self.cursor_y + self.display.max_text_height)
+                self.scroll_y = min(max_y - self.display.max_text_height + 1, 
+                                   self.scroll_y + self.display.max_text_height)
+            else:
+                # Fallback when display is not available
+                self.cursor_y = min(max_y, self.cursor_y + 20)
+                self.scroll_y = min(max_y - 20 + 1, self.scroll_y + 20)
             self.scroll_y = max(0, self.scroll_y)
             self._adjust_cursor_x()
         
@@ -1016,7 +1032,7 @@ class Editor:
                 self.buffer.update_selection(self.cursor_y, self.cursor_x)
                 
                 # Scroll if needed
-                if self.cursor_y >= self.scroll_y + self.display.max_text_height:
+                if self.display and self.cursor_y >= self.scroll_y + self.display.max_text_height:
                     self.scroll_y = self.cursor_y - self.display.max_text_height + 1
         
         elif key == ord('k') or key == curses.KEY_UP:
@@ -1110,7 +1126,8 @@ class Editor:
     def _handle_command_mode(self, key: int) -> None:
         """Handle keypresses in command mode"""
         # Ensure the command line is visible
-        self.display.update_command_line(self.command_buffer, self.command_cursor)
+        if self.display:
+            self.display.update_command_line(self.command_buffer, self.command_cursor)
         
         if key == 27:  # Escape key
             # Return to normal mode
@@ -1128,33 +1145,38 @@ class Editor:
                 )
                 self.command_cursor -= 1
                 # Immediately show the change
-                self.display.update_command_line(self.command_buffer, self.command_cursor)
+                if self.display:
+                    self.display.update_command_line(self.command_buffer, self.command_cursor)
         
         elif key == curses.KEY_LEFT:
             # Move cursor left
             if self.command_cursor > 1:  # Don't move past the initial character
                 self.command_cursor -= 1
                 # Immediately show the change
-                self.display.update_command_line(self.command_buffer, self.command_cursor)
+                if self.display:
+                    self.display.update_command_line(self.command_buffer, self.command_cursor)
         
         elif key == curses.KEY_RIGHT:
             # Move cursor right
             if self.command_cursor < len(self.command_buffer):
                 self.command_cursor += 1
                 # Immediately show the change
-                self.display.update_command_line(self.command_buffer, self.command_cursor)
+                if self.display:
+                    self.display.update_command_line(self.command_buffer, self.command_cursor)
         
         elif key == curses.KEY_HOME:
             # Move to beginning of command (after the initial character)
             self.command_cursor = 1
             # Immediately show the change
-            self.display.update_command_line(self.command_buffer, self.command_cursor)
+            if self.display:
+                self.display.update_command_line(self.command_buffer, self.command_cursor)
         
         elif key == curses.KEY_END:
             # Move to end of command
             self.command_cursor = len(self.command_buffer)
             # Immediately show the change
-            self.display.update_command_line(self.command_buffer, self.command_cursor)
+            if self.display:
+                self.display.update_command_line(self.command_buffer, self.command_cursor)
         
         elif key == ord('\n') or key == curses.KEY_ENTER:
             # Execute command
@@ -1170,7 +1192,8 @@ class Editor:
             )
             self.command_cursor += 1
             # Immediately show the change
-            self.display.update_command_line(self.command_buffer, self.command_cursor)
+            if self.display:
+                self.display.update_command_line(self.command_buffer, self.command_cursor)
     
     def _process_command(self) -> None:
         """Process entered command"""
@@ -1266,7 +1289,10 @@ class Editor:
                 return
             
             # If not a special command, handle as a normal command
-            result = self.command_handler.execute(command[1:])  # Remove the leading ':'
+            if self.command_handler:
+                result = self.command_handler.execute(command[1:])  # Remove the leading ':'
+            else:
+                result = False
             
             # Return to normal mode
             self.mode = "NORMAL"
@@ -1387,16 +1413,30 @@ class Editor:
             self.display.update_mode(self.mode, model_info)
         
         # Update text content
-        self.display.update_text(
-            self.buffer.get_lines(),
-            self.cursor_y,
-            self.cursor_x,
-            self.scroll_y,
-            self.buffer.get_selection()
-        )
+        if self.display:
+            selection = self.buffer.get_selection()
+            # Only pass selection if both parts are not None
+            if selection and selection[0] is not None and selection[1] is not None:
+                # Create a new tuple with the proper type
+                validated_selection = (selection[0], selection[1])
+                self.display.update_text(
+                    self.buffer.get_lines(),
+                    self.cursor_y,
+                    self.cursor_x,
+                    self.scroll_y,
+                    validated_selection
+                )
+            else:
+                self.display.update_text(
+                    self.buffer.get_lines(),
+                    self.cursor_y,
+                    self.cursor_x,
+                    self.scroll_y,
+                    None
+                )
         
         # Update command line if in command mode
-        if self.mode == "COMMAND":
+        if self.mode == "COMMAND" and self.display:
             self.display.update_command_line(
                 self.command_buffer,
                 self.command_cursor
@@ -1414,8 +1454,9 @@ class Editor:
     def _do_resize(self) -> None:
         """Actually perform the resize operation"""
         with self.thread_lock:
-            self.display.resize()
-            self._update_display()
+            if self.display:
+                self.display.resize()
+                self._update_display()
     
     def _initialize_editor(self, stdscr) -> None:
         """Initialize the editor components and settings"""
@@ -1487,7 +1528,7 @@ class Editor:
         if self.display:
             if self.cursor_y < self.scroll_y:
                 self.scroll_y = self.cursor_y
-            elif self.cursor_y >= self.scroll_y + self.display.max_text_height:
+            elif self.display and self.cursor_y >= self.scroll_y + self.display.max_text_height:
                 self.scroll_y = self.cursor_y - self.display.max_text_height + 1
                 
         # Set status message
@@ -1737,7 +1778,8 @@ class Editor:
                 self.set_status_message("Explanation ready")
                 
                 # Show dialog
-                self.display.show_dialog("Code Explanation", explanation_lines)
+                if self.display:
+                    self.display.show_dialog("Code Explanation", explanation_lines)
         
         except Exception as e:
             with self.thread_lock:
@@ -1984,7 +2026,8 @@ class Editor:
                 self.set_status_message("Code analysis complete")
                 
                 # Show dialog
-                self.display.show_dialog("Code Analysis Results", analysis_lines)
+                if self.display:
+                    self.display.show_dialog("Code Analysis Results", analysis_lines)
         
         except Exception as e:
             with self.thread_lock:
@@ -2055,7 +2098,8 @@ class Editor:
                 self.set_status_message("Query response ready")
                 
                 # Show dialog
-                self.display.show_dialog("Query Response", response_lines)
+                if self.display:
+                    self.display.show_dialog("Query Response", response_lines)
         
         except Exception as e:
             with self.thread_lock:
@@ -2144,7 +2188,8 @@ class Editor:
                 self.ai_processing = False
                 
                 # Show the chat dialog
-                self.display.show_dialog("AI Chat", chat_lines)
+                if self.display:
+                    self.display.show_dialog("AI Chat", chat_lines)
             
         except Exception as e:
             logging.error(f"Error in AI chat thread: {str(e)}")

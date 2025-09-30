@@ -473,6 +473,8 @@ class Display:
     
     def _draw_dialog(self, title: str) -> None:
         """Draw the dialog content"""
+        if not self.dialog_win:
+            return
         self.dialog_win.clear()
         self.dialog_win.bkgd(' ', self.COLOR_DIALOG)
         
@@ -755,14 +757,18 @@ class Display:
                 # Call the callback to set the provider and then set the submodel
                 if self.model_callback and self.ai_service:
                     # First set the main model provider
-                    self.model_callback(selected_provider["id"])
+                    self.model_callback(selected_provider.get("id"))
                     
                     # Then set the specific submodel
-                    self.ai_service.set_submodel(selected_provider["id"], selected_submodel["id"])
+                    if isinstance(selected_submodel, dict):
+                        self.ai_service.set_submodel(selected_provider.get("id"), selected_submodel.get("id"))
+                    else:
+                        # If submodel is not a dict, use it directly
+                        self.ai_service.set_submodel(selected_provider.get("id"), selected_submodel)
                     
                     # Close the dialog
                     self.close_dialog()
-                    return selected_provider["id"]
+                    return selected_provider.get("id")
             else:
                 # Check if the selected model has submodels
                 selected_model = self.dialog_options[self.selected_index]
@@ -772,7 +778,7 @@ class Display:
                     return None
                 else:
                     # No submodels, just select the provider directly
-                    selected_provider_id = selected_model["id"]
+                    selected_provider_id = selected_model.get("id")
                     if self.model_callback:
                         self.model_callback(selected_provider_id)
                     self.close_dialog()
@@ -848,13 +854,19 @@ class Display:
         content_idx = 0
         for i, submodel in enumerate(submodels):
             if i == self.selected_submodel_index:
-                self.dialog_content[content_idx] = f"→ {submodel['name']}"
+                if isinstance(submodel, dict):
+                    self.dialog_content[content_idx] = f"→ {submodel.get('name', 'Unknown')}"
+                else:
+                    self.dialog_content[content_idx] = f"→ {submodel}"
             else:
-                self.dialog_content[content_idx] = f"  {submodel['name']}"
+                if isinstance(submodel, dict):
+                    self.dialog_content[content_idx] = f"  {submodel.get('name', 'Unknown')}"
+                else:
+                    self.dialog_content[content_idx] = f"  {submodel}"
                 
             # Skip description and blank line
             content_idx += 1
-            if "description" in submodel:
+            if isinstance(submodel, dict) and "description" in submodel:
                 content_idx += 1
             if i < len(submodels) - 1:
                 content_idx += 1
@@ -948,6 +960,9 @@ class Display:
         self.dialog_content = message + ["", "Press 'y' to confirm or 'n' to cancel"]
         self._setup_dialog_window()
         
+        if not self.dialog_win:
+            return False
+        
         # Draw dialog with special footer
         self.dialog_win.clear()
         self.dialog_win.bkgd(' ', self.COLOR_DIALOG)
@@ -993,6 +1008,8 @@ class Display:
         if colorized_content is None:
             # If no content is provided, fall back to regular dialog
             self._draw_dialog(title)
+            return
+        if not self.dialog_win:
             return
         self.dialog_win.clear()
         self.dialog_win.bkgd(' ', self.COLOR_DIALOG)
