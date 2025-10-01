@@ -103,6 +103,13 @@ class Editor:
         self.search_direction = "forward" # Direction of search (forward/backward)
         self.search_results = []          # List of (line, col) positions of search matches
         self.current_search_index = -1    # Index in search_results of current match
+        self.search_highlighting = True   # Whether to highlight search matches
+        self.search_case_sensitive = None # None=smart case, True=case sensitive, False=case insensitive
+        self.search_regex = False         # Whether to use regex search
+        self.search_very_magic = False    # \v flag for very magic mode
+        self.search_input_mode = False    # True when entering search pattern
+        self.search_input_buffer = ""     # Buffer for search input
+        self.search_cursor_pos = 0        # Cursor position in search input
         
         # For display optimization
         self._last_update_time = time.time()
@@ -546,6 +553,8 @@ class Editor:
             self._handle_visual_mode(key)
         elif self.mode == "COMMAND":
             self._handle_command_mode(key)
+        elif self.mode == "SEARCH":
+            self.handle_search_input(key)
         elif self.mode == "NLP":
             # Initialize NLP handler on demand
             if not self.nlp_handler:
@@ -566,19 +575,27 @@ class Editor:
             self.set_status_message("-- INSERT --")
             
         elif key == ord('n'):
-            # Check if next key is 'l' for NLP mode
+            # Check if this is for NLP mode or search
             if self.display and self.display.stdscr:
+                self.display.stdscr.nodelay(True)  # Make getch non-blocking
                 next_key = self.display.stdscr.getch()
-            else:
-                return
-            if next_key == ord('l'):
-                # Enter NLP mode
-                self.mode = "NLP"
-                # NLP handler will be initialized when handling input
-                self.set_status_message("-- NLP MODE --")
-            else:
-                # Put the key back in the input queue
-                curses.ungetch(next_key)
+                self.display.stdscr.nodelay(False)  # Restore blocking mode
+                
+                if next_key == ord('l'):
+                    # Enter NLP mode ('nl' command)
+                    self.mode = "NLP"
+                    # NLP handler will be initialized when handling input
+                    self.set_status_message("-- NLP MODE --")
+                elif next_key != -1:
+                    # Put the key back and treat 'n' as search next
+                    curses.ungetch(next_key)
+                    # Repeat last search
+                    if self.search_pattern:
+                        self._find_next_search_match()
+                else:
+                    # No key pressed quickly, treat as search next
+                    if self.search_pattern:
+                        self._find_next_search_match()
             
         elif key == ord('s'):
             # Delete current character and enter insert mode
@@ -647,28 +664,26 @@ class Editor:
             self.set_status_message("-- VISUAL --")
         
         elif key == ord('/'):
-            # Enter command mode for forward search
-            self.mode = "COMMAND"
-            self.command_buffer = "/"
-            self.command_cursor = 1
-            self.search_direction = "forward"
+            # Enter search mode for forward search
+            self.enter_search_mode("forward")
         
         elif key == ord('?'):
-            # Enter command mode for backward search
-            self.mode = "COMMAND"
-            self.command_buffer = "?"
-            self.command_cursor = 1
-            self.search_direction = "backward"
+            # Enter search mode for backward search
+            self.enter_search_mode("backward")
         
-        elif key == ord('n'):
-            # Repeat last search
-            if self.search_pattern:
-                self._find_next_search_match()
-        
+                
         elif key == ord('N'):
-            # Repeat last search in opposite direction
+            # Repeat last search in opposite direction (Shift+N)
             if self.search_pattern:
                 self._find_next_search_match(opposite_direction=True)
+                
+        elif key == ord('*'):
+            # Search for word under cursor (forward)
+            self.search_word_under_cursor(backward=False)
+            
+        elif key == ord('#'):
+            # Search for word under cursor (backward)
+            self.search_word_under_cursor(backward=True)
             
         elif key == ord('o'):
             # Open new line below cursor and enter insert mode
@@ -842,45 +857,142 @@ class Editor:
         self.mode = "INSERT"
         self.set_status_message("-- INSERT --")
         
-    def _start_search(self, pattern: str) -> None:
+    def _start_search(self, pattern: str, direction: str = None, incremental: bool = False) -> None:
         """
         Start a search for the given pattern
         
         Args:
             pattern: The search pattern to find
+            direction: Search direction ('forward' or 'backward'), uses current if None
+            incremental: Whether this is an incremental search (for live preview)
         """
+        # Parse search flags from pattern
+        actual_pattern, flags = self._parse_search_pattern(pattern)
+        
         # Store the search pattern
-        self.search_pattern = pattern
+        self.search_pattern = actual_pattern
+        
+        # Update search direction if specified
+        if direction:
+            self.search_direction = direction
+        
+        # Apply flags
+        if 'c' in flags:
+            self.search_case_sensitive = False
+        elif 'C' in flags:
+            self.search_case_sensitive = True
+        elif self.search_case_sensitive is None:
+            # Smart case: case insensitive unless pattern has uppercase
+            self.search_case_sensitive = any(c.isupper() for c in actual_pattern)
+        
+        if 'v' in flags:
+            self.search_very_magic = True
         
         # Find all matches
         self.search_results = []
+        self._perform_search(actual_pattern)
+        
+        # If we found matches, move to the first one (unless incremental)
+        if self.search_results:
+            if not incremental:
+                self._find_next_search_match()
+            match_count = len(self.search_results)
+            current_idx = self.current_search_index + 1 if self.current_search_index >= 0 else 1
+            self.set_status_message(f"[{current_idx}/{match_count}] matches for: {actual_pattern}")
+        else:
+            self.set_status_message(f"Pattern not found: {actual_pattern}")
+    
+    def _parse_search_pattern(self, pattern: str) -> Tuple[str, str]:
+        """
+        Parse search pattern and extract flags
+        
+        Args:
+            pattern: The raw search pattern with possible flags
+            
+        Returns:
+            Tuple of (actual_pattern, flags)
+        """
+        flags = ""
+        actual_pattern = pattern
+        
+        # Check for flags at the beginning (e.g., \c, \C, \v)
+        if pattern.startswith('\\'):
+            parts = pattern.split(' ', 1)
+            if len(parts) > 0:
+                flag_part = parts[0]
+                if 'c' in flag_part:
+                    flags += 'c'
+                if 'C' in flag_part:
+                    flags += 'C'
+                if 'v' in flag_part:
+                    flags += 'v'
+                # Remove flag prefix from pattern
+                if len(parts) > 1:
+                    actual_pattern = parts[1]
+                elif len(flag_part) > 2:
+                    actual_pattern = pattern[2:]
+                else:
+                    actual_pattern = ""
+        
+        return actual_pattern, flags
+    
+    def _perform_search(self, pattern: str) -> None:
+        """
+        Perform the actual search for the pattern
+        
+        Args:
+            pattern: The search pattern (without flags)
+        """
+        if not pattern:
+            return
+            
+        # Prepare regex pattern if needed
+        if self.search_regex or self.search_very_magic:
+            try:
+                if self.search_very_magic:
+                    # Very magic mode - most chars are special
+                    regex_pattern = pattern
+                else:
+                    # Regular regex mode
+                    regex_pattern = pattern
+                    
+                # Apply case sensitivity
+                flags = 0 if self.search_case_sensitive else re.IGNORECASE
+                compiled_pattern = re.compile(regex_pattern, flags)
+            except re.error:
+                # Invalid regex, fall back to literal search
+                self.search_regex = False
+                self.search_very_magic = False
         
         # Search through the buffer for all occurrences
         for y, line in enumerate(self.buffer.get_lines()):
-            start_pos = 0
-            while True:
+            if self.search_regex or self.search_very_magic:
+                # Regex search
                 try:
-                    # Find the next occurrence in this line
-                    pos = line.find(pattern, start_pos)
+                    for match in compiled_pattern.finditer(line):
+                        self.search_results.append((y, match.start(), len(match.group())))
+                except:
+                    continue
+            else:
+                # Literal search
+                search_line = line
+                search_pat = pattern
+                
+                if not self.search_case_sensitive:
+                    search_line = line.lower()
+                    search_pat = pattern.lower()
+                
+                start_pos = 0
+                while True:
+                    pos = search_line.find(search_pat, start_pos)
                     if pos == -1:
                         break
                     
-                    # Add this match to results
-                    self.search_results.append((y, pos))
+                    # Add this match to results (y, start_col, length)
+                    self.search_results.append((y, pos, len(pattern)))
                     
                     # Move past this match for the next iteration
                     start_pos = pos + 1
-                except:
-                    # Handle any search errors
-                    break
-        
-        # If we found matches, move to the first one
-        if self.search_results:
-            # Sort results based on search direction
-            self._find_next_search_match()
-            self.set_status_message(f"Found {len(self.search_results)} matches")
-        else:
-            self.set_status_message(f"Pattern not found: {pattern}")
             
     def _find_next_search_match(self, opposite_direction: bool = False) -> None:
         """
@@ -903,60 +1015,347 @@ class Editor:
         
         if direction == "forward":
             # Find the next match after cursor position
-            next_match = None
+            next_match_idx = None
             for i, match in enumerate(self.search_results):
-                if match > cursor_pos:
-                    next_match = match
-                    self.current_search_index = i
+                match_pos = (match[0], match[1])  # Extract position from match tuple
+                if match_pos > cursor_pos:
+                    next_match_idx = i
                     break
                     
             # Wrap around if needed
-            if next_match is None:
-                next_match = self.search_results[0]
-                self.current_search_index = 0
-                self.set_status_message("Search wrapped to top")
+            if next_match_idx is None:
+                next_match_idx = 0
+                wrapped = True
+            else:
+                wrapped = False
         else:
             # Find the previous match before cursor position
-            prev_match = None
+            prev_match_idx = None
             for i in range(len(self.search_results) - 1, -1, -1):
                 match = self.search_results[i]
-                if match < cursor_pos:
-                    prev_match = match
-                    self.current_search_index = i
+                match_pos = (match[0], match[1])  # Extract position from match tuple
+                if match_pos < cursor_pos:
+                    prev_match_idx = i
                     break
                     
             # Wrap around if needed
-            if prev_match is None:
-                prev_match = self.search_results[-1]
-                self.current_search_index = len(self.search_results) - 1
-                self.set_status_message("Search wrapped to bottom")
+            if prev_match_idx is None:
+                prev_match_idx = len(self.search_results) - 1
+                wrapped = True
+            else:
+                wrapped = False
                 
-            next_match = prev_match
+            next_match_idx = prev_match_idx
         
         # Move cursor to the match
-        if next_match:
-            self.cursor_y, self.cursor_x = next_match
+        if next_match_idx is not None and next_match_idx < len(self.search_results):
+            match = self.search_results[next_match_idx]
+            self.cursor_y = match[0]
+            self.cursor_x = match[1]
+            self.current_search_index = next_match_idx
             self.preferred_x = self.cursor_x
+            
+            # Update status message
+            match_count = len(self.search_results)
+            current_idx = self.current_search_index + 1
+            status_msg = f"[{current_idx}/{match_count}] matches"
+            if wrapped:
+                status_msg += " (wrapped)"
+            self.set_status_message(status_msg)
             
             # Ensure match is visible
             if self.cursor_y < self.scroll_y:
                 self.scroll_y = self.cursor_y
             elif self.display and self.cursor_y >= self.scroll_y + self.display.max_text_height:
                 self.scroll_y = self.cursor_y - self.display.max_text_height + 1
-                # Store current version in history before paste
-                self.history.add_version(self.buffer.get_lines())
+    
+    def search_word_under_cursor(self, backward: bool = False) -> None:
+        """
+        Search for the word under the cursor (* and # commands)
+        
+        Args:
+            backward: Whether to search backward (#) or forward (*)
+        """
+        # Get the word under cursor
+        if self.cursor_y >= len(self.buffer.get_lines()):
+            return
+            
+        line = self.buffer.get_line(self.cursor_y)
+        if self.cursor_x >= len(line):
+            return
+            
+        # Find word boundaries
+        start = self.cursor_x
+        end = self.cursor_x
+        
+        # Move start to beginning of word
+        while start > 0 and (line[start - 1].isalnum() or line[start - 1] == '_'):
+            start -= 1
+            
+        # Move end to end of word
+        while end < len(line) and (line[end].isalnum() or line[end] == '_'):
+            end += 1
+            
+        if start == end:
+            self.set_status_message("No word under cursor")
+            return
+            
+        # Get the word and search for it
+        word = line[start:end]
+        # Add word boundaries to pattern
+        pattern = f"\\b{re.escape(word)}\\b"
+        
+        # Set search direction and start search
+        self.search_direction = "backward" if backward else "forward"
+        self.search_regex = True
+        self._start_search(pattern)
+    
+    def clear_search_highlights(self) -> None:
+        """
+        Clear search highlights (:noh command)
+        """
+        self.search_highlighting = False
+        self.search_results = []
+        self.current_search_index = -1
+        self.set_status_message("Search highlighting cleared")
+    
+    def enter_search_mode(self, direction: str) -> None:
+        """
+        Enter search mode (/ or ? commands)
+        
+        Args:
+            direction: 'forward' or 'backward'
+        """
+        self.search_input_mode = True
+        self.search_direction = direction
+        self.search_input_buffer = ""
+        self.search_cursor_pos = 0
+        self.mode = "SEARCH"
+        
+        # Show search prompt in status line
+        prompt = "/" if direction == "forward" else "?"
+        self.set_status_message(prompt)
+    
+    def handle_search_input(self, key: int) -> None:
+        """
+        Handle input while in search mode
+        
+        Args:
+            key: The key code
+        """
+        if key == 27:  # Escape - cancel search
+            self.search_input_mode = False
+            self.mode = "NORMAL"
+            self.set_status_message("")
+            
+        elif key == 10 or key == 13:  # Enter - execute search
+            if self.search_input_buffer:
+                self._start_search(self.search_input_buffer)
+            self.search_input_mode = False
+            self.mode = "NORMAL"
+            
+        elif key == 127 or key == curses.KEY_BACKSPACE:  # Backspace
+            if self.search_cursor_pos > 0:
+                self.search_input_buffer = (
+                    self.search_input_buffer[:self.search_cursor_pos - 1] + 
+                    self.search_input_buffer[self.search_cursor_pos:]
+                )
+                self.search_cursor_pos -= 1
+                self._update_search_display()
+                # Incremental search
+                if self.search_input_buffer:
+                    self._start_search(self.search_input_buffer, incremental=True)
+                    
+        elif key == curses.KEY_LEFT:
+            if self.search_cursor_pos > 0:
+                self.search_cursor_pos -= 1
+                self._update_search_display()
                 
-                # Insert clipboard lines
-                for i, line in enumerate(self.clipboard):
-                    self.buffer.insert_line(self.cursor_y + i + 1, line)
+        elif key == curses.KEY_RIGHT:
+            if self.search_cursor_pos < len(self.search_input_buffer):
+                self.search_cursor_pos += 1
+                self._update_search_display()
                 
-                # Move cursor to the last inserted line
-                self.cursor_y += len(self.clipboard)
-                self._adjust_cursor_x()
-                
-                # Store updated version in history
-                self.history.add_version(self.buffer.get_lines())
-                self.set_status_message(f"Pasted {len(self.clipboard)} lines")
+        elif 32 <= key <= 126:  # Printable character
+            self.search_input_buffer = (
+                self.search_input_buffer[:self.search_cursor_pos] +
+                chr(key) +
+                self.search_input_buffer[self.search_cursor_pos:]
+            )
+            self.search_cursor_pos += 1
+            self._update_search_display()
+            # Incremental search
+            if self.search_input_buffer:
+                self._start_search(self.search_input_buffer, incremental=True)
+    
+    def _update_search_display(self) -> None:
+        """Update the search prompt display"""
+        prompt = "/" if self.search_direction == "forward" else "?"
+        self.set_status_message(f"{prompt}{self.search_input_buffer}")
+    
+    def substitute(self, pattern: str, replacement: str, line_range: Tuple[int, int] = None,
+                  global_flag: bool = False, confirm: bool = False) -> int:
+        """
+        Perform substitution/replacement
+        
+        Args:
+            pattern: The pattern to search for
+            replacement: The replacement text
+            line_range: Tuple of (start_line, end_line) 0-indexed, None for current line
+            global_flag: Whether to replace all occurrences in each line
+            confirm: Whether to ask for confirmation for each replacement
+            
+        Returns:
+            Number of substitutions made
+        """
+        # Store current version in history
+        self.history.add_version(self.buffer.get_lines())
+        
+        # Determine line range
+        if line_range is None:
+            # Current line only
+            start_line = self.cursor_y
+            end_line = self.cursor_y
+        else:
+            start_line, end_line = line_range
+            
+        # Ensure valid range
+        lines = self.buffer.get_lines()
+        start_line = max(0, min(start_line, len(lines) - 1))
+        end_line = max(0, min(end_line, len(lines) - 1))
+        
+        substitution_count = 0
+        
+        # Parse search flags from pattern
+        actual_pattern, flags = self._parse_search_pattern(pattern)
+        
+        # Apply flags
+        case_sensitive = self.search_case_sensitive
+        if 'c' in flags:
+            case_sensitive = False
+        elif 'C' in flags:
+            case_sensitive = True
+        elif case_sensitive is None:
+            # Smart case
+            case_sensitive = any(c.isupper() for c in actual_pattern)
+        
+        is_regex = self.search_regex or self.search_very_magic or 'v' in flags
+        
+        # Prepare regex if needed
+        if is_regex:
+            try:
+                regex_flags = 0 if case_sensitive else re.IGNORECASE
+                compiled_pattern = re.compile(actual_pattern, regex_flags)
+            except re.error:
+                self.set_status_message(f"Invalid regex pattern: {actual_pattern}")
+                return 0
+        
+        # Perform substitution on each line in range
+        for line_num in range(start_line, end_line + 1):
+            line = self.buffer.get_line(line_num)
+            new_line = line
+            line_substitutions = 0
+            
+            if is_regex:
+                # Regex substitution
+                if global_flag:
+                    if confirm:
+                        # Confirm each replacement
+                        matches = list(compiled_pattern.finditer(line))
+                        offset = 0
+                        for match in matches:
+                            # Show the match and ask for confirmation
+                            self.cursor_y = line_num
+                            self.cursor_x = match.start() + offset
+                            self._update_display()
+                            
+                            # Ask for confirmation (simplified version)
+                            self.set_status_message(f"Replace '{match.group()}' with '{replacement}'? (y/n/a/q)")
+                            if self.display:
+                                response = self.display.stdscr.getch()
+                                if response == ord('y'):
+                                    # Replace this occurrence
+                                    new_text = compiled_pattern.sub(replacement, match.group())
+                                    new_line = new_line[:match.start() + offset] + new_text + new_line[match.end() + offset:]
+                                    offset += len(new_text) - len(match.group())
+                                    line_substitutions += 1
+                                elif response == ord('n'):
+                                    # Skip this occurrence
+                                    continue
+                                elif response == ord('a'):
+                                    # Replace all remaining without asking
+                                    new_line = compiled_pattern.sub(replacement, new_line)
+                                    line_substitutions = len(matches)
+                                    break
+                                elif response == ord('q'):
+                                    # Quit substitution
+                                    break
+                    else:
+                        # Replace all occurrences
+                        new_line, count = compiled_pattern.subn(replacement, line)
+                        line_substitutions = count
+                else:
+                    # Replace only first occurrence
+                    new_line, count = compiled_pattern.subn(replacement, line, count=1)
+                    line_substitutions = count
+            else:
+                # Literal substitution
+                search_pat = actual_pattern
+                if not case_sensitive:
+                    # Case-insensitive literal search
+                    search_line = line.lower()
+                    search_pat = actual_pattern.lower()
+                    
+                    if global_flag:
+                        # Replace all occurrences
+                        positions = []
+                        start_pos = 0
+                        while True:
+                            pos = search_line.find(search_pat, start_pos)
+                            if pos == -1:
+                                break
+                            positions.append((pos, pos + len(search_pat)))
+                            start_pos = pos + 1
+                        
+                        # Replace from end to start to preserve positions
+                        for start, end in reversed(positions):
+                            new_line = new_line[:start] + replacement + new_line[end:]
+                            line_substitutions += 1
+                    else:
+                        # Replace first occurrence only
+                        pos = search_line.find(search_pat)
+                        if pos != -1:
+                            new_line = line[:pos] + replacement + line[pos + len(actual_pattern):]
+                            line_substitutions = 1
+                else:
+                    # Case-sensitive literal search
+                    if global_flag:
+                        new_line = line.replace(actual_pattern, replacement)
+                        line_substitutions = line.count(actual_pattern)
+                    else:
+                        # Replace first occurrence only
+                        pos = line.find(actual_pattern)
+                        if pos != -1:
+                            new_line = line[:pos] + replacement + line[pos + len(actual_pattern):]
+                            line_substitutions = 1
+            
+            # Update the line if changed
+            if line_substitutions > 0:
+                self.buffer.set_line(line_num, new_line)
+                substitution_count += line_substitutions
+        
+        # Store updated version in history
+        if substitution_count > 0:
+            self.history.add_version(self.buffer.get_lines())
+            
+        # Report results
+        if substitution_count == 0:
+            self.set_status_message(f"Pattern not found: {actual_pattern}")
+        else:
+            lines_affected = end_line - start_line + 1
+            self.set_status_message(f"{substitution_count} substitution(s) on {lines_affected} line(s)")
+            
+        return substitution_count
     
     def _handle_insert_mode(self, key: int) -> None:
         """Handle keypresses in insert mode"""
@@ -1567,7 +1966,9 @@ class Editor:
                     self.cursor_y,
                     self.cursor_x,
                     self.scroll_y,
-                    validated_selection
+                    validated_selection,
+                    self.search_results if self.search_highlighting else None,
+                    self.current_search_index
                 )
             else:
                 self.display.update_text(
@@ -1575,7 +1976,9 @@ class Editor:
                     self.cursor_y,
                     self.cursor_x,
                     self.scroll_y,
-                    None
+                    None,
+                    self.search_results if self.search_highlighting else None,
+                    self.current_search_index
                 )
         
         # Update command line if in command mode

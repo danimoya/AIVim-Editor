@@ -47,6 +47,9 @@ class Display:
         curses.init_pair(9, curses.COLOR_RED, -1)
         # Diff - header
         curses.init_pair(10, curses.COLOR_MAGENTA, -1)
+        # Search highlighting
+        curses.init_pair(11, curses.COLOR_BLACK, curses.COLOR_YELLOW)  # Current search match
+        curses.init_pair(12, curses.COLOR_BLACK, curses.COLOR_GREEN)   # Other search matches
         
         # Define colors
         self.COLOR_NORMAL = curses.color_pair(1)
@@ -59,6 +62,8 @@ class Display:
         self.COLOR_DIFF_ADDED = curses.color_pair(8)
         self.COLOR_DIFF_REMOVED = curses.color_pair(9)
         self.COLOR_DIFF_HEADER = curses.color_pair(10)
+        self.COLOR_SEARCH_CURRENT = curses.color_pair(11)
+        self.COLOR_SEARCH_OTHER = curses.color_pair(12)
         
         # Line number gutter width
         self.gutter_width = 4
@@ -133,7 +138,8 @@ class Display:
             self._setup_dialog_window()
     
     def update_text(self, lines: List[str], cursor_y: int, cursor_x: int, 
-                    scroll_y: int, selection: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None) -> None:
+                    scroll_y: int, selection: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None,
+                    search_results: List[Tuple[int, int, int]] = None, current_search_index: int = -1) -> None:
         """
         Update the text display
         
@@ -143,6 +149,8 @@ class Display:
             cursor_x: Cursor x position (column)
             scroll_y: First visible line number
             selection: Optional tuple of ((start_y, start_x), (end_y, end_x)) for selection
+            search_results: Optional list of search matches as (line_num, start_col, length)
+            current_search_index: Index of current search match in search_results
         """
         if self.is_dialog_open():
             return
@@ -214,14 +222,27 @@ class Display:
             if len(display_line) > available_width:
                 display_line = display_line[:available_width]
             
+            # Get search matches for this line
+            line_search_matches = []
+            if search_results:
+                for idx, match in enumerate(search_results):
+                    if match[0] == line_num:
+                        is_current = idx == current_search_index
+                        line_search_matches.append((match[1], match[2], is_current))
+            
             # Handle displaying line content with or without selection
             # Each section has its own try/except to handle potential curses errors safely
             if not selection_start or not selection_end:
-                # No selection, simple display
-                try:
-                    self.text_win.addstr(i, self.gutter_width, display_line)
-                except curses.error:
-                    pass
+                # No selection, display with search highlighting
+                if line_search_matches:
+                    # Render line with search highlights
+                    self._render_line_with_search_highlights(i, display_line, line_search_matches)
+                else:
+                    # Simple display without highlights
+                    try:
+                        self.text_win.addstr(i, self.gutter_width, display_line)
+                    except curses.error:
+                        pass
             else:
                 # With selection - determine which case applies
                 if line_num < selection_start[0] or line_num > selection_end[0]:
@@ -1134,3 +1155,44 @@ class Display:
     def show_optimization_message(self) -> None:
         """Method implementation removed as requested"""
         pass
+    
+    def _render_line_with_search_highlights(self, row: int, line: str, matches: List[Tuple[int, int, bool]]) -> None:
+        """
+        Render a line with search match highlights
+        
+        Args:
+            row: Row number in the text window
+            line: Line text to render
+            matches: List of (start_col, length, is_current) tuples for matches on this line
+        """
+        try:
+            # Sort matches by start column
+            sorted_matches = sorted(matches, key=lambda m: m[0])
+            
+            col = 0  # Current column position
+            x_pos = self.gutter_width  # Current x position on screen
+            
+            for match_start, match_len, is_current in sorted_matches:
+                # Render text before the match
+                if match_start > col:
+                    pre_text = line[col:match_start]
+                    self.text_win.addstr(row, x_pos, pre_text)
+                    x_pos += len(pre_text)
+                    col = match_start
+                
+                # Render the match with highlighting
+                match_text = line[match_start:match_start + match_len]
+                if match_text:
+                    color = self.COLOR_SEARCH_CURRENT if is_current else self.COLOR_SEARCH_OTHER
+                    self.text_win.addstr(row, x_pos, match_text, color)
+                    x_pos += len(match_text)
+                    col = match_start + match_len
+            
+            # Render remaining text after all matches
+            if col < len(line):
+                remaining = line[col:]
+                self.text_win.addstr(row, x_pos, remaining)
+                
+        except curses.error:
+            # Silently ignore if we can't write to the edge of the screen
+            pass

@@ -68,6 +68,14 @@ class CommandHandler:
             r'^nlplive$': self._cmd_toggle_nlp_live_mode,
             # Debug mode command
             r'^debug$': self._cmd_toggle_debug_mode,
+            # Search/Replace commands
+            r'^noh$': self._cmd_no_highlight,
+            r'^nohlsearch$': self._cmd_no_highlight,
+            # Substitution patterns (must be more specific before general)
+            r'^%s/([^/]*)/([^/]*)/(g?c?)$': self._cmd_substitute_all,
+            r'^(\d+),(\d+)s/([^/]*)/([^/]*)/(g?c?)$': self._cmd_substitute_range,
+            r'^s/([^/]*)/([^/]*)/(g?c?)$': self._cmd_substitute_current,
+            r'^\'<,\'>s/([^/]*)/([^/]*)/(g?c?)$': self._cmd_substitute_visual,
         }
         
         return commands
@@ -845,4 +853,142 @@ class CommandHandler:
             self.editor.set_status_message(f"Error toggling debug mode: {str(e)}")
             logging.error(f"Error executing debug command: {str(e)}")
             return False
+    
+    def _cmd_no_highlight(self) -> bool:
+        """
+        Handle the no highlight command (:noh or :nohlsearch).
+        Clears search highlighting.
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            self.editor.clear_search_highlights()
+            return True
+        except Exception as e:
+            self.editor.set_status_message(f"Error clearing highlights: {str(e)}")
+            return False
+    
+    def _cmd_substitute_current(self, pattern: str, replacement: str, flags: str) -> bool:
+        """
+        Handle substitution on current line (:s/pattern/replacement/flags).
+        
+        Args:
+            pattern: The search pattern
+            replacement: The replacement text
+            flags: Optional flags (g, c, gc)
             
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            global_flag = 'g' in flags
+            confirm = 'c' in flags
+            
+            count = self.editor.substitute(pattern, replacement, 
+                                          line_range=None,
+                                          global_flag=global_flag,
+                                          confirm=confirm)
+            return count > 0 or pattern == ""
+        except Exception as e:
+            self.editor.set_status_message(f"Error in substitution: {str(e)}")
+            return False
+    
+    def _cmd_substitute_all(self, pattern: str, replacement: str, flags: str) -> bool:
+        """
+        Handle substitution on all lines (:%s/pattern/replacement/flags).
+        
+        Args:
+            pattern: The search pattern
+            replacement: The replacement text
+            flags: Optional flags (g, c, gc)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            global_flag = 'g' in flags
+            confirm = 'c' in flags
+            
+            # Get total line count
+            total_lines = len(self.editor.buffer.get_lines())
+            line_range = (0, total_lines - 1) if total_lines > 0 else (0, 0)
+            
+            count = self.editor.substitute(pattern, replacement,
+                                          line_range=line_range,
+                                          global_flag=global_flag,
+                                          confirm=confirm)
+            return count > 0 or pattern == ""
+        except Exception as e:
+            self.editor.set_status_message(f"Error in substitution: {str(e)}")
+            return False
+    
+    def _cmd_substitute_range(self, start_line: str, end_line: str, 
+                              pattern: str, replacement: str, flags: str) -> bool:
+        """
+        Handle substitution on line range (:start,end s/pattern/replacement/flags).
+        
+        Args:
+            start_line: Starting line number (1-based)
+            end_line: Ending line number (1-based)
+            pattern: The search pattern
+            replacement: The replacement text
+            flags: Optional flags (g, c, gc)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Convert to 0-based indexing
+            start = int(start_line) - 1
+            end = int(end_line) - 1
+            
+            global_flag = 'g' in flags
+            confirm = 'c' in flags
+            
+            count = self.editor.substitute(pattern, replacement,
+                                          line_range=(start, end),
+                                          global_flag=global_flag,
+                                          confirm=confirm)
+            return count > 0 or pattern == ""
+        except Exception as e:
+            self.editor.set_status_message(f"Error in substitution: {str(e)}")
+            return False
+    
+    def _cmd_substitute_visual(self, pattern: str, replacement: str, flags: str) -> bool:
+        """
+        Handle substitution on visual selection (:'<,'>s/pattern/replacement/flags).
+        
+        Args:
+            pattern: The search pattern
+            replacement: The replacement text
+            flags: Optional flags (g, c, gc)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Get visual selection range
+            if hasattr(self.editor.buffer, 'selection_start') and hasattr(self.editor.buffer, 'selection_end'):
+                start_y = self.editor.buffer.selection_start[0]
+                end_y = self.editor.buffer.selection_end[0]
+                
+                # Ensure correct order
+                if start_y > end_y:
+                    start_y, end_y = end_y, start_y
+                
+                global_flag = 'g' in flags
+                confirm = 'c' in flags
+                
+                count = self.editor.substitute(pattern, replacement,
+                                              line_range=(start_y, end_y),
+                                              global_flag=global_flag,
+                                              confirm=confirm)
+                return count > 0 or pattern == ""
+            else:
+                self.editor.set_status_message("No visual selection")
+                return False
+        except Exception as e:
+            self.editor.set_status_message(f"Error in substitution: {str(e)}")
+            return False
+
