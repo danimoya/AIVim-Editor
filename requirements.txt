@@ -10,3 +10,6 @@ python-dotenv
 gunicorn
 replit
 pytest
+coverage
+pytest
+pytest-cov

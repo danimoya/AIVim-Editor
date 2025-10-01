@@ -1,0 +1,637 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.13, pytest-8.3.5, pluggy-1.5.0 -- /nix/store/2lcqw1d28vklbk8ikiwad28iq2smwndv-python-wrapped-0.1.0/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/runner/workspace
+configfile: pyproject.toml
+plugins: anyio-4.9.0, cov-7.0.0
+collecting ... collected 287 items
+
+tests/test_ai_features.py::TestNLPMode::test_debounced_processing PASSED [  0%]
+tests/test_ai_features.py::TestNLPMode::test_enter_nlp_mode PASSED       [  0%]
+tests/test_ai_features.py::TestNLPMode::test_exit_nlp_mode PASSED        [  1%]
+tests/test_ai_features.py::TestNLPMode::test_handle_key_mappings PASSED  [  1%]
+tests/test_ai_features.py::TestNLPMode::test_live_mode_toggle PASSED     [  1%]
+tests/test_ai_features.py::TestNLPMode::test_nlp_marker_detection PASSED [  2%]
+tests/test_ai_features.py::TestNLPMode::test_process_nlp_sections PASSED [  2%]
+tests/test_ai_features.py::TestNLPMode::test_shift_enter_functionality PASSED [  2%]
+tests/test_ai_features.py::TestNLPMode::test_smart_nl_vs_code_detection PASSED [  3%]
+tests/test_ai_features.py::TestAICommands::test_analyze_command PASSED   [  3%]
+tests/test_ai_features.py::TestAICommands::test_chat_command PASSED      [  3%]
+tests/test_ai_features.py::TestAICommands::test_explain_command PASSED   [  4%]
+tests/test_ai_features.py::TestAICommands::test_generate_command PASSED  [  4%]
+tests/test_ai_features.py::TestAICommands::test_improve_command PASSED   [  4%]
+tests/test_ai_features.py::TestAICommands::test_invalid_line_ranges PASSED [  5%]
+tests/test_ai_features.py::TestAICommands::test_model_command PASSED     [  5%]
+tests/test_ai_features.py::TestAIServiceIntegration::test_anthropic_integration PASSED [  5%]
+tests/test_ai_features.py::TestAIServiceIntegration::test_config_loading PASSED [  6%]
+tests/test_ai_features.py::TestAIServiceIntegration::test_local_llm_support PASSED [  6%]
+tests/test_ai_features.py::TestAIServiceIntegration::test_missing_api_keys_error_handling FAILED [  6%]
+tests/test_ai_features.py::TestAIServiceIntegration::test_model_switching PASSED [  7%]
+tests/test_ai_features.py::TestAIServiceIntegration::test_openai_integration FAILED [  7%]
+tests/test_ai_features.py::TestAIServiceIntegration::test_timeout_handling FAILED [  8%]
+tests/test_ai_features.py::TestAIDrivenFeatures::test_code_analysis_and_explanations PASSED [  8%]
+tests/test_ai_features.py::TestAIDrivenFeatures::test_code_improvement_suggestions PASSED [  8%]
+tests/test_ai_features.py::TestAIDrivenFeatures::test_context_aware_processing PASSED [  9%]
+tests/test_ai_features.py::TestAIDrivenFeatures::test_natural_language_to_code_translation PASSED [  9%]
+tests/test_ai_features.py::TestAIDrivenFeatures::test_smart_indentation_preservation PASSED [  9%]
+tests/test_ai_features.py::TestEditorAIIntegration::test_ai_command_threading FAILED [ 10%]
+tests/test_ai_features.py::TestEditorAIIntegration::test_ai_response_display FAILED [ 10%]
+tests/test_ai_service.py::TestAIService::test_analyze_code PASSED        [ 10%]
+tests/test_ai_service.py::TestAIService::test_create_completion_anthropic PASSED [ 11%]
+tests/test_ai_service.py::TestAIService::test_create_completion_local PASSED [ 11%]
+tests/test_ai_service.py::TestAIService::test_create_completion_openai PASSED [ 11%]
+tests/test_ai_service.py::TestAIService::test_create_completion_unconfigured_model PASSED [ 12%]
+tests/test_ai_service.py::TestAIService::test_custom_query PASSED        [ 12%]
+tests/test_ai_service.py::TestAIService::test_generate_code PASSED       [ 12%]
+tests/test_ai_service.py::TestAIService::test_get_current_model_info_anthropic PASSED [ 13%]
+tests/test_ai_service.py::TestAIService::test_get_current_model_info_local PASSED [ 13%]
+tests/test_ai_service.py::TestAIService::test_get_current_model_info_openai PASSED [ 13%]
+tests/test_ai_service.py::TestAIService::test_get_explanation PASSED     [ 14%]
+tests/test_ai_service.py::TestAIService::test_get_improvement PASSED     [ 14%]
+tests/test_ai_service.py::TestAIService::test_is_model_configured_anthropic_with_key PASSED [ 14%]
+tests/test_ai_service.py::TestAIService::test_is_model_configured_anthropic_without_key PASSED [ 15%]
+tests/test_ai_service.py::TestAIService::test_is_model_configured_local_with_model PASSED [ 15%]
+tests/test_ai_service.py::TestAIService::test_is_model_configured_local_without_model PASSED [ 16%]
+tests/test_ai_service.py::TestAIService::test_is_model_configured_openai_with_key PASSED [ 16%]
+tests/test_ai_service.py::TestAIService::test_is_model_configured_openai_without_key PASSED [ 16%]
+tests/test_ai_service.py::TestAIService::test_load_config_with_existing_file PASSED [ 17%]
+tests/test_ai_service.py::TestAIService::test_load_config_with_io_error PASSED [ 17%]
+tests/test_ai_service.py::TestAIService::test_load_config_with_nonexistent_file PASSED [ 17%]
+tests/test_ai_service.py::TestAIService::test_set_model_anthropic PASSED [ 18%]
+tests/test_ai_service.py::TestAIService::test_set_model_invalid PASSED   [ 18%]
+tests/test_ai_service.py::TestAIService::test_set_model_local PASSED     [ 18%]
+tests/test_ai_service.py::TestAIService::test_set_model_openai PASSED    [ 19%]
+tests/test_buffer.py::TestBuffer::test_delete_line PASSED                [ 19%]
+tests/test_buffer.py::TestBuffer::test_get_content FAILED                [ 19%]
+tests/test_buffer.py::TestBuffer::test_get_line PASSED                   [ 20%]
+tests/test_buffer.py::TestBuffer::test_get_lines PASSED                  [ 20%]
+tests/test_buffer.py::TestBuffer::test_get_selection_text_multi_line PASSED [ 20%]
+tests/test_buffer.py::TestBuffer::test_get_selection_text_no_selection PASSED [ 21%]
+tests/test_buffer.py::TestBuffer::test_get_selection_text_single_line PASSED [ 21%]
+tests/test_buffer.py::TestBuffer::test_init PASSED                       [ 21%]
+tests/test_buffer.py::TestBuffer::test_insert_line PASSED                [ 22%]
+tests/test_buffer.py::TestBuffer::test_is_modified_and_mark_as_saved PASSED [ 22%]
+tests/test_buffer.py::TestBuffer::test_selection_operations PASSED       [ 22%]
+tests/test_buffer.py::TestBuffer::test_set_content PASSED                [ 23%]
+tests/test_buffer.py::TestBuffer::test_set_line PASSED                   [ 23%]
+tests/test_buffer.py::TestBuffer::test_set_lines PASSED                  [ 24%]
+tests/test_command_handler.py::TestCommandHandler::test_cmd_ai_query FAILED [ 24%]
+tests/test_command_handler.py::TestCommandHandler::test_cmd_analyze FAILED [ 24%]
+tests/test_command_handler.py::TestCommandHandler::test_cmd_confirm_yes PASSED [ 25%]
+tests/test_command_handler.py::TestCommandHandler::test_cmd_explain FAILED [ 25%]
+tests/test_command_handler.py::TestCommandHandler::test_cmd_force_quit PASSED [ 25%]
+tests/test_command_handler.py::TestCommandHandler::test_cmd_generate FAILED [ 26%]
+tests/test_command_handler.py::TestCommandHandler::test_cmd_help PASSED  [ 26%]
+tests/test_command_handler.py::TestCommandHandler::test_cmd_improve FAILED [ 26%]
+tests/test_command_handler.py::TestCommandHandler::test_cmd_next_prev_tab PASSED [ 27%]
+tests/test_command_handler.py::TestCommandHandler::test_cmd_quit PASSED  [ 27%]
+tests/test_command_handler.py::TestCommandHandler::test_cmd_set_option FAILED [ 27%]
+tests/test_command_handler.py::TestCommandHandler::test_cmd_tab_close PASSED [ 28%]
+tests/test_command_handler.py::TestCommandHandler::test_cmd_tab_new PASSED [ 28%]
+tests/test_command_handler.py::TestCommandHandler::test_cmd_tab_new_file PASSED [ 28%]
+tests/test_command_handler.py::TestCommandHandler::test_cmd_write PASSED [ 29%]
+tests/test_command_handler.py::TestCommandHandler::test_cmd_write_as PASSED [ 29%]
+tests/test_command_handler.py::TestCommandHandler::test_cmd_write_quit PASSED [ 29%]
+tests/test_command_handler.py::TestCommandHandler::test_execute_unknown_command PASSED [ 30%]
+tests/test_command_handler.py::TestCommandHandler::test_execute_with_colon PASSED [ 30%]
+tests/test_command_handler.py::TestCommandHandler::test_init PASSED      [ 31%]
+tests/test_commands.py::TestCommandHandler::test_ai_query_command PASSED [ 31%]
+tests/test_commands.py::TestCommandHandler::test_explain_command PASSED  [ 31%]
+tests/test_commands.py::TestCommandHandler::test_force_quit_command PASSED [ 32%]
+tests/test_commands.py::TestCommandHandler::test_generate_command PASSED [ 32%]
+tests/test_commands.py::TestCommandHandler::test_improve_command PASSED  [ 32%]
+tests/test_commands.py::TestCommandHandler::test_quit_command PASSED     [ 33%]
+tests/test_commands.py::TestCommandHandler::test_write_as_command PASSED [ 33%]
+tests/test_commands.py::TestCommandHandler::test_write_command PASSED    [ 33%]
+tests/test_commands.py::TestCommandHandler::test_write_quit_command PASSED [ 34%]
+tests/test_core_features.py::TestModalEditing::test_command_mode_input PASSED [ 34%]
+tests/test_core_features.py::TestModalEditing::test_escape_returns_to_normal PASSED [ 34%]
+tests/test_core_features.py::TestModalEditing::test_initial_mode PASSED  [ 35%]
+tests/test_core_features.py::TestModalEditing::test_switch_to_command_mode PASSED [ 35%]
+tests/test_core_features.py::TestModalEditing::test_switch_to_insert_mode PASSED [ 35%]
+tests/test_core_features.py::TestModalEditing::test_switch_to_visual_mode PASSED [ 36%]
+tests/test_core_features.py::TestModalEditing::test_visual_selection_tracking PASSED [ 36%]
+tests/test_core_features.py::TestBufferManagement::test_buffer_initialization PASSED [ 36%]
+tests/test_core_features.py::TestBufferManagement::test_buffer_modification_tracking PASSED [ 37%]
+tests/test_core_features.py::TestBufferManagement::test_empty_buffer_handling PASSED [ 37%]
+tests/test_core_features.py::TestBufferManagement::test_line_operations_dd PASSED [ 37%]
+tests/test_core_features.py::TestBufferManagement::test_line_operations_yy_and_p PASSED [ 38%]
+tests/test_core_features.py::TestBufferManagement::test_multiple_line_insertion PASSED [ 38%]
+tests/test_core_features.py::TestBufferManagement::test_text_deletion PASSED [ 39%]
+tests/test_core_features.py::TestBufferManagement::test_text_insertion PASSED [ 39%]
+tests/test_core_features.py::TestBufferManagement::test_undo_redo_tracking PASSED [ 39%]
+tests/test_core_features.py::TestCursorMovement::test_basic_movement_hjkl PASSED [ 40%]
+tests/test_core_features.py::TestCursorMovement::test_boundary_conditions PASSED [ 40%]
+tests/test_core_features.py::TestCursorMovement::test_cursor_memory_on_vertical_movement PASSED [ 40%]
+tests/test_core_features.py::TestCursorMovement::test_line_navigation_0_dollar PASSED [ 41%]
+tests/test_core_features.py::TestCursorMovement::test_page_movement PASSED [ 41%]
+tests/test_core_features.py::TestCursorMovement::test_word_movement_web PASSED [ 41%]
+tests/test_core_features.py::TestFileOperations::test_create_new_buffer PASSED [ 42%]
+tests/test_core_features.py::TestFileOperations::test_force_quit_command PASSED [ 42%]
+tests/test_core_features.py::TestFileOperations::test_load_file_success PASSED [ 42%]
+tests/test_core_features.py::TestFileOperations::test_load_nonexistent_file PASSED [ 43%]
+tests/test_core_features.py::TestFileOperations::test_quit_command_with_unsaved_changes PASSED [ 43%]
+tests/test_core_features.py::TestFileOperations::test_save_as_command PASSED [ 43%]
+tests/test_core_features.py::TestFileOperations::test_save_file_with_filename PASSED [ 44%]
+tests/test_core_features.py::TestFileOperations::test_save_file_without_filename PASSED [ 44%]
+tests/test_core_features.py::TestFileOperations::test_write_quit_command PASSED [ 44%]
+tests/test_core_features.py::TestEdgeCase::test_empty_file_handling PASSED [ 45%]
+tests/test_core_features.py::TestEdgeCase::test_invalid_command_handling PASSED [ 45%]
+tests/test_core_features.py::TestEdgeCase::test_invalid_cursor_position_recovery PASSED [ 45%]
+tests/test_core_features.py::TestEdgeCase::test_selection_with_empty_buffer PASSED [ 46%]
+tests/test_core_features.py::TestEdgeCase::test_unicode_content PASSED   [ 46%]
+tests/test_core_features.py::TestEdgeCase::test_very_long_line_handling PASSED [ 47%]
+tests/test_editor.py::TestEditor::test_initialization FAILED             [ 47%]
+tests/test_editor.py::TestEditor::test_load_nonexistent_file FAILED      [ 47%]
+tests/test_editor.py::TestEditor::test_save_file PASSED                  [ 48%]
+tests/test_editor.py::TestEditor::test_quit_with_unsaved_changes FAILED  [ 48%]
+tests/test_editor.py::TestEditor::test_run_ai_command FAILED             [ 48%]
+tests/test_file_operations.py::TestFileOperations::test_cmd_edit_current PASSED [ 49%]
+tests/test_file_operations.py::TestFileOperations::test_cmd_edit_file PASSED [ 49%]
+tests/test_file_operations.py::TestFileOperations::test_cmd_force_edit PASSED [ 49%]
+tests/test_file_operations.py::TestFileOperations::test_cmd_new_buffer PASSED [ 50%]
+tests/test_file_operations.py::TestFileOperations::test_cmd_new_buffer_named PASSED [ 50%]
+tests/test_file_operations.py::TestFileOperations::test_cmd_saveas PASSED [ 50%]
+tests/test_file_operations.py::TestFileOperations::test_cmd_saveas_permission_denied PASSED [ 51%]
+tests/test_file_operations.py::TestFileOperations::test_error_recovery PASSED [ 51%]
+tests/test_file_operations.py::TestFileOperations::test_file_browser_filter PASSED [ 51%]
+tests/test_file_operations.py::TestFileOperations::test_file_browser_init PASSED [ 52%]
+tests/test_file_operations.py::TestFileOperations::test_file_browser_item PASSED [ 52%]
+tests/test_file_operations.py::TestFileOperations::test_file_browser_item_directory PASSED [ 52%]
+tests/test_file_operations.py::TestFileOperations::test_file_browser_item_display PASSED [ 53%]
+tests/test_file_operations.py::TestFileOperations::test_file_browser_load_directory PASSED [ 53%]
+tests/test_file_operations.py::TestFileOperations::test_file_browser_load_directory_with_hidden PASSED [ 54%]
+tests/test_file_operations.py::TestFileOperations::test_full_edit_save_cycle PASSED [ 54%]
+tests/test_file_operations.py::TestFileOperations::test_is_binary_file_binary PASSED [ 54%]
+tests/test_file_operations.py::TestFileOperations::test_is_binary_file_nonexistent PASSED [ 55%]
+tests/test_file_operations.py::TestFileOperations::test_is_binary_file_text PASSED [ 55%]
+tests/test_file_operations.py::TestFileOperations::test_load_file_existing PASSED [ 55%]
+tests/test_file_operations.py::TestFileOperations::test_load_file_nonexistent PASSED [ 56%]
+tests/test_file_operations.py::TestFileOperations::test_load_file_with_error PASSED [ 56%]
+tests/test_file_operations.py::TestFileOperations::test_load_file_with_permissions_check PASSED [ 56%]
+tests/test_file_operations.py::TestFileOperations::test_load_file_with_permissions_check_binary PASSED [ 57%]
+tests/test_file_operations.py::TestFileOperations::test_load_file_with_permissions_check_readonly FAILED [ 57%]
+tests/test_file_operations.py::TestFileOperations::test_multiple_file_operations PASSED [ 57%]
+tests/test_file_operations.py::TestFileOperations::test_reload_file PASSED [ 58%]
+tests/test_file_operations.py::TestFileOperations::test_reload_file_nonexistent PASSED [ 58%]
+tests/test_file_operations.py::TestFileOperations::test_save_file_basic PASSED [ 58%]
+tests/test_file_operations.py::TestFileOperations::test_save_file_disk_full FAILED [ 59%]
+tests/test_file_operations.py::TestFileOperations::test_save_file_permission_denied PASSED [ 59%]
+tests/test_file_operations.py::TestFileOperations::test_save_file_with_backup PASSED [ 59%]
+tests/test_file_operations.py::TestFileOperations::test_save_file_with_filename PASSED [ 60%]
+tests/test_file_operations.py::TestCommandIntegration::test_command_chaining PASSED [ 60%]
+tests/test_history.py::TestHistory::test_add_version PASSED              [ 60%]
+tests/test_history.py::TestHistory::test_branching_history PASSED        [ 61%]
+tests/test_history.py::TestHistory::test_clear PASSED                    [ 61%]
+tests/test_history.py::TestHistory::test_get_current_version PASSED      [ 62%]
+tests/test_history.py::TestHistory::test_get_version_info PASSED         [ 62%]
+tests/test_history.py::TestHistory::test_init PASSED                     [ 62%]
+tests/test_history.py::TestHistory::test_prune_history PASSED            [ 63%]
+tests/test_history.py::TestHistory::test_undo_redo PASSED                [ 63%]
+tests/test_key_handler.py::TestKeyHandler::test_handle_command_mode_execute PASSED [ 63%]
+tests/test_key_handler.py::TestKeyHandler::test_handle_command_mode_exit PASSED [ 64%]
+tests/test_key_handler.py::TestKeyHandler::test_handle_command_mode_typing FAILED [ 64%]
+tests/test_key_handler.py::TestKeyHandler::test_handle_global_keys FAILED [ 64%]
+tests/test_key_handler.py::TestKeyHandler::test_handle_insert_mode_character_insertion FAILED [ 65%]
+tests/test_key_handler.py::TestKeyHandler::test_handle_insert_mode_enter_key PASSED [ 65%]
+tests/test_key_handler.py::TestKeyHandler::test_handle_insert_mode_exit PASSED [ 65%]
+tests/test_key_handler.py::TestKeyHandler::test_handle_key_delegates_to_mode_handler PASSED [ 66%]
+tests/test_key_handler.py::TestKeyHandler::test_handle_normal_mode_mode_changes PASSED [ 66%]
+tests/test_key_handler.py::TestKeyHandler::test_handle_normal_mode_movement PASSED [ 66%]
+tests/test_key_handler.py::TestKeyHandler::test_handle_s_key_in_normal_mode PASSED [ 67%]
+tests/test_key_handler.py::TestKeyHandler::test_handle_visual_mode_command_entry PASSED [ 67%]
+tests/test_key_handler.py::TestKeyHandler::test_handle_visual_mode_exit PASSED [ 67%]
+tests/test_key_handler.py::TestKeyHandler::test_init PASSED              [ 68%]
+tests/test_local_llm_logging.py::TestLocalLLMLogging::test_local_llm_error_handling PASSED [ 68%]
+tests/test_local_llm_logging.py::TestLocalLLMLogging::test_local_llm_stdout_capture FAILED [ 68%]
+tests/test_local_llm_tabs.py::test_local_llm_tabs PASSED                 [ 69%]
+tests/test_model_info_display.py::test_model_info_display PASSED         [ 69%]
+tests/test_model_selector.py::TestModelSelector::test_command_handler_model_command PASSED [ 70%]
+tests/test_model_selector.py::TestModelSelector::test_model_selector_display FAILED [ 70%]
+tests/test_model_selector.py::TestModelSelector::test_model_selector_esc_key PASSED [ 70%]
+tests/test_model_selector.py::TestModelSelector::test_model_selector_key_handling PASSED [ 71%]
+tests/test_modes.py::TestModes::test_mode_comparison PASSED              [ 71%]
+tests/test_modes.py::TestModes::test_mode_names PASSED                   [ 71%]
+tests/test_modes.py::TestModes::test_mode_uniqueness PASSED              [ 72%]
+tests/test_modes.py::TestModes::test_mode_values PASSED                  [ 72%]
+tests/test_multiline_paste.py::test_multiline_paste PASSED               [ 72%]
+tests/test_nlp_shift_enter.py::TestNLPShiftEnter::test_handle_key_shift_enter FAILED [ 73%]
+tests/test_nlp_shift_enter.py::TestNLPShiftEnter::test_handle_shift_enter PASSED [ 73%]
+tests/test_nlp_shift_enter.py::TestNLPShiftEnter::test_scan_nlp_sections PASSED [ 73%]
+tests/test_nlptranslate_command.py::TestNLPTranslateCommand::test_nlptranslate_error_handling PASSED [ 74%]
+tests/test_nlptranslate_command.py::TestNLPTranslateCommand::test_nlptranslate_no_sections PASSED [ 74%]
+tests/test_nlptranslate_command.py::TestNLPTranslateCommand::test_nlptranslate_with_sections PASSED [ 74%]
+tests/test_search_replace.py::TestSearchFunctionality::test_backward_search PASSED [ 75%]
+tests/test_search_replace.py::TestSearchFunctionality::test_clear_search_highlights PASSED [ 75%]
+tests/test_search_replace.py::TestSearchFunctionality::test_forward_search PASSED [ 75%]
+tests/test_search_replace.py::TestSearchFunctionality::test_next_search_match PASSED [ 76%]
+tests/test_search_replace.py::TestSearchFunctionality::test_previous_search_match PASSED [ 76%]
+tests/test_search_replace.py::TestSearchFunctionality::test_regex_search PASSED [ 77%]
+tests/test_search_replace.py::TestSearchFunctionality::test_search_basic_pattern PASSED [ 77%]
+tests/test_search_replace.py::TestSearchFunctionality::test_search_case_insensitive PASSED [ 77%]
+tests/test_search_replace.py::TestSearchFunctionality::test_search_case_sensitive PASSED [ 78%]
+tests/test_search_replace.py::TestSearchFunctionality::test_search_flags PASSED [ 78%]
+tests/test_search_replace.py::TestSearchFunctionality::test_search_word_backward PASSED [ 78%]
+tests/test_search_replace.py::TestSearchFunctionality::test_search_word_under_cursor PASSED [ 79%]
+tests/test_search_replace.py::TestSearchFunctionality::test_smart_case_search PASSED [ 79%]
+tests/test_search_replace.py::TestReplaceFunctionality::test_substitute_all_lines PASSED [ 79%]
+tests/test_search_replace.py::TestReplaceFunctionality::test_substitute_all_lines_global PASSED [ 80%]
+tests/test_search_replace.py::TestReplaceFunctionality::test_substitute_case_insensitive PASSED [ 80%]
+tests/test_search_replace.py::TestReplaceFunctionality::test_substitute_current_line PASSED [ 80%]
+tests/test_search_replace.py::TestReplaceFunctionality::test_substitute_current_line_global PASSED [ 81%]
+tests/test_search_replace.py::TestReplaceFunctionality::test_substitute_empty_pattern FAILED [ 81%]
+tests/test_search_replace.py::TestReplaceFunctionality::test_substitute_range PASSED [ 81%]
+tests/test_search_replace.py::TestReplaceFunctionality::test_substitute_undo FAILED [ 82%]
+tests/test_search_replace.py::TestReplaceFunctionality::test_substitute_visual_mode PASSED [ 82%]
+tests/test_search_replace.py::TestReplaceFunctionality::test_substitute_with_regex PASSED [ 82%]
+tests/test_search_replace.py::TestCommandHandlerIntegration::test_noh_command PASSED [ 83%]
+tests/test_search_replace.py::TestCommandHandlerIntegration::test_substitute_all_command PASSED [ 83%]
+tests/test_search_replace.py::TestCommandHandlerIntegration::test_substitute_command_parsing PASSED [ 83%]
+tests/test_search_replace.py::TestCommandHandlerIntegration::test_substitute_range_command PASSED [ 84%]
+tests/test_search_replace.py::TestSearchHighlighting::test_render_line_with_search_highlights PASSED [ 84%]
+tests/test_search_replace.py::TestSearchHighlighting::test_update_text_with_search_results PASSED [ 85%]
+tests/test_search_replace.py::TestPerformance::test_search_performance_large_file PASSED [ 85%]
+tests/test_search_replace.py::TestPerformance::test_substitute_performance_large_file PASSED [ 85%]
+tests/test_settings.py::TestSettingsDataClasses::test_editor_settings_defaults PASSED [ 86%]
+tests/test_settings.py::TestSettingsDataClasses::test_display_settings_defaults PASSED [ 86%]
+tests/test_settings.py::TestSettingsDataClasses::test_ai_settings_defaults PASSED [ 86%]
+tests/test_settings.py::TestSettingsDataClasses::test_file_settings_defaults PASSED [ 87%]
+tests/test_settings.py::TestSettingsDataClasses::test_search_settings_defaults PASSED [ 87%]
+tests/test_settings.py::TestSettingsDataClasses::test_settings_to_dict PASSED [ 87%]
+tests/test_settings.py::TestSettingsDataClasses::test_settings_from_dict PASSED [ 88%]
+tests/test_settings.py::TestSettingsManager::test_settings_initialization PASSED [ 88%]
+tests/test_settings.py::TestSettingsManager::test_get_setting PASSED     [ 88%]
+tests/test_settings.py::TestSettingsManager::test_get_setting_with_alias PASSED [ 89%]
+tests/test_settings.py::TestSettingsManager::test_set_setting PASSED     [ 89%]
+tests/test_settings.py::TestSettingsManager::test_set_setting_with_alias PASSED [ 89%]
+tests/test_settings.py::TestSettingsManager::test_toggle_setting PASSED  [ 90%]
+tests/test_settings.py::TestSettingsManager::test_get_all_settings PASSED [ 90%]
+tests/test_settings.py::TestSettingsManager::test_reset_settings PASSED  [ 90%]
+tests/test_settings.py::TestSettingsManager::test_save_and_load_settings PASSED [ 91%]
+tests/test_settings.py::TestSettingsManager::test_export_import_config PASSED [ 91%]
+tests/test_settings.py::TestSettingsManager::test_type_conversion PASSED [ 91%]
+tests/test_settings.py::TestCommandHandlerIntegration::test_cmd_set_help PASSED [ 92%]
+tests/test_settings.py::TestCommandHandlerIntegration::test_cmd_set_all PASSED [ 92%]
+tests/test_settings.py::TestCommandHandlerIntegration::test_cmd_set_show PASSED [ 93%]
+tests/test_settings.py::TestCommandHandlerIntegration::test_cmd_set_value PASSED [ 93%]
+tests/test_settings.py::TestCommandHandlerIntegration::test_cmd_set_toggle PASSED [ 93%]
+tests/test_settings.py::TestCommandHandlerIntegration::test_cmd_set_no_option PASSED [ 94%]
+tests/test_settings.py::TestCommandHandlerIntegration::test_cmd_source PASSED [ 94%]
+tests/test_settings.py::TestCommandHandlerIntegration::test_apply_setting PASSED [ 94%]
+tests/test_settings.py::TestSettingsHelp::test_get_help PASSED           [ 95%]
+tests/test_settings.py::TestEditorSettingsIntegration::test_editor_initializes_settings PASSED [ 95%]
+tests/test_settings.py::TestEditorSettingsIntegration::test_editor_uses_settings_for_search PASSED [ 95%]
+tests/test_settings.py::TestDisplaySettingsIntegration::test_display_respects_line_number_setting FAILED [ 96%]
+tests/test_shift_a_command.py::test_shift_a_command PASSED               [ 96%]
+tests/test_tabs.py::test_tab_commands PASSED                             [ 96%]
+tests/test_utils.py::TestUtils::test_create_backup_file PASSED           [ 97%]
+tests/test_utils.py::TestUtils::test_create_backup_file_error PASSED     [ 97%]
+tests/test_utils.py::TestUtils::test_create_backup_file_nonexistent PASSED [ 97%]
+tests/test_utils.py::TestUtils::test_create_diff_no_changes PASSED       [ 98%]
+tests/test_utils.py::TestUtils::test_create_diff_with_changes PASSED     [ 98%]
+tests/test_utils.py::TestUtils::test_parse_line_range PASSED             [ 98%]
+tests/test_utils.py::TestUtils::test_split_diff_line PASSED              [ 99%]
+tests/test_utils.py::TestUtils::test_tokenize_command PASSED             [ 99%]
+tests/test_y_command.py::test_y_command PASSED                           [100%]
+
+=================================== FAILURES ===================================
+________ TestAIServiceIntegration.test_missing_api_keys_error_handling _________
+tests/test_ai_features.py:394: in test_missing_api_keys_error_handling
+    self.assertTrue(result is None or "API key" in str(result))
+E   AssertionError: False is not true
+------------------------------ Captured log call -------------------------------
+WARNING  root:ai_service.py:134 No config file found. Using environment variables.
+WARNING  root:ai_service.py:231 ANTHROPIC_API_KEY environment variable not set. Claude features will not work.
+WARNING  root:ai_service.py:278 No local model found. Set LLAMA_MODEL_PATH environment variable to use local LLM.
+_______________ TestAIServiceIntegration.test_openai_integration _______________
+tests/test_ai_features.py:320: in test_openai_integration
+    self.ai_service._initialize_openai_client()
+E   AttributeError: 'AIService' object has no attribute '_initialize_openai_client'
+------------------------------ Captured log call -------------------------------
+WARNING  root:ai_service.py:134 No config file found. Using environment variables.
+WARNING  root:ai_service.py:231 ANTHROPIC_API_KEY environment variable not set. Claude features will not work.
+WARNING  root:ai_service.py:278 No local model found. Set LLAMA_MODEL_PATH environment variable to use local LLM.
+________________ TestAIServiceIntegration.test_timeout_handling ________________
+tests/test_ai_features.py:427: in test_timeout_handling
+    result = self.ai_service._call_openai_api("Test prompt", timeout=30)
+E   AttributeError: 'AIService' object has no attribute '_call_openai_api'
+------------------------------ Captured log call -------------------------------
+WARNING  root:ai_service.py:134 No config file found. Using environment variables.
+WARNING  root:ai_service.py:231 ANTHROPIC_API_KEY environment variable not set. Claude features will not work.
+WARNING  root:ai_service.py:278 No local model found. Set LLAMA_MODEL_PATH environment variable to use local LLM.
+______________ TestEditorAIIntegration.test_ai_command_threading _______________
+tests/test_ai_features.py:648: in test_ai_command_threading
+    mock_thread.assert_called_once()
+/nix/store/7d088dip86hlzri9sk0h78b63yfmx0a0-python3-3.11.13/lib/python3.11/unittest/mock.py:918: in assert_called_once
+    raise AssertionError(msg)
+E   AssertionError: Expected 'Thread' to have been called once. Called 0 times.
+------------------------------ Captured log call -------------------------------
+WARNING  root:ai_service.py:134 No config file found. Using environment variables.
+WARNING  root:ai_service.py:231 ANTHROPIC_API_KEY environment variable not set. Claude features will not work.
+WARNING  root:ai_service.py:278 No local model found. Set LLAMA_MODEL_PATH environment variable to use local LLM.
+_______________ TestEditorAIIntegration.test_ai_response_display _______________
+tests/test_ai_features.py:660: in test_ai_response_display
+    self.editor._create_ai_response_tab("Test Response", response)
+E   AttributeError: 'Editor' object has no attribute '_create_ai_response_tab'
+------------------------------ Captured log call -------------------------------
+WARNING  root:ai_service.py:134 No config file found. Using environment variables.
+WARNING  root:ai_service.py:231 ANTHROPIC_API_KEY environment variable not set. Claude features will not work.
+WARNING  root:ai_service.py:278 No local model found. Set LLAMA_MODEL_PATH environment variable to use local LLM.
+_________________________ TestBuffer.test_get_content __________________________
+tests/test_buffer.py:134: in test_get_content
+    self.assertEqual(self.buffer.get_content(), "single line")
+E   AssertionError: '' != 'single line'
+E   + single line
+_____________________ TestCommandHandler.test_cmd_ai_query _____________________
+tests/test_command_handler.py:145: in test_cmd_ai_query
+    self.editor.ai_custom_query.assert_called_once_with("How does this code work?")
+/nix/store/7d088dip86hlzri9sk0h78b63yfmx0a0-python3-3.11.13/lib/python3.11/unittest/mock.py:951: in assert_called_once_with
+    return self.assert_called_with(*args, **kwargs)
+/nix/store/7d088dip86hlzri9sk0h78b63yfmx0a0-python3-3.11.13/lib/python3.11/unittest/mock.py:939: in assert_called_with
+    raise AssertionError(_error_message()) from cause
+E   AssertionError: expected call not found.
+E   Expected: ai_custom_query('How does this code work?')
+E     Actual: ai_custom_query('How does this code work?', blocking=False)
+_____________________ TestCommandHandler.test_cmd_analyze ______________________
+tests/test_command_handler.py:121: in test_cmd_analyze
+    self.editor.ai_analyze_code.assert_called_once_with(0, 4)  # Convert 1-based to 0-based
+/nix/store/7d088dip86hlzri9sk0h78b63yfmx0a0-python3-3.11.13/lib/python3.11/unittest/mock.py:951: in assert_called_once_with
+    return self.assert_called_with(*args, **kwargs)
+/nix/store/7d088dip86hlzri9sk0h78b63yfmx0a0-python3-3.11.13/lib/python3.11/unittest/mock.py:939: in assert_called_with
+    raise AssertionError(_error_message()) from cause
+E   AssertionError: expected call not found.
+E   Expected: ai_analyze_code(0, 4)
+E     Actual: ai_analyze_code(0, 4, blocking=False)
+_____________________ TestCommandHandler.test_cmd_explain ______________________
+tests/test_command_handler.py:97: in test_cmd_explain
+    self.editor.ai_explain.assert_called_once_with(0, 4)  # Convert 1-based to 0-based
+/nix/store/7d088dip86hlzri9sk0h78b63yfmx0a0-python3-3.11.13/lib/python3.11/unittest/mock.py:951: in assert_called_once_with
+    return self.assert_called_with(*args, **kwargs)
+/nix/store/7d088dip86hlzri9sk0h78b63yfmx0a0-python3-3.11.13/lib/python3.11/unittest/mock.py:939: in assert_called_with
+    raise AssertionError(_error_message()) from cause
+E   AssertionError: expected call not found.
+E   Expected: ai_explain(0, 4)
+E     Actual: ai_explain(0, 4, blocking=False)
+_____________________ TestCommandHandler.test_cmd_generate _____________________
+tests/test_command_handler.py:133: in test_cmd_generate
+    self.editor.ai_generate.assert_called_once_with(0, "Test function")  # Convert 1-based to 0-based
+/nix/store/7d088dip86hlzri9sk0h78b63yfmx0a0-python3-3.11.13/lib/python3.11/unittest/mock.py:951: in assert_called_once_with
+    return self.assert_called_with(*args, **kwargs)
+/nix/store/7d088dip86hlzri9sk0h78b63yfmx0a0-python3-3.11.13/lib/python3.11/unittest/mock.py:939: in assert_called_with
+    raise AssertionError(_error_message()) from cause
+E   AssertionError: expected call not found.
+E   Expected: ai_generate(0, 'Test function')
+E     Actual: ai_generate(0, 'Test function', blocking=False)
+_____________________ TestCommandHandler.test_cmd_improve ______________________
+tests/test_command_handler.py:109: in test_cmd_improve
+    self.editor.ai_improve.assert_called_once_with(0, 4)  # Convert 1-based to 0-based
+/nix/store/7d088dip86hlzri9sk0h78b63yfmx0a0-python3-3.11.13/lib/python3.11/unittest/mock.py:951: in assert_called_once_with
+    return self.assert_called_with(*args, **kwargs)
+/nix/store/7d088dip86hlzri9sk0h78b63yfmx0a0-python3-3.11.13/lib/python3.11/unittest/mock.py:939: in assert_called_with
+    raise AssertionError(_error_message()) from cause
+E   AssertionError: expected call not found.
+E   Expected: ai_improve(0, 4)
+E     Actual: ai_improve(0, 4, blocking=False)
+____________________ TestCommandHandler.test_cmd_set_option ____________________
+tests/test_command_handler.py:161: in test_cmd_set_option
+    self.editor.set_ai_model.assert_called_once_with(model)
+/nix/store/7d088dip86hlzri9sk0h78b63yfmx0a0-python3-3.11.13/lib/python3.11/unittest/mock.py:950: in assert_called_once_with
+    raise AssertionError(msg)
+E   AssertionError: Expected 'set_ai_model' to be called once. Called 0 times.
+________________________ TestEditor.test_initialization ________________________
+tests/test_editor.py:22: in test_initialization
+    assert self.editor.mode == Mode.NORMAL
+E   AssertionError: assert 'NORMAL' == <Mode.NORMAL: 1>
+E    +  where 'NORMAL' = <aivim.editor.Editor object at 0x7fa7e90e6190>.mode
+E    +    where <aivim.editor.Editor object at 0x7fa7e90e6190> = <tests.test_editor.TestEditor object at 0x7fa7eae48110>.editor
+E    +  and   <Mode.NORMAL: 1> = Mode.NORMAL
+------------------------------ Captured log setup ------------------------------
+WARNING  root:ai_service.py:134 No config file found. Using environment variables.
+WARNING  root:ai_service.py:231 ANTHROPIC_API_KEY environment variable not set. Claude features will not work.
+WARNING  root:ai_service.py:278 No local model found. Set LLAMA_MODEL_PATH environment variable to use local LLM.
+____________________ TestEditor.test_load_nonexistent_file _____________________
+tests/test_editor.py:31: in test_load_nonexistent_file
+    assert "Error loading file" in self.editor.status_message
+E   AssertionError: assert 'Error loading file' in ''
+E    +  where '' = <aivim.editor.Editor object at 0x7fa7e9002890>.status_message
+E    +    where <aivim.editor.Editor object at 0x7fa7e9002890> = <tests.test_editor.TestEditor object at 0x7fa7eae48cd0>.editor
+------------------------------ Captured log setup ------------------------------
+WARNING  root:ai_service.py:134 No config file found. Using environment variables.
+WARNING  root:ai_service.py:231 ANTHROPIC_API_KEY environment variable not set. Claude features will not work.
+WARNING  root:ai_service.py:278 No local model found. Set LLAMA_MODEL_PATH environment variable to use local LLM.
+__________________ TestEditor.test_quit_with_unsaved_changes ___________________
+tests/test_editor.py:59: in test_quit_with_unsaved_changes
+    assert self.editor.running is not False
+E   AttributeError: 'Editor' object has no attribute 'running'
+------------------------------ Captured log setup ------------------------------
+WARNING  root:ai_service.py:134 No config file found. Using environment variables.
+WARNING  root:ai_service.py:231 ANTHROPIC_API_KEY environment variable not set. Claude features will not work.
+WARNING  root:ai_service.py:278 No local model found. Set LLAMA_MODEL_PATH environment variable to use local LLM.
+________________________ TestEditor.test_run_ai_command ________________________
+tests/test_editor.py:80: in test_run_ai_command
+    assert self.editor.ai_processing is True
+E   assert False is True
+E    +  where False = <aivim.editor.Editor object at 0x7fa7e90410d0>.ai_processing
+E    +    where <aivim.editor.Editor object at 0x7fa7e90410d0> = <tests.test_editor.TestEditor object at 0x7fa7eae4a010>.editor
+------------------------------ Captured log setup ------------------------------
+WARNING  root:ai_service.py:134 No config file found. Using environment variables.
+WARNING  root:ai_service.py:231 ANTHROPIC_API_KEY environment variable not set. Claude features will not work.
+WARNING  root:ai_service.py:278 No local model found. Set LLAMA_MODEL_PATH environment variable to use local LLM.
+______ TestFileOperations.test_load_file_with_permissions_check_readonly _______
+tests/test_file_operations.py:222: in test_load_file_with_permissions_check_readonly
+    self.assertIn("read-only", status_msg)
+E   AssertionError: 'read-only' not found in 'Loaded: /tmp/tmpj0xf04i5/test.txt'
+------------------------------ Captured log call -------------------------------
+WARNING  root:ai_service.py:134 No config file found. Using environment variables.
+WARNING  root:ai_service.py:231 ANTHROPIC_API_KEY environment variable not set. Claude features will not work.
+WARNING  root:ai_service.py:278 No local model found. Set LLAMA_MODEL_PATH environment variable to use local LLM.
+_________________ TestFileOperations.test_save_file_disk_full __________________
+tests/test_file_operations.py:158: in test_save_file_disk_full
+    self.assertIn("Disk full", status_msg)
+E   AssertionError: 'Disk full' not found in 'Saved: /tmp/tmpi6b13jrg/test.txt (7 bytes)'
+------------------------------ Captured log call -------------------------------
+WARNING  root:ai_service.py:134 No config file found. Using environment variables.
+WARNING  root:ai_service.py:231 ANTHROPIC_API_KEY environment variable not set. Claude features will not work.
+WARNING  root:ai_service.py:278 No local model found. Set LLAMA_MODEL_PATH environment variable to use local LLM.
+________________ TestKeyHandler.test_handle_command_mode_typing ________________
+tests/test_key_handler.py:266: in test_handle_command_mode_typing
+    self.assertEqual(self.editor.command_cursor, 2)
+E   AssertionError: 3 != 2
+____________________ TestKeyHandler.test_handle_global_keys ____________________
+tests/test_key_handler.py:90: in test_handle_global_keys
+    self.assertTrue(result)
+E   AssertionError: False is not true
+__________ TestKeyHandler.test_handle_insert_mode_character_insertion __________
+tests/test_key_handler.py:184: in test_handle_insert_mode_character_insertion
+    self.assertEqual(self.editor.insert_char.call_count, 4)
+E   AssertionError: 1 != 4
+______________ TestLocalLLMLogging.test_local_llm_stdout_capture _______________
+tests/test_local_llm_logging.py:84: in test_local_llm_stdout_capture
+    self.assertIn("Local LLM perf: llama_print_timings: load time = 1234.56 ms", log_content)
+E   AssertionError: 'Local LLM perf: llama_print_timings: load time = 1234.56 ms' not found in "Using local model: 140359142116176 (<MagicMock name='mock.model_path' id='140359142116176'>)\nStarting local LLM inference...\nLocal LLM inference completed in 0.00 seconds.\nSaved local model response to /home/runner/.aivim/responses/20251001_005540_140359142116176_response.json\n"
+------------------------------ Captured log call -------------------------------
+WARNING  root:ai_service.py:134 No config file found. Using environment variables.
+INFO     root:ai_service.py:213 OpenAI client initialized successfully
+WARNING  root:ai_service.py:231 ANTHROPIC_API_KEY environment variable not set. Claude features will not work.
+WARNING  root:ai_service.py:278 No local model found. Set LLAMA_MODEL_PATH environment variable to use local LLM.
+INFO     root:ai_service.py:675 Using local model: 140359142116176 (<MagicMock name='mock.model_path' id='140359142116176'>)
+INFO     root:ai_service.py:693 Starting local LLM inference...
+INFO     root:ai_service.py:722 Local LLM inference completed in 0.00 seconds.
+INFO     root:ai_service.py:775 Saved local model response to /home/runner/.aivim/responses/20251001_005540_140359142116176_response.json
+________________ TestModelSelector.test_model_selector_display _________________
+tests/test_model_selector.py:46: in test_model_selector_display
+    self.assertEqual(len(args), 2)
+E   AssertionError: 3 != 2
+------------------------------ Captured log call -------------------------------
+WARNING  root:ai_service.py:134 No config file found. Using environment variables.
+INFO     root:ai_service.py:213 OpenAI client initialized successfully
+WARNING  root:ai_service.py:231 ANTHROPIC_API_KEY environment variable not set. Claude features will not work.
+WARNING  root:ai_service.py:278 No local model found. Set LLAMA_MODEL_PATH environment variable to use local LLM.
+INFO     root:settings.py:252 No config file found, using default: /home/runner/.config/aivim/settings.json
+INFO     root:settings.py:267 Config file not found: /home/runner/.config/aivim/settings.json
+________________ TestNLPShiftEnter.test_handle_key_shift_enter _________________
+tests/test_nlp_shift_enter.py:94: in test_handle_key_shift_enter
+    self.assertTrue(result, "Shift+Enter was not recognized or handled")
+E   AssertionError: False is not true : Shift+Enter was not recognized or handled
+____________ TestReplaceFunctionality.test_substitute_empty_pattern ____________
+tests/test_search_replace.py:274: in test_substitute_empty_pattern
+    self.assertEqual(count, 0)
+E   AssertionError: 1 != 0
+------------------------------ Captured log call -------------------------------
+WARNING  root:ai_service.py:134 No config file found. Using environment variables.
+INFO     root:ai_service.py:213 OpenAI client initialized successfully
+WARNING  root:ai_service.py:231 ANTHROPIC_API_KEY environment variable not set. Claude features will not work.
+WARNING  root:ai_service.py:278 No local model found. Set LLAMA_MODEL_PATH environment variable to use local LLM.
+INFO     root:settings.py:252 No config file found, using default: /home/runner/.config/aivim/settings.json
+INFO     root:settings.py:267 Config file not found: /home/runner/.config/aivim/settings.json
+INFO     root:editor.py:2093 Status: 1 substitution(s) on 1 line(s)
+________________ TestReplaceFunctionality.test_substitute_undo _________________
+tests/test_search_replace.py:291: in test_substitute_undo
+    self.assertEqual(self.editor.buffer.get_line(0), original_line)
+E   AssertionError: 'baz bar baz' != 'foo bar foo'
+E   - baz bar baz
+E   + foo bar foo
+------------------------------ Captured log call -------------------------------
+WARNING  root:ai_service.py:134 No config file found. Using environment variables.
+INFO     root:ai_service.py:213 OpenAI client initialized successfully
+WARNING  root:ai_service.py:231 ANTHROPIC_API_KEY environment variable not set. Claude features will not work.
+WARNING  root:ai_service.py:278 No local model found. Set LLAMA_MODEL_PATH environment variable to use local LLM.
+INFO     root:settings.py:252 No config file found, using default: /home/runner/.config/aivim/settings.json
+INFO     root:settings.py:267 Config file not found: /home/runner/.config/aivim/settings.json
+INFO     root:editor.py:2093 Status: 2 substitution(s) on 1 line(s)
+___ TestDisplaySettingsIntegration.test_display_respects_line_number_setting ___
+tests/test_settings.py:445: in test_display_respects_line_number_setting
+    display.update_text(lines, 0, 0, 0, editor=editor)
+aivim/display.py:199: in update_text
+    max_y, max_x = self.text_win.getmaxyx()
+E   TypeError: cannot unpack non-iterable Mock object
+------------------------------ Captured log call -------------------------------
+INFO     root:settings.py:252 No config file found, using default: /home/runner/.config/aivim/settings.json
+INFO     root:settings.py:267 Config file not found: /home/runner/.config/aivim/settings.json
+=============================== warnings summary ===============================
+tests/test_ai_features.py::TestNLPMode::test_enter_nlp_mode
+  /home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/_pytest/threadexception.py:82: PytestUnhandledThreadExceptionWarning: Exception in thread Thread-6 (_live_detection_loop)
+  
+  Traceback (most recent call last):
+    File "/nix/store/7d088dip86hlzri9sk0h78b63yfmx0a0-python3-3.11.13/lib/python3.11/threading.py", line 1045, in _bootstrap_inner
+      self.run()
+    File "/nix/store/7d088dip86hlzri9sk0h78b63yfmx0a0-python3-3.11.13/lib/python3.11/threading.py", line 982, in run
+      self._target(*self._args, **self._kwargs)
+    File "/home/runner/workspace/aivim/nlp_mode.py", line 1023, in _live_detection_loop
+      while self.live_mode_enabled and self.editor.mode == "NLP":
+                                       ^^^^^^^^^^^^^^^^
+    File "/nix/store/7d088dip86hlzri9sk0h78b63yfmx0a0-python3-3.11.13/lib/python3.11/unittest/mock.py", line 653, in __getattr__
+      raise AttributeError("Mock object has no attribute %r" % name)
+  AttributeError: Mock object has no attribute 'mode'
+  
+    warnings.warn(pytest.PytestUnhandledThreadExceptionWarning(msg))
+
+tests/test_ai_features.py::TestNLPMode::test_exit_nlp_mode
+  /home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/_pytest/threadexception.py:82: PytestUnhandledThreadExceptionWarning: Exception in thread Thread-7 (_live_detection_loop)
+  
+  Traceback (most recent call last):
+    File "/nix/store/7d088dip86hlzri9sk0h78b63yfmx0a0-python3-3.11.13/lib/python3.11/threading.py", line 1045, in _bootstrap_inner
+      self.run()
+    File "/nix/store/7d088dip86hlzri9sk0h78b63yfmx0a0-python3-3.11.13/lib/python3.11/threading.py", line 982, in run
+      self._target(*self._args, **self._kwargs)
+    File "/home/runner/workspace/aivim/nlp_mode.py", line 1023, in _live_detection_loop
+      while self.live_mode_enabled and self.editor.mode == "NLP":
+                                       ^^^^^^^^^^^^^^^^
+    File "/nix/store/7d088dip86hlzri9sk0h78b63yfmx0a0-python3-3.11.13/lib/python3.11/unittest/mock.py", line 653, in __getattr__
+      raise AttributeError("Mock object has no attribute %r" % name)
+  AttributeError: Mock object has no attribute 'mode'
+  
+    warnings.warn(pytest.PytestUnhandledThreadExceptionWarning(msg))
+
+tests/test_ai_features.py::TestNLPMode::test_live_mode_toggle
+  /home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/_pytest/threadexception.py:82: PytestUnhandledThreadExceptionWarning: Exception in thread Thread-10 (_live_detection_loop)
+  
+  Traceback (most recent call last):
+    File "/nix/store/7d088dip86hlzri9sk0h78b63yfmx0a0-python3-3.11.13/lib/python3.11/threading.py", line 1045, in _bootstrap_inner
+      self.run()
+    File "/nix/store/7d088dip86hlzri9sk0h78b63yfmx0a0-python3-3.11.13/lib/python3.11/threading.py", line 982, in run
+      self._target(*self._args, **self._kwargs)
+    File "/home/runner/workspace/aivim/nlp_mode.py", line 1023, in _live_detection_loop
+      while self.live_mode_enabled and self.editor.mode == "NLP":
+                                       ^^^^^^^^^^^^^^^^
+    File "/nix/store/7d088dip86hlzri9sk0h78b63yfmx0a0-python3-3.11.13/lib/python3.11/unittest/mock.py", line 653, in __getattr__
+      raise AttributeError("Mock object has no attribute %r" % name)
+  AttributeError: Mock object has no attribute 'mode'
+  
+    warnings.warn(pytest.PytestUnhandledThreadExceptionWarning(msg))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================================ tests coverage ================================
+_______________ coverage: platform linux, python 3.11.13-final-0 _______________
+
+Name                       Stmts   Miss  Cover   Missing
+--------------------------------------------------------
+aivim/__init__.py              7      0   100%
+aivim/ai_service.py          431    195    55%   16-17, 22-23, 121-122, 150, 159-171, 175-176, 180-185, 192-204, 214-219, 225-229, 232-233, 261-262, 267-276, 280, 295-296, 302, 326-328, 334-336, 344-346, 351-385, 397-435, 452-464, 479-515, 530, 551, 556, 561-607, 611-658, 663, 666, 713, 776-777, 855, 860-861
+aivim/buffer.py               88      0   100%
+aivim/command_handler.py     502    178    65%   196-198, 219-221, 243-245, 265-267, 283-285, 299-300, 322-323, 346-347, 371-372, 398-402, 430-431, 453-457, 467-478, 508-509, 516, 540-542, 561-565, 593-598, 766-767, 770-771, 776-778, 792-793, 801-802, 806-808, 819-820, 825-827, 840-853, 868-870, 888-890, 917-919, 929-934, 943-950, 963-996, 1008-1009, 1043-1061, 1070-1082, 1095-1097, 1120-1122, 1149-1151, 1181-1183, 1205, 1216-1220
+aivim/commands.py             87     87     0%   4-285
+aivim/display.py             630    481    24%   123-138, 157, 188-196, 208, 214-220, 228, 249-322, 329, 342-356, 367-398, 409-447, 457-463, 473-479, 483-489, 493-499, 504-517, 521-560, 564-579, 595-661, 665-699, 711-832, 841-870, 874-885, 889-920, 931-976, 987-991, 1005-1043, 1053-1109, 1120-1128, 1132-1138, 1142-1159, 1162, 1201-1203
+aivim/editor.py             1579   1082    31%   45, 49, 122, 231, 235-237, 241-243, 252-264, 322-326, 333-343, 389, 393, 396-398, 408, 417, 437-453, 458-488, 493-570, 574-823, 830-842, 849-860, 879, 883, 885, 891, 905, 937, 949, 956, 964-967, 976-977, 1007-1008, 1070, 1072, 1083, 1087, 1095, 1102-1103, 1148-1191, 1195-1196, 1237, 1239, 1251-1253, 1266-1294, 1301-1302, 1334-1342, 1355, 1364-1554, 1558-1668, 1673-1740, 1744-1847, 1859-1885, 1890-1990, 1998-2002, 2006-2009, 2014-2052, 2058-2059, 2069-2088, 2103-2104, 2114-2115, 2127-2128, 2132-2134, 2139-2151, 2162-2195, 2199-2258, 2270-2271, 2299, 2321, 2332-2342, 2353-2394, 2398-2502, 2513-2558, 2562-2590, 2600-2630, 2634-2662, 2666-2680, 2688, 2693-2711, 2715-2750, 2766-2768, 2806-2928
+aivim/file_browser.py        208    140    33%   31, 42, 50, 54, 65-67, 96-116, 148-150, 154-158, 162-218, 223-241, 254-321, 325-359
+aivim/history.py              56      0   100%
+aivim/key_handler.py         174     63    64%   46, 64-65, 68-69, 128-144, 171, 174-177, 186-188, 196-211, 215-225, 237-241, 247-254, 270, 273, 276, 279, 284, 288-289, 331-332, 336-337
+aivim/modes.py                 7      0   100%
+aivim/nlp_mode.py            616    424    31%   83-84, 88-89, 99-100, 108-109, 116-117, 128, 136-137, 154-155, 162-174, 178-341, 350, 376, 382, 392, 410-411, 413-414, 416-417, 437, 481-482, 492-504, 510, 516, 538-729, 740-741, 749-750, 754-763, 796-798, 821-1002, 1007, 1024-1048, 1055-1124, 1137-1205, 1209-1233, 1238-1245, 1250-1260, 1276-1294, 1298-1378, 1382-1414, 1421-1436
+aivim/run_editor.py           47     47     0%   7-105
+aivim/settings.py            235     18    92%   236, 247-248, 292-294, 325-327, 342-346, 410, 413-415
+aivim/syntax.py               55     43    22%   17-38, 43, 83-96, 109-142, 154-164, 173-176, 185-187
+aivim/ui.py                   88     88     0%   5-208
+aivim/utils.py                62      0   100%
+--------------------------------------------------------
+TOTAL                       4872   2846    42%
+Coverage HTML written to dir htmlcov
+=========================== short test summary info ============================
+FAILED tests/test_ai_features.py::TestAIServiceIntegration::test_missing_api_keys_error_handling
+FAILED tests/test_ai_features.py::TestAIServiceIntegration::test_openai_integration
+FAILED tests/test_ai_features.py::TestAIServiceIntegration::test_timeout_handling
+FAILED tests/test_ai_features.py::TestEditorAIIntegration::test_ai_command_threading
+FAILED tests/test_ai_features.py::TestEditorAIIntegration::test_ai_response_display
+FAILED tests/test_buffer.py::TestBuffer::test_get_content - AssertionError: '...
+FAILED tests/test_command_handler.py::TestCommandHandler::test_cmd_ai_query
+FAILED tests/test_command_handler.py::TestCommandHandler::test_cmd_analyze - ...
+FAILED tests/test_command_handler.py::TestCommandHandler::test_cmd_explain - ...
+FAILED tests/test_command_handler.py::TestCommandHandler::test_cmd_generate
+FAILED tests/test_command_handler.py::TestCommandHandler::test_cmd_improve - ...
+FAILED tests/test_command_handler.py::TestCommandHandler::test_cmd_set_option
+FAILED tests/test_editor.py::TestEditor::test_initialization - AssertionError...
+FAILED tests/test_editor.py::TestEditor::test_load_nonexistent_file - Asserti...
+FAILED tests/test_editor.py::TestEditor::test_quit_with_unsaved_changes - Att...
+FAILED tests/test_editor.py::TestEditor::test_run_ai_command - assert False i...
+FAILED tests/test_file_operations.py::TestFileOperations::test_load_file_with_permissions_check_readonly
+FAILED tests/test_file_operations.py::TestFileOperations::test_save_file_disk_full
+FAILED tests/test_key_handler.py::TestKeyHandler::test_handle_command_mode_typing
+FAILED tests/test_key_handler.py::TestKeyHandler::test_handle_global_keys - A...
+FAILED tests/test_key_handler.py::TestKeyHandler::test_handle_insert_mode_character_insertion
+FAILED tests/test_local_llm_logging.py::TestLocalLLMLogging::test_local_llm_stdout_capture
+FAILED tests/test_model_selector.py::TestModelSelector::test_model_selector_display
+FAILED tests/test_nlp_shift_enter.py::TestNLPShiftEnter::test_handle_key_shift_enter
+FAILED tests/test_search_replace.py::TestReplaceFunctionality::test_substitute_empty_pattern
+FAILED tests/test_search_replace.py::TestReplaceFunctionality::test_substitute_undo
+FAILED tests/test_settings.py::TestDisplaySettingsIntegration::test_display_respects_line_number_setting
+================= 27 failed, 260 passed, 3 warnings in 12.54s ==================

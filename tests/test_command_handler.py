@@ -94,7 +94,7 @@ class TestCommandHandler(unittest.TestCase):
         """Test explain command"""
         # Test successful explain
         self.command_handler.execute("explain 1 5")
-        self.editor.ai_explain.assert_called_once_with(0, 4)  # Convert 1-based to 0-based
+        self.editor.ai_explain.assert_called_once_with(0, 4, blocking=False)  # Convert 1-based to 0-based
         
         # Test with error
         self.editor.ai_explain.side_effect = Exception("Explain error")
@@ -106,7 +106,7 @@ class TestCommandHandler(unittest.TestCase):
         """Test improve command"""
         # Test successful improve
         self.command_handler.execute("improve 1 5")
-        self.editor.ai_improve.assert_called_once_with(0, 4)  # Convert 1-based to 0-based
+        self.editor.ai_improve.assert_called_once_with(0, 4, blocking=False)  # Convert 1-based to 0-based
         
         # Test with error
         self.editor.ai_improve.side_effect = Exception("Improve error")
@@ -118,7 +118,7 @@ class TestCommandHandler(unittest.TestCase):
         """Test analyze command"""
         # Test successful analyze
         self.command_handler.execute("analyze 1 5")
-        self.editor.ai_analyze_code.assert_called_once_with(0, 4)  # Convert 1-based to 0-based
+        self.editor.ai_analyze_code.assert_called_once_with(0, 4, blocking=False)  # Convert 1-based to 0-based
         
         # Test with error
         self.editor.ai_analyze_code.side_effect = Exception("Analyze error")
@@ -130,7 +130,7 @@ class TestCommandHandler(unittest.TestCase):
         """Test generate command"""
         # Test successful generate
         self.command_handler.execute("generate 1 Test function")
-        self.editor.ai_generate.assert_called_once_with(0, "Test function")  # Convert 1-based to 0-based
+        self.editor.ai_generate.assert_called_once_with(0, "Test function", blocking=False)  # Convert 1-based to 0-based
         
         # Test with error
         self.editor.ai_generate.side_effect = Exception("Generate error")
@@ -142,7 +142,7 @@ class TestCommandHandler(unittest.TestCase):
         """Test AI query command"""
         # Test successful AI query
         self.command_handler.execute("ai How does this code work?")
-        self.editor.ai_custom_query.assert_called_once_with("How does this code work?")
+        self.editor.ai_custom_query.assert_called_once_with("How does this code work?", blocking=False)
         
         # Test with error
         self.editor.ai_custom_query.side_effect = Exception("Query error")

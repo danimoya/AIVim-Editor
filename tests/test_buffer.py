@@ -131,10 +131,12 @@ class TestBuffer(unittest.TestCase):
         
         # Single line
         self.buffer.lines = ["single line"]
+        self.buffer._content_cache = None  # Invalidate cache after directly setting lines
         self.assertEqual(self.buffer.get_content(), "single line")
         
         # Multiple lines
         self.buffer.lines = ["line1", "line2", "line3"]
+        self.buffer._content_cache = None  # Invalidate cache after directly setting lines
         self.assertEqual(self.buffer.get_content(), "line1\nline2\nline3")
     
     def test_set_content(self):
