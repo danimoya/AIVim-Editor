@@ -160,9 +160,36 @@ class KeyHandler:
             current_line = self.editor.buffer.get_line(self.editor.cursor_y)
             new_line = current_line[self.editor.cursor_x:]
             self.editor.buffer.replace_line(self.editor.cursor_y, current_line[:self.editor.cursor_x])
-            self.editor.buffer.insert_line(self.editor.cursor_y + 1, new_line)
+            
+            # Handle autoindent
+            indent = ""
+            if hasattr(self.editor, 'settings') and self.editor.settings.editor.autoindent:
+                # Calculate indentation of current line
+                indent_count = 0
+                for char in current_line:
+                    if char == ' ':
+                        indent_count += 1
+                    elif char == '\t':
+                        # Consider tab as equivalent to tabstop spaces
+                        if hasattr(self.editor, 'settings'):
+                            indent_count += self.editor.settings.editor.tabstop
+                        else:
+                            indent_count += 4
+                    else:
+                        break
+                
+                # Apply same indentation to new line
+                if hasattr(self.editor, 'settings') and self.editor.settings.editor.expandtab:
+                    indent = ' ' * indent_count
+                else:
+                    # Use tabs and spaces based on original indentation
+                    tabs = indent_count // self.editor.settings.editor.tabstop if hasattr(self.editor, 'settings') else indent_count // 4
+                    spaces = indent_count % self.editor.settings.editor.tabstop if hasattr(self.editor, 'settings') else indent_count % 4
+                    indent = '\t' * tabs + ' ' * spaces
+            
+            self.editor.buffer.insert_line(self.editor.cursor_y + 1, indent + new_line)
             self.editor.cursor_y += 1
-            self.editor.cursor_x = 0
+            self.editor.cursor_x = len(indent)
         
         elif key == self.KEY_BACKSPACE:
             # Handle backspace
@@ -198,9 +225,20 @@ class KeyHandler:
                 self.editor.buffer.delete_line(self.editor.cursor_y + 1)
         
         elif key == self.KEY_TAB:
-            # Insert tab (4 spaces)
-            for _ in range(4):
-                self.editor.insert_char(' ')
+            # Insert tab based on settings
+            if hasattr(self.editor, 'settings'):
+                if self.editor.settings.editor.expandtab:
+                    # Insert spaces according to tabstop
+                    num_spaces = self.editor.settings.editor.tabstop
+                    for _ in range(num_spaces):
+                        self.editor.insert_char(' ')
+                else:
+                    # Insert actual tab character
+                    self.editor.insert_char('\t')
+            else:
+                # Fallback to default behavior (4 spaces)
+                for _ in range(4):
+                    self.editor.insert_char(' ')
         
         elif 32 <= key <= 126:  # Printable ASCII characters
             self.editor.insert_char(chr(key))

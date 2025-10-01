@@ -139,7 +139,8 @@ class Display:
     
     def update_text(self, lines: List[str], cursor_y: int, cursor_x: int, 
                     scroll_y: int, selection: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None,
-                    search_results: List[Tuple[int, int, int]] = None, current_search_index: int = -1) -> None:
+                    search_results: List[Tuple[int, int, int]] = None, current_search_index: int = -1, 
+                    editor=None) -> None:
         """
         Update the text display
         
@@ -206,16 +207,20 @@ class Display:
             if i >= max_y:
                 break
                 
-            # Display line number
-            gutter = f"{line_num+1:3d} "
-            try:
-                self.text_win.addstr(i, 0, gutter, self.COLOR_LINENO)
-            except curses.error:
-                # Skip if we can't write the line number (shouldn't happen)
-                continue
+            # Display line number if enabled
+            gutter_offset = 0
+            if editor and hasattr(editor, 'settings') and editor.settings.editor.number:
+                # Show line numbers
+                gutter = f"{line_num+1:3d} "
+                try:
+                    self.text_win.addstr(i, 0, gutter, self.COLOR_LINENO)
+                except curses.error:
+                    # Skip if we can't write the line number (shouldn't happen)
+                    continue
+                gutter_offset = self.gutter_width
             
             # Calculate available width for text (don't draw past edge)
-            available_width = max_x - self.gutter_width - 1  # Leave 1 char margin
+            available_width = max_x - gutter_offset - 1  # Leave 1 char margin
             
             # If the line is too long, truncate it
             display_line = line

@@ -50,7 +50,15 @@ class CommandHandler:
             r'^analyze\s+(\d+)\s+(\d+)$': self._cmd_analyze,
             r'^generate\s+(\d+)\s+(.+)$': self._cmd_generate,
             r'^ai\s+(.+)$': self._cmd_ai_query,
-            r'^set\s+(.+)$': self._cmd_set_option,
+            # Settings commands - more specific patterns first
+            r'^set\?$': self._cmd_set_help,
+            r'^set\s+all$': self._cmd_set_all,
+            r'^set\s+(\w+)!$': self._cmd_set_toggle,
+            r'^set\s+no(\w+)$': self._cmd_set_no_option,
+            r'^set\s+(\w+)=(.*)$': self._cmd_set_value,
+            r'^set\s+(\w+)$': self._cmd_set_show,
+            r'^source\s+(.+)$': self._cmd_source,
+            r'^source$': self._cmd_source_default,
             r'^model$': self._cmd_model_selector,
             r'^model\s+(.+)$': self._cmd_set_model,
             r'^y$': self._cmd_confirm_yes,
@@ -276,28 +284,247 @@ class CommandHandler:
             self.editor.set_status_message(f"Error executing AI query: {str(e)}")
             return False
     
-    def _cmd_set_option(self, option: str) -> bool:
+    def _cmd_set_help(self) -> bool:
         """
-        Handle the set option command (:set option).
-
-        Args:
-            option: The option string
+        Handle the set help command (:set?).
 
         Returns:
             True if successful, False otherwise
         """
-        # Handle AI model selection (for backward compatibility)
-        if option.lower() in ["openai", "claude", "local"]:
-            try:
-                self.editor.set_ai_model(option.lower())
-                self.editor.set_status_message(f"AI model set to: {option}")
+        if hasattr(self.editor, 'settings'):
+            help_lines = self.editor.settings.get_help()
+            self.editor.display.show_dialog("Settings Help", help_lines)
+            return True
+        else:
+            self.editor.set_status_message("Settings system not initialized")
+            return False
+    
+    def _cmd_set_all(self) -> bool:
+        """
+        Handle the set all command (:set all).
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if hasattr(self.editor, 'settings'):
+            all_settings = self.editor.settings.get_all()
+            lines = ["All Settings", "=" * 50, ""]
+            
+            for category, settings in all_settings.items():
+                lines.append(f"{category.upper()} Settings:")
+                for key, value in settings.items():
+                    lines.append(f"  {key}={value}")
+                lines.append("")
+            
+            self.editor.display.show_dialog("All Settings", lines)
+            return True
+        else:
+            self.editor.set_status_message("Settings system not initialized")
+            return False
+    
+    def _cmd_set_toggle(self, option: str) -> bool:
+        """
+        Handle the set toggle command (:set option!).
+
+        Args:
+            option: Option to toggle
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if hasattr(self.editor, 'settings'):
+            if self.editor.settings.toggle(option):
+                value = self.editor.settings.get(option)
+                self.editor.set_status_message(f"{option}={value}")
+                # Apply the setting immediately if relevant
+                self._apply_setting(option, value)
                 return True
-            except Exception as e:
-                self.editor.set_status_message(f"Error setting AI model: {str(e)}")
+            else:
+                self.editor.set_status_message(f"Cannot toggle option: {option}")
                 return False
         else:
-            self.editor.set_status_message(f"Unknown option: {option}")
+            self.editor.set_status_message("Settings system not initialized")
             return False
+    
+    def _cmd_set_no_option(self, option: str) -> bool:
+        """
+        Handle the set no option command (:set nooption).
+
+        Args:
+            option: Option to turn off
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if hasattr(self.editor, 'settings'):
+            # Only works for boolean options
+            current = self.editor.settings.get(option)
+            if isinstance(current, bool):
+                if self.editor.settings.set(option, False):
+                    self.editor.set_status_message(f"no{option}")
+                    # Apply the setting immediately if relevant
+                    self._apply_setting(option, False)
+                    return True
+            self.editor.set_status_message(f"Invalid option: no{option}")
+            return False
+        else:
+            self.editor.set_status_message("Settings system not initialized")
+            return False
+    
+    def _cmd_set_value(self, option: str, value: str) -> bool:
+        """
+        Handle the set value command (:set option=value).
+
+        Args:
+            option: Option name
+            value: New value
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if hasattr(self.editor, 'settings'):
+            # Strip quotes if present
+            if value.startswith('"') and value.endswith('"'):
+                value = value[1:-1]
+            elif value.startswith("'") and value.endswith("'"):
+                value = value[1:-1]
+            
+            if self.editor.settings.set(option, value):
+                self.editor.set_status_message(f"{option}={value}")
+                # Apply the setting immediately if relevant
+                self._apply_setting(option, self.editor.settings.get(option))
+                return True
+            else:
+                self.editor.set_status_message(f"Error setting {option}={value}")
+                return False
+        else:
+            self.editor.set_status_message("Settings system not initialized")
+            return False
+    
+    def _cmd_set_show(self, option: str) -> bool:
+        """
+        Handle the set show command (:set option).
+
+        Args:
+            option: Option to show
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if hasattr(self.editor, 'settings'):
+            value = self.editor.settings.get(option)
+            if value is not None:
+                # For boolean options, show with "no" prefix if False
+                if isinstance(value, bool):
+                    if value:
+                        self.editor.set_status_message(f"{option}")
+                    else:
+                        self.editor.set_status_message(f"no{option}")
+                else:
+                    self.editor.set_status_message(f"{option}={value}")
+                return True
+            else:
+                self.editor.set_status_message(f"Unknown option: {option}")
+                return False
+        else:
+            self.editor.set_status_message("Settings system not initialized")
+            return False
+    
+    def _cmd_source(self, path: str) -> bool:
+        """
+        Handle the source command (:source path).
+
+        Args:
+            path: Path to settings file to load
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if hasattr(self.editor, 'settings'):
+            # Expand tilde and environment variables
+            path = os.path.expandvars(os.path.expanduser(path))
+            
+            if self.editor.settings.load(path):
+                self.editor.set_status_message(f"Sourced {path}")
+                # Apply all settings
+                self._apply_all_settings()
+                return True
+            else:
+                self.editor.set_status_message(f"Error sourcing {path}")
+                return False
+        else:
+            self.editor.set_status_message("Settings system not initialized")
+            return False
+    
+    def _cmd_source_default(self) -> bool:
+        """
+        Handle the source command without path (:source).
+        Reloads the default config file.
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if hasattr(self.editor, 'settings'):
+            if self.editor.settings.load():
+                self.editor.set_status_message("Reloaded settings")
+                # Apply all settings
+                self._apply_all_settings()
+                return True
+            else:
+                self.editor.set_status_message("Error reloading settings")
+                return False
+        else:
+            self.editor.set_status_message("Settings system not initialized")
+            return False
+    
+    def _apply_setting(self, option: str, value: Any) -> None:
+        """
+        Apply a setting to the editor immediately.
+
+        Args:
+            option: Setting name
+            value: Setting value
+        """
+        # Map settings to editor properties/methods
+        if option == "number" or option == "relativenumber":
+            # Trigger display refresh
+            if hasattr(self.editor, 'display') and self.editor.display:
+                self.editor.display.refresh = True
+        elif option == "cursorline" or option == "cursorcolumn":
+            # Trigger display refresh
+            if hasattr(self.editor, 'display') and self.editor.display:
+                self.editor.display.refresh = True
+        elif option in ["ignorecase", "smartcase", "hlsearch", "incsearch"]:
+            # Update search settings
+            if option == "hlsearch":
+                self.editor.search_highlighting = value
+            # Other search settings are handled dynamically during search
+        elif option == "default_model":
+            # Update AI model
+            if hasattr(self.editor, 'set_ai_model'):
+                self.editor.set_ai_model(value)
+        elif option == "nlp_live_mode":
+            # Update NLP live mode
+            if hasattr(self.editor, 'nlp_handler') and self.editor.nlp_handler:
+                self.editor.nlp_handler.live_mode = value
+    
+    def _apply_all_settings(self) -> None:
+        """
+        Apply all current settings to the editor.
+        """
+        if not hasattr(self.editor, 'settings'):
+            return
+        
+        # Apply display settings
+        if hasattr(self.editor, 'display') and self.editor.display:
+            self.editor.display.refresh = True
+        
+        # Apply search settings
+        self.editor.search_highlighting = self.editor.settings.search.hlsearch
+        
+        # Apply AI settings
+        if hasattr(self.editor, 'set_ai_model'):
+            self.editor.set_ai_model(self.editor.settings.ai.default_model)
     
     def _cmd_model_selector(self) -> bool:
         """

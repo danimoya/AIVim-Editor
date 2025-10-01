@@ -14,6 +14,7 @@ from .display import Display
 from .command_handler import CommandHandler
 from .ai_service import AIService
 from .history import History
+from .settings import Settings
 
 
 class Tab:
@@ -67,6 +68,7 @@ class Editor:
         self.display = None  # Will be initialized in start()
         self.command_handler = None  # Will be initialized in start()
         self.ai_service = AIService()
+        self.settings = Settings()  # Initialize settings
         
         # Create initial tab
         initial_tab = Tab("Untitled", filename=filename)
@@ -103,7 +105,7 @@ class Editor:
         self.search_direction = "forward" # Direction of search (forward/backward)
         self.search_results = []          # List of (line, col) positions of search matches
         self.current_search_index = -1    # Index in search_results of current match
-        self.search_highlighting = True   # Whether to highlight search matches
+        self.search_highlighting = self.settings.search.hlsearch  # Use settings for highlighting
         self.search_case_sensitive = None # None=smart case, True=case sensitive, False=case insensitive
         self.search_regex = False         # Whether to use regex search
         self.search_very_magic = False    # \v flag for very magic mode
@@ -1968,7 +1970,8 @@ class Editor:
                     self.scroll_y,
                     validated_selection,
                     self.search_results if self.search_highlighting else None,
-                    self.current_search_index
+                    self.current_search_index,
+                    editor=self
                 )
             else:
                 self.display.update_text(
@@ -1978,7 +1981,8 @@ class Editor:
                     self.scroll_y,
                     None,
                     self.search_results if self.search_highlighting else None,
-                    self.current_search_index
+                    self.current_search_index,
+                    editor=self
                 )
         
         # Update command line if in command mode
