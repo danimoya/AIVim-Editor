@@ -278,8 +278,8 @@ class Editor:
             if self.display:
                 self.set_status_message(f"Error loading file: {str(e)}")
     
-    def save_file(self, filename: Optional[str] = None) -> None:
-        """Save buffer content to a file"""
+    def save_file(self, filename: Optional[str] = None, create_backup: bool = True) -> None:
+        """Save buffer content to a file with optional backup"""
         save_filename = filename or self.filename
         
         if not save_filename:
@@ -287,18 +287,161 @@ class Editor:
             return
         
         try:
+            # Check write permissions
+            if os.path.exists(save_filename):
+                if not os.access(save_filename, os.W_OK):
+                    self.set_status_message(f"Permission denied: cannot write to {save_filename}")
+                    return
+                    
+                # Create backup if enabled and file exists
+                if create_backup and getattr(self, 'auto_backup', True):
+                    from .utils import create_backup_file
+                    backup_path = create_backup_file(save_filename)
+                    if backup_path:
+                        logging.info(f"Created backup: {backup_path}")
+            
             content = self.buffer.get_content()
-            with open(save_filename, 'w') as f:
-                f.write(content)
+            
+            # Write to temporary file first for safety
+            import tempfile
+            temp_fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(save_filename) or '.')
+            try:
+                with os.fdopen(temp_fd, 'w') as f:
+                    f.write(content)
+                # Rename temp file to target
+                os.replace(temp_path, save_filename)
+            except:
+                # Clean up temp file on error
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+                raise
             
             self.buffer.mark_as_saved()
             self.filename = save_filename
             
             self.set_status_message(f"Saved: {save_filename} ({len(content)} bytes)")
             logging.info(f"Saved file: {save_filename}")
+        except OSError as e:
+            if e.errno == 28:  # ENOSPC - No space left on device
+                self.set_status_message(f"Error: Disk full, cannot save {save_filename}")
+            elif e.errno == 13:  # EACCES - Permission denied
+                self.set_status_message(f"Permission denied: cannot write to {save_filename}")
+            else:
+                self.set_status_message(f"Error saving file: {str(e)}")
+            logging.error(f"Error saving file: {str(e)}")
         except Exception as e:
             self.set_status_message(f"Error saving file: {str(e)}")
             logging.error(f"Error saving file: {str(e)}")
+    
+    def reload_file(self, force: bool = False) -> None:
+        """Reload the current file from disk"""
+        if not self.filename:
+            raise ValueError("No file to reload")
+            
+        if not force and self.buffer.is_modified():
+            raise ValueError("File has unsaved changes (use force=True to discard)")
+            
+        try:
+            if not os.path.exists(self.filename):
+                raise FileNotFoundError(f"File not found: {self.filename}")
+                
+            with open(self.filename, 'r') as f:
+                content = f.read()
+                self.buffer.set_content(content)
+                self.buffer.mark_as_saved()
+                
+            self.set_status_message(f"Reloaded: {self.filename}")
+            logging.info(f"Reloaded file: {self.filename}")
+        except Exception as e:
+            logging.error(f"Error reloading file: {str(e)}")
+            raise
+    
+    def is_binary_file(self, filename: str) -> bool:
+        """Check if a file is binary"""
+        try:
+            # Check if file exists
+            if not os.path.exists(filename):
+                return False
+                
+            # Read first 8192 bytes to check for binary content
+            with open(filename, 'rb') as f:
+                chunk = f.read(8192)
+                
+            # Check for null bytes (common in binary files)
+            if b'\0' in chunk:
+                return True
+                
+            # Check if the content is mostly non-text
+            text_chars = bytearray({7,8,9,10,12,13,27} | set(range(0x20, 0x100)) - {0x7f})
+            non_text = 0
+            
+            for byte in chunk:
+                if byte not in text_chars:
+                    non_text += 1
+                    
+            # If more than 30% non-text, consider it binary
+            if len(chunk) > 0 and non_text / len(chunk) > 0.3:
+                return True
+                
+            return False
+        except Exception as e:
+            logging.error(f"Error checking if file is binary: {str(e)}")
+            return False
+    
+    def load_file_with_permissions_check(self, filename: str, force: bool = False) -> None:
+        """Load a file with permissions and binary file checking"""
+        try:
+            # Expand path
+            filename = os.path.expanduser(filename)
+            
+            # Check if switching files and current buffer has unsaved changes
+            if not force and self.filename and self.buffer.is_modified():
+                raise ValueError("Current buffer has unsaved changes")
+            
+            # Check if file is binary
+            if self.is_binary_file(filename):
+                raise ValueError(f"Cannot edit binary file: {filename}")
+            
+            # Check read permissions
+            if os.path.exists(filename):
+                if not os.access(filename, os.R_OK):
+                    raise PermissionError(f"Permission denied: cannot read {filename}")
+                    
+                # Check if file is read-only
+                if not os.access(filename, os.W_OK):
+                    self.set_status_message(f"Warning: {filename} is read-only")
+                    
+            # Load the file
+            self.load_file(filename)
+            
+            # Update tab name
+            if hasattr(self, 'current_tab'):
+                self.current_tab.name = os.path.basename(filename)
+                
+        except Exception as e:
+            logging.error(f"Error loading file with permissions check: {str(e)}")
+            raise
+    
+    def open_file_browser(self) -> None:
+        """Open the file browser/explorer"""
+        # Import here to avoid circular dependency
+        from .file_browser import FileBrowser
+        
+        try:
+            # Create and run the file browser
+            browser = FileBrowser(self)
+            selected_file = browser.browse()
+            
+            if selected_file:
+                # Open the selected file
+                self.load_file_with_permissions_check(selected_file)
+                
+        except ImportError:
+            # If file_browser module doesn't exist yet, show a temporary implementation
+            self.set_status_message("File browser not yet implemented")
+        except Exception as e:
+            logging.error(f"Error opening file browser: {str(e)}")
+            self.set_status_message(f"Error opening file browser: {str(e)}")
     
     def start(self, stdscr) -> None:
         """Initialize and start the editor with curses"""

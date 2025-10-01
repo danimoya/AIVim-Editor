@@ -30,11 +30,21 @@ class CommandHandler:
             Dictionary mapping command patterns to handler functions
         """
         commands = {
+            # File operations
             r'^w$': self._cmd_write,
             r'^w\s+(.+)$': self._cmd_write_as,
             r'^q$': self._cmd_quit,
             r'^wq$': self._cmd_write_quit,
             r'^q!$': self._cmd_force_quit,
+            r'^e$': self._cmd_edit_current,  # Edit current file (reload)
+            r'^e\s+(.+)$': self._cmd_edit,    # Edit specified file
+            r'^e!$': self._cmd_force_edit_current,  # Force reload current file
+            r'^e!\s+(.+)$': self._cmd_force_edit,   # Force edit specified file
+            r'^new$': self._cmd_new_buffer,   # Create new buffer/tab
+            r'^new\s+(.+)$': self._cmd_new_buffer_named,  # Create new buffer with name
+            r'^saveas\s+(.+)$': self._cmd_save_as,  # Save with different filename
+            r'^browse$': self._cmd_browse_files,     # Open file browser
+            # AI operations
             r'^explain\s+(\d+)\s+(\d+)$': self._cmd_explain,
             r'^improve\s+(\d+)\s+(\d+)$': self._cmd_improve,
             r'^analyze\s+(\d+)\s+(\d+)$': self._cmd_analyze,
@@ -508,6 +518,185 @@ class CommandHandler:
         
         self.editor.display.show_dialog("Help", help_text)
         return True
+    
+    def _cmd_edit_current(self) -> bool:
+        """
+        Handle the edit command without filename (:e).
+        Reloads the current file from disk.
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.editor.filename:
+            self.editor.set_status_message("No file to reload")
+            return False
+            
+        if self.editor.buffer.is_modified():
+            self.editor.set_status_message("File has unsaved changes (use :e! to force)")
+            return False
+            
+        try:
+            self.editor.reload_file()
+            return True
+        except Exception as e:
+            self.editor.set_status_message(f"Error reloading file: {str(e)}")
+            return False
+    
+    def _cmd_edit(self, filename: str) -> bool:
+        """
+        Handle the edit command with filename (:e filename).
+        Opens the specified file in the current tab.
+        
+        Args:
+            filename: File to open
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if self.editor.buffer.is_modified():
+            self.editor.set_status_message("Current buffer has unsaved changes (use :e! to force)")
+            return False
+            
+        try:
+            # Expand path (handle ~, etc.)
+            filename = os.path.expanduser(filename)
+            
+            # Check if file is binary
+            if self.editor.is_binary_file(filename):
+                self.editor.set_status_message(f"Cannot edit binary file: {filename}")
+                return False
+            
+            self.editor.load_file_with_permissions_check(filename)
+            return True
+        except Exception as e:
+            self.editor.set_status_message(f"Error opening file: {str(e)}")
+            return False
+    
+    def _cmd_force_edit_current(self) -> bool:
+        """
+        Handle the force edit command without filename (:e!).
+        Force reloads the current file from disk, discarding changes.
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.editor.filename:
+            self.editor.set_status_message("No file to reload")
+            return False
+            
+        try:
+            self.editor.reload_file(force=True)
+            return True
+        except Exception as e:
+            self.editor.set_status_message(f"Error reloading file: {str(e)}")
+            return False
+    
+    def _cmd_force_edit(self, filename: str) -> bool:
+        """
+        Handle the force edit command with filename (:e! filename).
+        Force opens the specified file, discarding current changes.
+        
+        Args:
+            filename: File to open
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Expand path (handle ~, etc.)
+            filename = os.path.expanduser(filename)
+            
+            # Check if file is binary
+            if self.editor.is_binary_file(filename):
+                self.editor.set_status_message(f"Cannot edit binary file: {filename}")
+                return False
+            
+            self.editor.load_file_with_permissions_check(filename, force=True)
+            return True
+        except Exception as e:
+            self.editor.set_status_message(f"Error opening file: {str(e)}")
+            return False
+    
+    def _cmd_new_buffer(self) -> bool:
+        """
+        Handle the new buffer command (:new).
+        Creates a new empty buffer in a new tab.
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            index = self.editor.create_tab("Untitled")
+            self.editor.switch_to_tab(index)
+            self.editor.set_status_message("Created new buffer")
+            return True
+        except Exception as e:
+            self.editor.set_status_message(f"Error creating new buffer: {str(e)}")
+            return False
+    
+    def _cmd_new_buffer_named(self, name: str) -> bool:
+        """
+        Handle the new buffer command with name (:new name).
+        Creates a new empty buffer in a new tab with the specified name.
+        
+        Args:
+            name: Name for the new buffer/tab
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            index = self.editor.create_tab(name)
+            self.editor.switch_to_tab(index)
+            self.editor.set_status_message(f"Created new buffer: {name}")
+            return True
+        except Exception as e:
+            self.editor.set_status_message(f"Error creating new buffer: {str(e)}")
+            return False
+    
+    def _cmd_save_as(self, filename: str) -> bool:
+        """
+        Handle the saveas command (:saveas filename).
+        Saves the current buffer to a different filename.
+        
+        Args:
+            filename: New filename to save to
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Expand path (handle ~, etc.)
+            filename = os.path.expanduser(filename)
+            
+            # Check if we can write to the directory
+            directory = os.path.dirname(filename) or '.'
+            if not os.access(directory, os.W_OK):
+                self.editor.set_status_message(f"Cannot write to directory: {directory}")
+                return False
+            
+            self.editor.save_file(filename)
+            self.editor.filename = filename
+            self.editor.current_tab.name = os.path.basename(filename)
+            return True
+        except Exception as e:
+            self.editor.set_status_message(f"Error saving file as {filename}: {str(e)}")
+            return False
+    
+    def _cmd_browse_files(self) -> bool:
+        """
+        Handle the browse command (:browse).
+        Opens the file browser/explorer.
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            self.editor.open_file_browser()
+            return True
+        except Exception as e:
+            self.editor.set_status_message(f"Error opening file browser: {str(e)}")
+            return False
         
     def _cmd_enter_nlp_mode(self) -> bool:
         """
