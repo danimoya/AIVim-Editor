@@ -1,0 +1,127 @@
+============================================================
+AIVim Performance Benchmarks
+============================================================
+
+### Testing with 1000 lines ###
+Loading 1000 lines into buffer...
+  Load time: 0.37ms
+Testing get_lines operation...
+  Get lines time: 0.00ms
+Testing line insertions...
+  Insert 100 lines: 0.14ms
+Testing line deletions...
+  Delete 100 lines: 0.10ms
+Testing search operations...
+  Search time: 0.29ms (116 matches)
+Testing syntax highlighting...
+  Highlight 1000 lines: 4.18ms
+Testing selection operations...
+  50 selections: 0.26ms
+Testing rapid cursor movement...
+  1000 cursor moves: 1.00ms
+
+### Testing with 5000 lines ###
+Loading 5000 lines into buffer...
+  Load time: 1.03ms
+Testing get_lines operation...
+  Get lines time: 0.00ms
+Testing line insertions...
+  Insert 100 lines: 0.23ms
+Testing line deletions...
+  Delete 100 lines: 0.16ms
+Testing search operations...
+  Search time: 1.58ms (617 matches)
+Testing syntax highlighting...
+  Highlight 1000 lines: 3.45ms
+Testing selection operations...
+  50 selections: 0.42ms
+Testing rapid cursor movement...
+  1000 cursor moves: 1.08ms
+
+### Testing with 10000 lines ###
+Loading 10000 lines into buffer...
+  Load time: 2.21ms
+Testing get_lines operation...
+  Get lines time: 0.00ms
+Testing line insertions...
+  Insert 100 lines: 0.19ms
+Testing line deletions...
+  Delete 100 lines: 0.12ms
+Testing search operations...
+  Search time: 2.55ms (1238 matches)
+Testing syntax highlighting...
+  Highlight 1000 lines: 5.22ms
+Testing selection operations...
+  50 selections: 0.39ms
+Testing rapid cursor movement...
+  1000 cursor moves: 1.79ms
+
+### Testing with 50000 lines ###
+Loading 50000 lines into buffer...
+  Load time: 15.23ms
+Testing get_lines operation...
+  Get lines time: 0.00ms
+
+### Testing bulk operations (5000 line file) ###
+Testing bulk paste (1000 lines)...
+  Paste time: 0.17ms
+Testing bulk delete (1000 lines)...
+  Delete time: 0.05ms
+
+============================================================
+Performance Summary
+============================================================
+buffer_load:
+  Average: 4.71ms
+  Std Dev: 7.05ms
+  Min: 0.37ms
+  Max: 15.23ms
+get_lines:
+  Average: 0.00ms
+  Std Dev: 0.00ms
+  Min: 0.00ms
+  Max: 0.00ms
+insert_lines:
+  Average: 0.19ms
+  Std Dev: 0.05ms
+  Min: 0.14ms
+  Max: 0.23ms
+delete_lines:
+  Average: 0.13ms
+  Std Dev: 0.03ms
+  Min: 0.10ms
+  Max: 0.16ms
+search:
+  Average: 1.47ms
+  Std Dev: 1.13ms
+  Min: 0.29ms
+  Max: 2.55ms
+syntax_highlight:
+  Average: 4.28ms
+  Std Dev: 0.89ms
+  Min: 3.45ms
+  Max: 5.22ms
+selection:
+  Average: 0.36ms
+  Std Dev: 0.08ms
+  Min: 0.26ms
+  Max: 0.42ms
+cursor_move:
+  Average: 1.29ms
+  Std Dev: 0.44ms
+  Min: 1.00ms
+  Max: 1.79ms
+bulk_paste: 0.17ms
+bulk_delete: 0.05ms
+
+============================================================
+Performance Analysis
+============================================================
+✅ All operations within acceptable performance thresholds
+
+============================================================
+Optimization Recommendations
+============================================================
+✅ Performance is generally good
+
+Results saved to performance_results.json

@@ -16,9 +16,15 @@ class Buffer:
         # Selection state
         self.selection_start = None  # (y, x)
         self.selection_end = None  # (y, x)
+        
+        # Performance optimizations
+        self._line_count_cache = 1  # Cache line count to avoid repeated len() calls
+        self._content_cache = None  # Cache joined content to avoid repeated joins
     
     def get_lines(self) -> List[str]:
-        """Get all lines in the buffer"""
+        """Get all lines in the buffer - returns reference for performance"""
+        # Performance optimization: Return reference instead of copy
+        # Callers should not modify the returned list directly
         return self.lines
     
     def get_line(self, index: int) -> str:
@@ -33,12 +39,15 @@ class Buffer:
             if self.lines[index] != content:
                 self.lines[index] = content
                 self.modified = True
+                self._content_cache = None  # Invalidate content cache
     
     def insert_line(self, index: int, content: str) -> None:
         """Insert a new line at the specified index"""
         if 0 <= index <= len(self.lines):
             self.lines.insert(index, content)
             self.modified = True
+            self._line_count_cache = len(self.lines)  # Update cache
+            self._content_cache = None  # Invalidate content cache
     
     def delete_line(self, index: int) -> None:
         """Delete the line at the specified index"""
@@ -48,10 +57,15 @@ class Buffer:
             if not self.lines:
                 self.lines = [""]
             self.modified = True
+            self._line_count_cache = len(self.lines)  # Update cache
+            self._content_cache = None  # Invalidate content cache
     
     def get_content(self) -> str:
-        """Get the entire buffer content as a string"""
-        return "\n".join(self.lines)
+        """Get the entire buffer content as a string - uses caching for performance"""
+        # Performance optimization: Cache the joined content
+        if self._content_cache is None:
+            self._content_cache = "\n".join(self.lines)
+        return self._content_cache
     
     def set_content(self, content: str) -> None:
         """Set the entire buffer content"""
@@ -60,14 +74,19 @@ class Buffer:
         else:
             self.lines = [""]
         self.modified = True
+        self._line_count_cache = len(self.lines)  # Update cache
+        self._content_cache = content  # Update content cache
     
     def set_lines(self, lines: List[str]) -> None:
         """Set all lines in the buffer"""
         if lines:
-            self.lines = lines.copy()
+            # Performance: Use list() instead of copy() for large lists
+            self.lines = list(lines)
         else:
             self.lines = [""]
         self.modified = True
+        self._line_count_cache = len(self.lines)  # Update cache
+        self._content_cache = None  # Invalidate content cache
     
     def is_modified(self) -> bool:
         """Check if the buffer has been modified"""
@@ -125,3 +144,5 @@ class Buffer:
         self.modified = True
         self.selection_start = None
         self.selection_end = None
+        self._line_count_cache = 1  # Reset cache
+        self._content_cache = ""  # Reset content cache

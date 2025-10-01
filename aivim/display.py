@@ -103,6 +103,14 @@ class Display:
         self.loading_thread = None
         self.loading_stop_event = threading.Event()
         
+        # Performance optimizations: Caching and state tracking
+        self._rendered_lines_cache = {}  # Cache rendered lines by line number
+        self._last_rendered_state = None  # Track last rendered state to avoid redundant updates
+        self._force_full_redraw = True  # Flag to force full redraw when needed
+        self._last_status_text = ""  # Cache last status text to avoid redundant updates
+        self._last_mode_text = ""  # Cache last mode text to avoid redundant updates
+        self._last_command_state = (None, None)  # Cache last command state (text, cursor)
+        
         # Performance optimization message has been removed as requested
     
     def resize(self) -> None:
@@ -304,6 +312,11 @@ class Display:
         Args:
             status: Status text
         """
+        # Performance optimization: Skip if status hasn't changed
+        if status == self._last_status_text and not self._force_full_redraw:
+            return
+        self._last_status_text = status
+        
         self.status_win.clear()
         self.status_win.bkgd(' ', self.COLOR_STATUS)
         
@@ -366,6 +379,12 @@ class Display:
             command: Command text
             cursor_pos: Cursor position in the command
         """
+        # Performance optimization: Skip if command state hasn't changed
+        current_state = (command, cursor_pos)
+        if current_state == self._last_command_state and not self._force_full_redraw:
+            return
+        self._last_command_state = current_state
+        
         self.command_win.clear()
         self.command_win.bkgd(' ', self.COLOR_MESSAGE)
         

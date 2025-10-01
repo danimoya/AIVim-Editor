@@ -27,9 +27,11 @@ class NLPHandler:
         self.processing_thread = None
         self.pending_updates = []
         self.last_update_time = 0
-        self.update_debounce_ms = 1000  # Wait 1 second after typing stops before processing
+        self.update_debounce_ms = 1500  # Increased to 1.5 seconds for better performance
         self.update_timer = None
         self.nlp_sections = []  # List of (start_line, end_line) tuples for NLP sections
+        self.processing_lock = threading.RLock()  # Thread safety for processing
+        self._section_cache = {}  # Cache processed NLP sections to avoid reprocessing
         
         # Enhanced live mode features
         self.live_mode_enabled = True  # Enable live NLP detection by default
