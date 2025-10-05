@@ -8,7 +8,7 @@ version = "0.5"
 description = "AI-enhanced Vim-like text editor with code assistance and generation"
 readme = "README.md"
 authors = [
-    {sname = "Daniel Moya", email = "daniel.moya@dimensigon.com"}
+    {name = "Daniel Moya", email = "daniel.moya@dimensigon.com"}
 ]
 license = {text = "MIT"}
 classifiers = [
