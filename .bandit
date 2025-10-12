@@ -1,0 +1,56 @@
+# Bandit security scanner configuration for AIVim Editor
+# https://bandit.readthedocs.io/en/latest/config.html
+
+[bandit]
+# Directories to exclude from scanning
+exclude_dirs = [
+    '/tests/',
+    '/test_*.py',
+    '/.venv/',
+    '/venv/',
+    '/build/',
+    '/dist/',
+    '/.git/',
+    '/__pycache__/',
+    '*.egg-info'
+]
+
+# Test IDs to skip (comma-separated)
+# B101: assert_used - common in tests
+# B601: paramiko_calls - not using paramiko
+# B603: subprocess_without_shell_equals_true - we validate inputs
+skips = ['B101', 'B601']
+
+# Test IDs to run (comma-separated, leave empty to run all)
+tests = []
+
+# Confidence level filter (LOW, MEDIUM, HIGH)
+# Only report issues with severity level equal to or higher than this
+level = 'LOW'
+
+# Severity level filter (LOW, MEDIUM, HIGH)
+# Only report issues with confidence level equal to or higher than this
+severity = 'LOW'
+
+# Output format options:
+# - csv: CSV format
+# - custom: Custom format (requires formatter template)
+# - html: HTML format
+# - json: JSON format
+# - screen: Screen/terminal format
+# - txt: Plain text format
+# - xml: XML format
+# - yaml: YAML format
+format = 'screen'
+
+# Print messages of all issues found
+verbose = true
+
+# Aggregate output by filename or line number
+aggregate = 'file'
+
+# Number of lines of code context to show
+context_lines = 3
+
+# Output file for results
+output_file = 'bandit-report.txt'

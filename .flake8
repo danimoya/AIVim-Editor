@@ -1,0 +1,64 @@
+# Flake8 linting configuration for AIVim Editor
+# https://flake8.pycqa.org/en/latest/user/configuration.html
+
+[flake8]
+# Maximum line length
+max-line-length = 100
+
+# Maximum cyclomatic complexity
+max-complexity = 10
+
+# Error codes to ignore
+# E203: whitespace before ':' (conflicts with black)
+# E266: too many leading '#' for block comment
+# E501: line too long (handled by black)
+# W503: line break before binary operator (conflicts with black)
+# F403: 'from module import *' used; unable to detect undefined names
+# F401: module imported but unused (sometimes intentional for __init__.py)
+ignore = E203,E266,E501,W503,F403,F401
+
+# Error codes to enable
+# B: flake8-bugbear
+# C: flake8-comprehensions
+# E: pycodestyle errors
+# F: pyflakes
+# W: pycodestyle warnings
+# T4: flake8-print
+# B9: flake8-bugbear opinionated warnings
+select = B,C,E,F,W,T4,B9
+
+# Directories to exclude
+exclude =
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    build,
+    dist,
+    *.egg-info,
+    .eggs,
+    .tox,
+    .pytest_cache,
+    .mypy_cache,
+    .coverage,
+    htmlcov
+
+# Files to exclude
+per-file-ignores =
+    # Allow unused imports in __init__.py files
+    __init__.py:F401,F403
+    # Allow complex test functions
+    tests/*:E501,C901
+    test_*.py:E501,C901
+
+# Show source code for each error
+show-source = true
+
+# Show statistics for each error code
+statistics = true
+
+# Count errors and warnings
+count = true
+
+# Report all errors and warnings
+# doctests = true

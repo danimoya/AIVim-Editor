@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=42", "wheel"]
+requires = ["setuptools>=61.0", "wheel", "setuptools-scm>=8.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -10,36 +10,206 @@ readme = "README.md"
 authors = [
     {name = "Daniel Moya", email = "daniel.moya@dimensigon.com"}
 ]
+maintainers = [
+    {name = "Daniel Moya", email = "daniel.moya@dimensigon.com"}
+]
 license = {text = "MIT"}
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: Microsoft :: Windows",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3 :: Only",
     "Topic :: Text Editors",
     "Topic :: Text Editors :: Integrated Development Environments (IDE)",
     "Topic :: Software Development",
+    "Topic :: Software Development :: Code Generators",
+    "Typing :: Typed",
 ]
-keywords = ["vim", "editor", "ai", "code-generation", "code-improvement", "nlp"]
+keywords = ["vim", "editor", "ai", "code-generation", "code-improvement", "nlp", "terminal", "curses"]
 requires-python = ">=3.8"
 dependencies = [
-    "flask>=2.0.0",
-    "openai>=1.0.0",
-    "requests>=2.25.0",
+    "flask>=2.0.0,<4.0.0",
+    "openai>=1.0.0,<2.0.0",
+    "anthropic>=0.25.0,<1.0.0",
+    "requests>=2.25.0,<3.0.0",
+    "python-dotenv>=1.0.0",
+    "configparser>=5.3.0",
+    "tqdm>=4.65.0",
     "windows-curses>=2.3.0;platform_system=='Windows'",
+]
+
+[project.optional-dependencies]
+local-llm = [
+    "llama-cpp-python>=0.2.0",
+]
+server = [
+    "gunicorn>=23.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-timeout>=2.1.0",
+    "pytest-xdist>=3.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+    "pylint>=2.17.0",
+    "bandit>=1.7.0",
+    "safety>=2.3.0",
+]
+test = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-timeout>=2.1.0",
+    "pytest-xdist>=3.0.0",
+]
+lint = [
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+    "pylint>=2.17.0",
+]
+security = [
+    "bandit>=1.7.0",
+    "safety>=2.3.0",
+]
+build = [
+    "build>=0.10.0",
+    "twine>=4.0.0",
+    "check-manifest>=0.49",
+]
+all = [
+    "aivim[dev,test,lint,security,build]",
 ]
 
 [project.urls]
 "Homepage" = "https://github.com/danimoya/AIVim-Editor"
+"Documentation" = "https://github.com/danimoya/AIVim-Editor#readme"
+"Repository" = "https://github.com/danimoya/AIVim-Editor"
 "Bug Tracker" = "https://github.com/danimoya/AIVim-Editor/issues"
+"Changelog" = "https://github.com/danimoya/AIVim-Editor/releases"
+"Source" = "https://github.com/danimoya/AIVim-Editor"
 
 [project.scripts]
 aivim = "aivim.run_editor:main"
 
 [tool.setuptools]
 packages = ["aivim"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+aivim = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+    "--cov=aivim",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+
+[tool.coverage.run]
+source = ["aivim"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py38", "py39", "py310", "py311", "py312"]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+check_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+
+[tool.bandit]
+exclude_dirs = ["tests", "test_*.py"]
+skips = ["B101", "B601"]
+
+[tool.pylint.main]
+fail-under = 8.0
+ignore = ["tests"]
+jobs = 0
+
+[tool.pylint.format]
+max-line-length = 100
+
+[tool.pylint.messages_control]
+disable = [
+    "C0114",  # missing-module-docstring
+    "C0115",  # missing-class-docstring
+    "C0116",  # missing-function-docstring
+]

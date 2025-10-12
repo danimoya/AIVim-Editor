@@ -24,12 +24,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 def create_test_file():
     """Create a temporary test file with NLP sections"""
     with tempfile.NamedTemporaryFile(suffix='.py', delete=False) as f:
-        f.write(b"""#!/usr/bin/env python
+        f.write(b'''#!/usr/bin/env python
 """
 # NLP section that should trigger API call when we hit Shift+Enter or Ctrl+Enter
 # This is a multi-line comment block that will be identified by the NLP mode
 # as natural language to convert to code.
-# 
+#
 # Implement a simple function that calculates the factorial of a number
 # using a recursive approach.
 """
@@ -43,7 +43,7 @@ def existing_function():
 # Another existing function
 def another_function():
     return "Another function"
-""")
+''')
         return f.name
 
 def simulate_network_timeout(*args, **kwargs):

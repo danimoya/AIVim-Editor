@@ -1,3 +1,106 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv
+env.bak/
+venv.bak/
+
+# Sensitive Data
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+*.p12
+*.pfx
+config.ini
+secrets.yaml
+secrets.json
+aivim.log
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Backups
+*.bak
+*.backup
+*.tmp
+*~
+
+# AIVim specific
+.aivim/
+models/*.gguf
+responses/
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.pytype/
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Jupyter
+.ipynb_checkpoints
+*.ipynb
+
+# Documentation builds
+docs/_build/
+site/
+
+# Distribution / packaging
+*.whl
+
 # Replit specific files
 .replit
 replit.nix
@@ -6,3 +109,8 @@ replit.nix
 .upm/
 publishing.md
 todo.md
+
+# GitHub/Swarm coordination (optional - user can uncommit these)
+.claude-flow/
+.hive-mind/
+.swarm/

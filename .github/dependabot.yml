@@ -1,0 +1,72 @@
+# Dependabot configuration for AIVim Editor
+# https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+
+updates:
+  # Python dependencies
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "danimoya"
+    assignees:
+      - "danimoya"
+    labels:
+      - "dependencies"
+      - "python"
+    commit-message:
+      prefix: "deps"
+      prefix-development: "deps-dev"
+      include: "scope"
+    pull-request-branch-name:
+      separator: "/"
+    ignore:
+      # Ignore major version updates for stable dependencies
+      - dependency-name: "flask"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "openai"
+        update-types: ["version-update:semver-major"]
+    groups:
+      # Group test dependencies together
+      test-dependencies:
+        patterns:
+          - "pytest*"
+      # Group linting tools together
+      linting-tools:
+        patterns:
+          - "black"
+          - "isort"
+          - "flake8*"
+          - "pylint"
+          - "mypy"
+      # Group security tools together
+      security-tools:
+        patterns:
+          - "bandit"
+          - "safety"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "danimoya"
+    assignees:
+      - "danimoya"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci"
+      include: "scope"

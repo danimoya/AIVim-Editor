@@ -168,7 +168,17 @@ def main():
     # Run the test script
     if 'success' in locals() and success:
         logger.info("\nTesting local LLM integration...")
-        os.system("python tests/test_local_llm.py")
+        import subprocess
+        result = subprocess.run(
+            ["python", "tests/test_local_llm.py"],
+            check=False,
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            logger.error(f"Test failed: {result.stderr}")
+        else:
+            logger.info("Test passed successfully")
 
 if __name__ == "__main__":
     main()

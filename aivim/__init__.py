@@ -8,4 +8,4 @@ from .command_handler import CommandHandler
 from .ai_service import AIService
 from .history import History
 
-__version__ = "0.1.0"
+__version__ = "0.5.1"

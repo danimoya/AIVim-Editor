@@ -5,18 +5,93 @@ Web interface and API server
 """
 import os
 import logging
+import secrets
+import re
+from datetime import datetime, timedelta
+from collections import deque
 from flask import Flask, render_template, jsonify, request, send_from_directory
+from functools import wraps
 
 # Create Flask app
 app = Flask(__name__)
-app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret-key")
 
-# Enable logging
+# Rate limiting configuration
+class RateLimiter:
+    """Simple in-memory rate limiter"""
+    def __init__(self, max_calls=20, window_seconds=60):
+        self.max_calls = max_calls
+        self.window_seconds = window_seconds
+        self.call_history = {}
+
+    def is_allowed(self, client_id):
+        """Check if client is within rate limit"""
+        now = datetime.now()
+        cutoff = now - timedelta(seconds=self.window_seconds)
+
+        # Initialize or clean old entries
+        if client_id not in self.call_history:
+            self.call_history[client_id] = deque()
+
+        client_calls = self.call_history[client_id]
+
+        # Remove calls outside the window
+        while client_calls and client_calls[0] < cutoff:
+            client_calls.popleft()
+
+        # Check if under limit
+        if len(client_calls) >= self.max_calls:
+            return False
+
+        # Record this call
+        client_calls.append(now)
+        return True
+
+# Initialize rate limiter (20 calls per minute)
+rate_limiter = RateLimiter(max_calls=20, window_seconds=60)
+
+def rate_limit(f):
+    """Rate limiting decorator"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        client_id = request.remote_addr
+        if not rate_limiter.is_allowed(client_id):
+            return jsonify({"error": "Rate limit exceeded. Please try again later."}), 429
+        return f(*args, **kwargs)
+    return decorated_function
+
+# Security: Require SESSION_SECRET in production, generate random key for dev
+app.secret_key = os.environ.get("SESSION_SECRET")
+if not app.secret_key:
+    if os.environ.get("FLASK_ENV") == "production":
+        raise ValueError("SESSION_SECRET environment variable must be set in production")
+    # Only use random key in development
+    app.secret_key = secrets.token_hex(32)
+    logging.warning("Using temporary session secret for development only")
+
+# Enable logging with configurable level
+LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
+LOG_FILE = os.environ.get('LOG_FILE', 'aivim.log')
+
 logging.basicConfig(
-    filename="aivim.log",
-    level=logging.DEBUG,
+    filename=LOG_FILE,
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
+
+# Add filter to redact sensitive data from logs
+class SensitiveDataFilter(logging.Filter):
+    def filter(self, record):
+        # Redact API keys from log messages
+        if hasattr(record, 'msg'):
+            record.msg = re.sub(
+                r'(api[_-]?key["\']?\s*[:=]\s*["\']?)([^"\'}\s]+)',
+                r'\1***REDACTED***',
+                str(record.msg),
+                flags=re.IGNORECASE
+            )
+        return True
+
+logging.getLogger().addFilter(SensitiveDataFilter())
 
 # Web application routes
 @app.route('/')
@@ -25,12 +100,27 @@ def index():
     return render_template('index.html')
 
 @app.route('/api/ai-assist', methods=['POST'])
+@rate_limit
 def ai_assist():
     """Handle AI assistance requests from the web interface"""
-    data = request.json
+    # Validate Content-Type
+    if not request.is_json:
+        return jsonify({"error": "Content-Type must be application/json"}), 415
+
+    data = request.json or {}
+
+    # Validate required fields
+    if 'action' not in data:
+        return jsonify({"error": "Missing required field: action"}), 400
+
     action = data.get('action')
     code = data.get('code', '')
     context = data.get('context', '')
+
+    # Validate input length (prevent DoS with large payloads)
+    MAX_CODE_LENGTH = 50000  # ~50KB
+    if len(code) > MAX_CODE_LENGTH or len(context) > MAX_CODE_LENGTH:
+        return jsonify({"error": "Input too large. Maximum size is 50KB per field."}), 413
     
     # Create an instance of the AI service
     from aivim.ai_service import AIService
@@ -54,12 +144,14 @@ def ai_assist():
     return jsonify({"result": result})
 
 @app.route('/api/check-api-key', methods=['GET'])
+@rate_limit
 def check_api_key():
     """Check if the OPENAI_API_KEY is set"""
     has_key = bool(os.environ.get("OPENAI_API_KEY"))
     return jsonify({"has_key": has_key})
 
 @app.route('/api/model-info', methods=['GET'])
+@rate_limit
 def get_model_info():
     """Get information about the currently configured AI model"""
     # Create an instance of the AI service
@@ -78,9 +170,14 @@ def get_model_info():
     })
 
 @app.route('/api/set-model', methods=['POST'])
+@rate_limit
 def set_model():
     """Set the AI model to use"""
-    data = request.json
+    # Validate Content-Type
+    if not request.is_json:
+        return jsonify({"error": "Content-Type must be application/json"}), 415
+
+    data = request.json or {}
     model_name = data.get('model')
     
     if not model_name:
@@ -119,4 +216,13 @@ def send_static(path):
     return send_from_directory('static', path)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    DEBUG = os.environ.get('FLASK_DEBUG', 'False').lower() in ('true', '1', 'yes')
+
+    if DEBUG:
+        logging.warning("Running in DEBUG mode. Never use this in production!")
+
+    app.run(
+        host=os.environ.get('FLASK_HOST', '127.0.0.1'),  # Don't default to 0.0.0.0
+        port=int(os.environ.get('FLASK_PORT', '5000')),
+        debug=DEBUG
+    )
