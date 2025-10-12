@@ -1028,7 +1028,7 @@ For insertions, set 'replace_lines' to 0.
                 
                 # Calculate content hash to detect changes
                 import hashlib
-                content_hash = hashlib.md5(current_content.encode()).hexdigest()
+                content_hash = hashlib.md5(current_content.encode(), usedforsecurity=False).hexdigest()  # nosec B324 - used for content comparison, not security
                 
                 # Only process if content has changed
                 if content_hash != self.last_content_hash:
@@ -1218,7 +1218,7 @@ For insertions, set 'replace_lines' to 0.
             # Get content of the region
             lines = self.editor.buffer.get_lines()
             region_content = "\n".join(lines[region['start']:region['end']+1])
-            content_hash = hashlib.md5(region_content.encode()).hexdigest()
+            content_hash = hashlib.md5(region_content.encode(), usedforsecurity=False).hexdigest()  # nosec B324 - used for content comparison, not security
             
             # Check if this region has been processed with the same content
             if region_key not in self.last_processed_content or self.last_processed_content[region_key] != content_hash:
