@@ -152,9 +152,11 @@ jobs:
     - name: Generate checksums
       run: |
         cd dist
-        sha256sum * > SHA256SUMS
-        sha512sum * > SHA512SUMS
+        sha256sum *.whl *.tar.gz > SHA256SUMS
+        sha512sum *.whl *.tar.gz > SHA512SUMS
         cat SHA256SUMS
+        # Move checksums out of dist to avoid PyPI upload errors
+        mv SHA256SUMS SHA512SUMS ../
         cd ..
 
     - name: Store distribution packages
@@ -163,6 +165,15 @@ jobs:
         name: python-package-distributions
         path: dist/
         retention-days: 7
+
+    - name: Store checksums
+      uses: actions/upload-artifact@v4
+      with:
+        name: checksums
+        path: |
+          SHA256SUMS
+          SHA512SUMS
+        retention-days: 90
 
     - name: Store SBOM
       uses: actions/upload-artifact@v4
@@ -267,6 +278,13 @@ jobs:
         name: python-package-distributions
         path: dist/
 
+    - name: Download checksums
+      uses: actions/download-artifact@v4
+      with:
+        name: checksums
+        path: .
+      continue-on-error: true
+
     - name: Download SBOM
       uses: actions/download-artifact@v4
       with:
@@ -279,6 +297,8 @@ jobs:
       with:
         files: |
           dist/*
+          SHA256SUMS
+          SHA512SUMS
           sbom.json
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
