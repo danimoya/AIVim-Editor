@@ -206,8 +206,7 @@ jobs:
       url: https://pypi.org/project/aivim/
     permissions:
       id-token: write
-      contents: write
-      attestations: write
+      contents: read
 
     steps:
     - name: Download distribution packages
@@ -216,17 +215,19 @@ jobs:
         name: python-package-distributions
         path: dist/
 
-    - name: Generate artifact attestation
-      uses: actions/attest-build-provenance@v1
-      with:
-        subject-path: 'dist/*'
+    # Note: Attestations require public repository
+    # Uncomment when repository is public:
+    # - name: Generate artifact attestation
+    #   uses: actions/attest-build-provenance@v1
+    #   with:
+    #     subject-path: 'dist/*'
 
-    - name: Publish to PyPI with attestations
+    - name: Publish to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         password: ${{ secrets.PYPI_API_TOKEN }}
         verbose: true
-        attestations: true
+        # attestations: true  # Enable when repository is public
 
   post-publish-validation:
     name: Post-publish Installation Test
