@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3] - 2025-10-12
+
+### 🐛 Fixed
+
+- Fixed PyPI publishing workflow to work with private repositories
+- Disabled attestations for private repos (can be enabled when public)
+- Corrected permissions in publish workflow
+
+### 📝 Changed
+
+- Updated documentation to reflect private repository compatibility
+- Added clear instructions for enabling attestations on public repositories
+
 ## [0.5.2] - 2025-10-12
 
 ### ✨ Added
@@ -41,5 +54,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 See GitHub releases for earlier versions.
 
+[0.5.3]: https://github.com/danimoya/AIVim-Editor/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/danimoya/AIVim-Editor/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/danimoya/AIVim-Editor/releases/tag/v0.5.1

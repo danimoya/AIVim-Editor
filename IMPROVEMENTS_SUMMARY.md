@@ -41,19 +41,21 @@ This document summarizes the comprehensive improvements made to harden the AIVim
 
 **New Capabilities**:
 - 📋 **SBOM Generation**: CycloneDX Software Bill of Materials for supply chain security
-- 🔐 **Build Attestations**: Cryptographic provenance linking artifacts to source
+- 🔐 **Build Attestations**: Ready for public repositories (commented out for private repos)
 - ✅ **Checksum Generation**: SHA256 and SHA512 for integrity verification
-- 🔒 **Attestation Publishing**: Published to PyPI for package verification
 - 📊 **Enhanced Security Scans**: Comprehensive pre-publish checks
+- 🔓 **Private Repository Compatible**: Works with both public and private repositories
 
 **Security Improvements**:
 ```yaml
 - SBOM with all dependencies
-- Build provenance attestations
 - SHA256/SHA512 checksums
-- OIDC trusted publishing
+- OIDC trusted publishing support
 - Automated vulnerability scanning
+- Build attestations (when public)
 ```
+
+**Note**: Build attestations are disabled for private repositories as they require GitHub's public repository features. The workflow includes clear instructions for enabling them when the repository becomes public.
 
 ### 3. Dependency Management
 
