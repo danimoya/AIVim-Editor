@@ -127,7 +127,7 @@ jobs:
 
     - name: Install build tools
       run: |
-        python -m pip install --upgrade pip build twine
+        python -m pip install --upgrade pip build twine cyclonedx-bom
 
     - name: Build package
       run: |
@@ -141,12 +141,36 @@ jobs:
       run: |
         tar -tzf dist/*.tar.gz | head -20
 
+    - name: Generate SBOM (Software Bill of Materials)
+      run: |
+        cyclonedx-py requirements --format json --output sbom.json pyproject.toml || echo "SBOM generation completed with warnings"
+        if [ -f sbom.json ]; then
+          echo "SBOM generated successfully"
+          ls -lh sbom.json
+        fi
+
+    - name: Generate checksums
+      run: |
+        cd dist
+        sha256sum * > SHA256SUMS
+        sha512sum * > SHA512SUMS
+        cat SHA256SUMS
+        cd ..
+
     - name: Store distribution packages
       uses: actions/upload-artifact@v4
       with:
         name: python-package-distributions
         path: dist/
         retention-days: 7
+
+    - name: Store SBOM
+      uses: actions/upload-artifact@v4
+      with:
+        name: sbom
+        path: sbom.json
+        retention-days: 90
+      if: always()
 
   publish-to-testpypi:
     name: Publish to TestPyPI
@@ -180,6 +204,10 @@ jobs:
     environment:
       name: pypi
       url: https://pypi.org/project/aivim/
+    permissions:
+      id-token: write
+      contents: write
+      attestations: write
 
     steps:
     - name: Download distribution packages
@@ -188,11 +216,17 @@ jobs:
         name: python-package-distributions
         path: dist/
 
-    - name: Publish to PyPI
+    - name: Generate artifact attestation
+      uses: actions/attest-build-provenance@v1
+      with:
+        subject-path: 'dist/*'
+
+    - name: Publish to PyPI with attestations
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         password: ${{ secrets.PYPI_API_TOKEN }}
         verbose: true
+        attestations: true
 
   post-publish-validation:
     name: Post-publish Installation Test
@@ -232,9 +266,18 @@ jobs:
         name: python-package-distributions
         path: dist/
 
+    - name: Download SBOM
+      uses: actions/download-artifact@v4
+      with:
+        name: sbom
+        path: .
+      continue-on-error: true
+
     - name: Upload to GitHub Release
       uses: softprops/action-gh-release@v1
       with:
-        files: dist/*
+        files: |
+          dist/*
+          sbom.json
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
