@@ -194,7 +194,7 @@ jobs:
 
     steps:
     - name: Download distribution packages
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: python-package-distributions
         path: dist/
@@ -228,7 +228,7 @@ jobs:
 
     steps:
     - name: Download distribution packages
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: python-package-distributions
         path: dist/
@@ -282,20 +282,20 @@ jobs:
 
     steps:
     - name: Download distribution packages
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: python-package-distributions
         path: dist/
 
     - name: Download checksums
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: checksums
         path: .
       continue-on-error: true
 
     - name: Download SBOM
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: sbom
         path: .
