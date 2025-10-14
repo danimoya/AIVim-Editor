@@ -1,0 +1,200 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+      - '.gitignore'
+      - 'docs/**'
+  pull_request:
+    branches: [ main, develop ]
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+      - '.gitignore'
+      - 'docs/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-format:
+    name: Lint and Format Check
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install linting tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install black isort flake8 mypy pylint
+
+    - name: Check code formatting with black
+      run: black --check --diff aivim
+
+    - name: Check import sorting with isort
+      run: isort --check-only --diff aivim
+
+    - name: Run flake8 linter
+      run: flake8 aivim --count --show-source --statistics
+
+    - name: Run pylint
+      run: pylint aivim --fail-under=7.0
+      continue-on-error: true
+
+    - name: Type checking with mypy
+      run: mypy aivim --ignore-missing-imports --no-strict-optional
+
+  security-scan:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install security tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install bandit safety
+
+    - name: Run bandit security scan
+      run: bandit -r aivim -ll -i -x ./aivim/tests
+
+    - name: Check for vulnerable dependencies
+      run: safety check --json
+      continue-on-error: true
+
+  test-matrix:
+    name: Test Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    needs: [lint-and-format, security-scan]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+
+    - name: Install system dependencies (Ubuntu)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libncurses5-dev libncursesw5-dev
+
+    - name: Install package and dependencies
+      run: |
+        python -m pip install --upgrade pip setuptools wheel
+        pip install -e ".[test]"
+
+    - name: Run tests
+      run: |
+        pytest tests/ -v --cov=aivim --cov-report=xml --cov-report=term
+      env:
+        PYTHONPATH: ${{ github.workspace }}
+
+    - name: Upload coverage reports
+      if: matrix.python-version == '3.11' && matrix.os == 'ubuntu-latest'
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  build-test:
+    name: Build and Package Test
+    needs: [test-matrix]
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install build tools
+      run: |
+        python -m pip install --upgrade pip build twine check-manifest
+
+    - name: Check manifest
+      run: check-manifest
+      continue-on-error: true
+
+    - name: Build distribution
+      run: python -m build
+
+    - name: Check distribution
+      run: twine check dist/*
+
+    - name: Test installation from wheel
+      run: |
+        pip install dist/*.whl
+        aivim --help
+
+    - name: Store build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: python-distributions
+        path: dist/
+        retention-days: 5
+
+  all-checks-passed:
+    name: All CI Checks Passed
+    needs: [lint-and-format, security-scan, test-matrix, build-test]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+    - name: Check job status
+      run: |
+        if [[ "${{ needs.lint-and-format.result }}" != "success" || \
+              "${{ needs.security-scan.result }}" != "success" || \
+              "${{ needs.test-matrix.result }}" != "success" || \
+              "${{ needs.build-test.result }}" != "success" ]]; then
+          echo "One or more required checks failed"
+          exit 1
+        fi
+        echo "All CI checks passed successfully!"
+
+    - name: Create summary
+      run: |
+        echo "### CI Pipeline Summary ✅" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "All required checks have passed:" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Lint and Format Check" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Security Scanning" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Test Matrix" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Build and Package Test" >> $GITHUB_STEP_SUMMARY

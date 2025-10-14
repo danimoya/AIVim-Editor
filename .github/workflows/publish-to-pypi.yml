@@ -199,6 +199,11 @@ jobs:
         name: python-package-distributions
         path: dist/
 
+    - name: Generate attestation for TestPyPI
+      uses: actions/attest-build-provenance@v1
+      with:
+        subject-path: 'dist/*'
+
     - name: Publish to TestPyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
@@ -206,6 +211,8 @@ jobs:
         repository-url: https://test.pypi.org/legacy/
         skip-existing: true
         verbose: true
+        attestations: true
+        print-hash: true
 
   publish-to-pypi:
     name: Publish to PyPI
@@ -226,19 +233,21 @@ jobs:
         name: python-package-distributions
         path: dist/
 
-    # Note: Attestations require public repository
-    # Uncomment when repository is public:
-    # - name: Generate artifact attestation
-    #   uses: actions/attest-build-provenance@v1
-    #   with:
-    #     subject-path: 'dist/*'
+    # Generate artifact attestation for public repository
+    - name: Generate artifact attestation
+      uses: actions/attest-build-provenance@v1
+      with:
+        subject-path: 'dist/*'
 
     - name: Publish to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
+        # Try trusted publishing first, fall back to API token if not configured
         password: ${{ secrets.PYPI_API_TOKEN }}
+        skip-existing: false
         verbose: true
-        # attestations: true  # Enable when repository is public
+        attestations: true  # Enabled for public repository
+        print-hash: true  # Print package hashes for verification
 
   post-publish-validation:
     name: Post-publish Installation Test

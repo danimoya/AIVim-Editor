@@ -1,6 +1,14 @@
 
 # AIVim - AI-Enhanced Text Editor
 
+[![PyPI version](https://badge.fury.io/py/aivim.svg)](https://badge.fury.io/py/aivim)
+[![Python](https://img.shields.io/pypi/pyversions/aivim.svg)](https://pypi.org/project/aivim/)
+[![CI](https://github.com/danimoya/AIVim-Editor/actions/workflows/ci.yml/badge.svg)](https://github.com/danimoya/AIVim-Editor/actions/workflows/ci.yml)
+[![Test Suite](https://github.com/danimoya/AIVim-Editor/actions/workflows/test.yml/badge.svg)](https://github.com/danimoya/AIVim-Editor/actions/workflows/test.yml)
+[![Security](https://github.com/danimoya/AIVim-Editor/actions/workflows/security.yml/badge.svg)](https://github.com/danimoya/AIVim-Editor/actions/workflows/security.yml)
+[![codecov](https://codecov.io/gh/danimoya/AIVim-Editor/branch/main/graph/badge.svg)](https://codecov.io/gh/danimoya/AIVim-Editor)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 AIVim is an AI-enhanced version of Vim built in Python, offering intelligent code assistance and generation capabilities while maintaining the core modal editing experience. Combining the power of different AI models with familiar Vim interactions, AIVim helps developers understand, improve, and generate code more efficiently.
 
 ## Features
