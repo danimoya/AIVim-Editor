@@ -30,6 +30,8 @@ class History:
             lines: The buffer lines for this version
             metadata: Optional metadata about the changes
         """
+        if self.current_index >= 0 and self.versions[self.current_index] == lines:
+            return
         # Deep copy to ensure we don't have references to mutable objects
         lines_copy = copy.deepcopy(lines)
         metadata_copy = copy.deepcopy(metadata) if metadata else {}

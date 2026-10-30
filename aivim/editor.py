@@ -1,6 +1,12 @@
 """
 Core editor implementation for AIVim
 """
+import uuid
+from .file_store import FileStore, SaveResult
+from .ai_jobs import AIJob, AIJobs
+from .input_decoder import InputDecoder, Paste
+from .ai_service import AIError
+from .proposals import parse_proposal
 import curses
 import logging
 import os
@@ -38,6 +44,8 @@ class Tab:
         self.preferred_x = 0  # For maintaining horizontal position when moving vertically
         self.filename = filename
         self.is_temporary = False  # Indicates if this is a temporary tab (like AI suggestions)
+        self.document_id = uuid.uuid4().hex
+        self.file_identity = None
         self.history = History()  # Each tab has its own history
         
     def set_name(self, name: str) -> None:
@@ -53,7 +61,7 @@ class Editor:
     """
     Main editor class that coordinates all AIVim components
     """
-    def __init__(self, filename: Optional[str] = None):
+    def __init__(self, filename: Optional[str] = None, *, ai_service=None, settings=None, file_store=None):
         """
         Initialize the editor
         
@@ -66,12 +74,17 @@ class Editor:
         
         # Initialize common components
         self.display = None  # Will be initialized in start()
-        self.command_handler = None  # Will be initialized in start()
-        self.ai_service = AIService()
-        self.settings = Settings()  # Initialize settings
+        self.command_handler = CommandHandler(self)  # Will be initialized in start()
+        self.settings = settings if settings is not None else Settings()
+        self.ai_service = ai_service if ai_service is not None else AIService(settings=self.settings)
+        self.file_store = file_store if file_store is not None else FileStore()
+        self._pending_key = None
+        self._numeric_prefix = 0
+        self._insert_base = None  # Initialize settings
         
         # Create initial tab
         initial_tab = Tab("Untitled", filename=filename)
+        initial_tab.history.max_history=self.settings.file.undolevels
         self.tabs.append(initial_tab)
         
         # Editor state
@@ -95,7 +108,9 @@ class Editor:
         self.ai_blocking = False          # True if AI operation should block the UI
         self.ai_thread = None
         self.thread_lock = threading.RLock()
-        self.current_ai_model = "openai"  # Default AI model
+        self.jobs = AIJobs(self.ai_service)
+        self.current_job_id = None
+        self.current_ai_model = self.ai_service.current_model  # Default AI model
         self.pending_ai_action = None     # For storing AI suggestions awaiting confirmation
         self.chat_history = []            # For storing chat conversation history
         self.last_ai_status_update = 0    # Timestamp of last AI status update
@@ -212,6 +227,7 @@ class Editor:
         """
         new_tab = Tab(name, buffer, filename)
         new_tab.is_temporary = temporary
+        new_tab.history.max_history=self.settings.file.undolevels
         self.tabs.append(new_tab)
         return len(self.tabs) - 1
         
@@ -242,128 +258,55 @@ class Editor:
             self.current_tab_index = (self.current_tab_index - 1) % len(self.tabs)
             self.set_status_message(f"Tab: {self.current_tab.name}")
             
-    def close_current_tab(self) -> bool:
-        """
-        Close the current tab
-        
-        Returns:
-            True if successful, False otherwise (can't close last tab)
-        """
+    def close_current_tab(self, decision=None):
         if len(self.tabs) <= 1:
-            # Can't close the last tab
-            self.set_status_message("Cannot close the last tab")
-            return False
-            
-        # Remove the current tab
+            self.set_status_message('Cannot close the last tab'); return False
+        if self.buffer.is_modified():
+            if decision == 'save':
+                if not self.save_file(): return False
+            elif decision != 'discard':
+                self.set_status_message('Unsaved tab: :tabclose save, :tabclose discard, or continue editing to cancel'); return False
+        if hasattr(self, 'jobs'):
+            active=self.jobs.active.get(self.current_job_id)
+            if active and active.document_id==self.current_tab.document_id:self._cancel_ai_processing()
+            self.jobs.cancel_document(self.current_tab.document_id)
+        if self.pending_ai_action and self.pending_ai_action.document_id==self.current_tab.document_id:self.pending_ai_action=None
         del self.tabs[self.current_tab_index]
-        
-        # Adjust current index if needed
-        if self.current_tab_index >= len(self.tabs):
-            self.current_tab_index = len(self.tabs) - 1
-            
+        self.current_tab_index = min(self.current_tab_index, len(self.tabs)-1)
         return True
       
-    def load_file(self, filename: str) -> None:
-        """Load content from a file into the buffer"""
-        try:
-            if os.path.exists(filename):
-                with open(filename, 'r') as f:
-                    content = f.read()
-                    self.buffer.set_content(content)
-                    self.buffer.mark_as_saved()
-                    self.filename = filename
-                    logging.info(f"Loaded file: {filename}")
-                    if self.display:
-                        self.set_status_message(f"Loaded: {filename}")
-            else:
-                # New file
-                self.buffer = Buffer()
-                self.filename = filename
-                logging.info(f"New file: {filename}")
-                if self.display:
-                    self.set_status_message(f"New file: {filename}")
-        except Exception as e:
-            logging.error(f"Error loading file: {str(e)}")
-            if self.display:
-                self.set_status_message(f"Error loading file: {str(e)}")
-    
-    def save_file(self, filename: Optional[str] = None, create_backup: bool = True) -> None:
-        """Save buffer content to a file with optional backup"""
-        save_filename = filename or self.filename
-        
-        if not save_filename:
-            self.set_status_message("No filename specified (use :w filename)")
-            return
-        
-        try:
-            # Check write permissions
-            if os.path.exists(save_filename):
-                if not os.access(save_filename, os.W_OK):
-                    self.set_status_message(f"Permission denied: cannot write to {save_filename}")
-                    return
-                    
-                # Create backup if enabled and file exists
-                if create_backup and getattr(self, 'auto_backup', True):
-                    from .utils import create_backup_file
-                    backup_path = create_backup_file(save_filename)
-                    if backup_path:
-                        logging.info(f"Created backup: {backup_path}")
-            
-            content = self.buffer.get_content()
-            
-            # Write to temporary file first for safety
-            import tempfile
-            temp_fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(save_filename) or '.')
-            try:
-                with os.fdopen(temp_fd, 'w') as f:
-                    f.write(content)
-                # Rename temp file to target
-                os.replace(temp_path, save_filename)
-            except:
-                # Clean up temp file on error
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
-                raise
-            
-            self.buffer.mark_as_saved()
-            self.filename = save_filename
-            
-            self.set_status_message(f"Saved: {save_filename} ({len(content)} bytes)")
-            logging.info(f"Saved file: {save_filename}")
-        except OSError as e:
-            if e.errno == 28:  # ENOSPC - No space left on device
-                self.set_status_message(f"Error: Disk full, cannot save {save_filename}")
-            elif e.errno == 13:  # EACCES - Permission denied
-                self.set_status_message(f"Permission denied: cannot write to {save_filename}")
-            else:
-                self.set_status_message(f"Error saving file: {str(e)}")
-            logging.error(f"Error saving file: {str(e)}")
-        except Exception as e:
-            self.set_status_message(f"Error saving file: {str(e)}")
-            logging.error(f"Error saving file: {str(e)}")
-    
-    def reload_file(self, force: bool = False) -> None:
-        """Reload the current file from disk"""
-        if not self.filename:
-            raise ValueError("No file to reload")
-            
+    def load_file(self, filename, force=False):
         if not force and self.buffer.is_modified():
-            raise ValueError("File has unsaved changes (use force=True to discard)")
-            
-        try:
-            if not os.path.exists(self.filename):
-                raise FileNotFoundError(f"File not found: {self.filename}")
-                
-            with open(self.filename, 'r') as f:
-                content = f.read()
-                self.buffer.set_content(content)
-                self.buffer.mark_as_saved()
-                
-            self.set_status_message(f"Reloaded: {self.filename}")
-            logging.info(f"Reloaded file: {self.filename}")
-        except Exception as e:
-            logging.error(f"Error reloading file: {str(e)}")
-            raise
+            self.set_status_message('Unsaved document: save, open a new tab, or force reload'); return False
+        result = self.file_store.load(filename, self.settings.file.encoding, {'unix':'\n','dos':'\r\n','mac':'\r'}[self.settings.file.fileformat])
+        if not result:
+            self.set_status_message(result.message); return False
+        self.buffer.set_content(result.content); self.buffer.mark_as_saved()
+        self.current_tab.file_identity = result.identity; self.filename = filename
+        self.history.clear(); self.history.add_version(self.buffer.get_lines())
+        self.cursor_x = self.cursor_y = self.scroll_y = 0
+        self.set_status_message('Loaded document'); return True
+    
+    def save_file(self, filename=None, create_backup=True, force=False):
+        target = filename or self.filename
+        if not target:
+            result = SaveResult(False, code='NO_FILENAME', message='No filename specified (use :w filename)')
+        else:
+            identity = self.current_tab.file_identity
+            if identity and str(__import__('pathlib').Path(target).expanduser().absolute()) != str(__import__('pathlib').Path(self.filename).expanduser().absolute()): identity = None
+            result = self.file_store.save(target, self.buffer.get_content(), identity, force=force,
+                backup_dir=self.settings.file.backup_dir if create_backup and self.settings.file.auto_backup else None,
+                encoding=self.settings.file.encoding, newline={'unix':'\n','dos':'\r\n','mac':'\r'}[self.settings.file.fileformat])
+        if result:
+            self.current_tab.file_identity = result.identity; self.filename = target; self.buffer.mark_as_saved()
+            self.set_status_message('Saved document')
+        else: self.set_status_message(result.message)
+        return result
+    
+    def reload_file(self, force=False):
+        if not self.filename: raise ValueError('No file to reload')
+        if not force and self.buffer.is_modified(): raise ValueError('Unsaved changes; use :e! to discard')
+        return self.load_file(self.filename, force=force)
     
     def is_binary_file(self, filename: str) -> bool:
         """Check if a file is binary"""
@@ -394,7 +337,7 @@ class Editor:
                 
             return False
         except Exception as e:
-            logging.error(f"Error checking if file is binary: {str(e)}")
+            logging.error("editor operation failed")
             return False
     
     def load_file_with_permissions_check(self, filename: str, force: bool = False) -> None:
@@ -421,14 +364,15 @@ class Editor:
                     self.set_status_message(f"Warning: {filename} is read-only")
                     
             # Load the file
-            self.load_file(filename)
+            if not self.load_file(filename,force=force):
+                raise ValueError(self.status_message)
             
             # Update tab name
             if hasattr(self, 'current_tab'):
                 self.current_tab.name = os.path.basename(filename)
                 
         except Exception as e:
-            logging.error(f"Error loading file with permissions check: {str(e)}")
+            logging.error("editor operation failed")
             raise
     
     def open_file_browser(self) -> None:
@@ -449,7 +393,7 @@ class Editor:
             # If file_browser module doesn't exist yet, show a temporary implementation
             self.set_status_message("File browser not yet implemented")
         except Exception as e:
-            logging.error(f"Error opening file browser: {str(e)}")
+            logging.error("editor operation failed")
             self.set_status_message(f"Error opening file browser: {str(e)}")
     
     def start(self, stdscr) -> None:
@@ -469,15 +413,19 @@ class Editor:
         # Initialize editor components and settings
         self._initialize_editor(stdscr)
         
+        decoder=InputDecoder()
         # Main editor loop
         while not self.should_quit:
-            # Update display
+            self.poll_ai_events()
             self._update_display()
             
             # Get input
             try:
-                key = stdscr.getch()
-                self.handle_input(key)
+                key = stdscr.get_wch()
+                for event in decoder.feed(key):self.handle_input(event)
+            except curses.error:
+                for event in decoder.flush():self.handle_input(event)
+                self.poll_ai_events()
             except KeyboardInterrupt:
                 # Handle Ctrl+C more gracefully
                 if self.mode != "NORMAL":
@@ -487,7 +435,7 @@ class Editor:
                     # In normal mode, treat as Escape
                     self.set_status_message("")
     
-    def handle_input(self, key: int) -> None:
+    def _dispatch_input(self, key: int) -> None:
         """Process user input based on current mode"""
         # Store current time for input handling throttling
         current_time = time.time()
@@ -538,14 +486,6 @@ class Editor:
                 self.display.next_dialog_view()
                 return
                 
-        # Skip too frequent key processing (throttle keyboard repeat)
-        # Increase the throttle time to reduce screen refreshes
-        if hasattr(self, '_last_input_time') and current_time - self._last_input_time < 0.03:
-            # Skip if less than 30ms has passed since last input (very rapid typing)
-            # This improves performance and reduces screen flickering
-            return
-        self._last_input_time = current_time
-            
         # Handle input based on current mode
         if self.mode == "NORMAL":
             self._handle_normal_mode(key)
@@ -569,258 +509,70 @@ class Editor:
                 # If not handled, process as in INSERT mode
                 self._handle_insert_mode(key)
     
-    def _handle_normal_mode(self, key: int) -> None:
-        """Handle keypresses in normal mode"""
-        if key == ord('i'):
-            # Enter insert mode
-            self.mode = "INSERT"
-            self.set_status_message("-- INSERT --")
-            
-        elif key == ord('n'):
-            # Check if this is for NLP mode or search
-            if self.display and self.display.stdscr:
-                self.display.stdscr.nodelay(True)  # Make getch non-blocking
-                next_key = self.display.stdscr.getch()
-                self.display.stdscr.nodelay(False)  # Restore blocking mode
-                
-                if next_key == ord('l'):
-                    # Enter NLP mode ('nl' command)
-                    self.mode = "NLP"
-                    # NLP handler will be initialized when handling input
-                    self.set_status_message("-- NLP MODE --")
-                elif next_key != -1:
-                    # Put the key back and treat 'n' as search next
-                    curses.ungetch(next_key)
-                    # Repeat last search
-                    if self.search_pattern:
-                        self._find_next_search_match()
-                else:
-                    # No key pressed quickly, treat as search next
-                    if self.search_pattern:
-                        self._find_next_search_match()
-            
-        elif key == ord('s'):
-            # Delete current character and enter insert mode
-            line = self.buffer.get_line(self.cursor_y)
-            if self.cursor_x < len(line):
-                # Delete character under cursor
-                new_line = line[:self.cursor_x] + line[self.cursor_x+1:]
-                self.buffer.set_line(self.cursor_y, new_line)
-                
-                # Enter insert mode
-                self.mode = "INSERT"
-                self.set_status_message("-- INSERT --")
-        
-        elif key == ord('G') or (key == ord('g') and curses.keyname(key).decode("utf-8").startswith("S-")):
-            # Go to last line of the file (Shift+G)
-            last_line_idx = len(self.buffer.get_lines()) - 1
-            self.cursor_y = last_line_idx
-            
-            # Move cursor to the beginning of the line
-            self.cursor_x = 0
-            self.preferred_x = self.cursor_x
-            
-            # Update scroll position if necessary
-            if self.display and self.cursor_y >= self.scroll_y + self.display.max_text_height:
-                self.scroll_y = max(0, self.cursor_y - self.display.max_text_height + 1)
-                
-            self.set_status_message(f"Line {self.cursor_y + 1} of {last_line_idx + 1}")
-                
-        elif key == ord('A') or (key == ord('a') and (curses.keyname(key).decode("utf-8").startswith("^") or curses.keyname(key).decode("utf-8").startswith("S-"))):
-            # Go to end of line and enter insert mode (Shift+A)
-            line = self.buffer.get_line(self.cursor_y)
-            self.cursor_x = len(line)
-            self.preferred_x = self.cursor_x
-            self.mode = "INSERT"
-            self.set_status_message("-- INSERT --")
-        
-        elif key == ord('x'):
-            # Delete character under cursor
-            line = self.buffer.get_line(self.cursor_y)
-            if self.cursor_x < len(line):
-                # Store current version in history
-                self.history.add_version(self.buffer.get_lines())
-                
-                # Delete the character
-                new_line = line[:self.cursor_x] + line[self.cursor_x+1:]
-                self.buffer.set_line(self.cursor_y, new_line)
-                
-                # Store updated version in history
-                self.history.add_version(self.buffer.get_lines())
-                
-                # Adjust cursor if at end of line
-                if self.cursor_x >= len(new_line):
-                    self.cursor_x = max(0, len(new_line))
-                    self.preferred_x = self.cursor_x
-        
-        elif key == ord(':'):
-            # Enter command mode
-            self.mode = "COMMAND"
-            self.command_buffer = ":"
-            self.command_cursor = 1
-        
-        elif key == ord('v'):
-            # Enter visual mode
-            self.mode = "VISUAL"
-            self.buffer.start_selection(self.cursor_y, self.cursor_x)
-            self.set_status_message("-- VISUAL --")
-        
-        elif key == ord('/'):
-            # Enter search mode for forward search
-            self.enter_search_mode("forward")
-        
-        elif key == ord('?'):
-            # Enter search mode for backward search
-            self.enter_search_mode("backward")
-        
-                
-        elif key == ord('N'):
-            # Repeat last search in opposite direction (Shift+N)
-            if self.search_pattern:
-                self._find_next_search_match(opposite_direction=True)
-                
-        elif key == ord('*'):
-            # Search for word under cursor (forward)
-            self.search_word_under_cursor(backward=False)
-            
-        elif key == ord('#'):
-            # Search for word under cursor (backward)
-            self.search_word_under_cursor(backward=True)
-            
-        elif key == ord('o'):
-            # Open new line below cursor and enter insert mode
-            self._open_line_below()
-            
-        elif key == ord('O'):
-            # Open new line above cursor and enter insert mode
-            self._open_line_above()
-            
-        elif key == ord('p'):
-            # Paste clipboard content after cursor
-            if self.clipboard:
-                # Store current version in history before paste
-                self.history.add_version(self.buffer.get_lines())
-                
-                # Get the current line
-                current_line = self.buffer.get_line(self.cursor_y)
-                
-                if len(self.clipboard) == 1:
-                    # Single line paste - insert at cursor position on current line
-                    new_line = current_line[:self.cursor_x] + self.clipboard[0] + current_line[self.cursor_x:]
-                    self.buffer.set_line(self.cursor_y, new_line)
-                    self.cursor_x += len(self.clipboard[0])
-                    self.preferred_x = self.cursor_x
-                else:
-                    # Multi-line paste
-                    # First line: combine with first part of current line
-                    new_first_line = current_line[:self.cursor_x] + self.clipboard[0]
-                    self.buffer.set_line(self.cursor_y, new_first_line)
-                    
-                    # Middle lines: insert as new lines
-                    for i in range(1, len(self.clipboard) - 1):
-                        self.buffer.insert_line(self.cursor_y + i, self.clipboard[i])
-                    
-                    # Last line: combine with second part of current line
-                    last_clipboard_line = self.clipboard[-1]
-                    new_last_line = last_clipboard_line + current_line[self.cursor_x:]
-                    self.buffer.insert_line(self.cursor_y + len(self.clipboard) - 1, new_last_line)
-                    
-                    # Move cursor to end of pasted content
-                    self.cursor_y += len(self.clipboard) - 1
-                    self.cursor_x = len(last_clipboard_line)
-                    self.preferred_x = self.cursor_x
-                
-                # Store updated version in history
-                self.history.add_version(self.buffer.get_lines())
-                self.set_status_message(f"Pasted {len(self.clipboard)} lines")
-        
-        elif key == ord('h') or key == curses.KEY_LEFT:
-            # Move cursor left
-            if self.cursor_x > 0:
-                self.cursor_x -= 1
-                self.preferred_x = self.cursor_x
-        
-        elif key == ord('j') or key == curses.KEY_DOWN:
-            # Move cursor down
-            if self.cursor_y < len(self.buffer.get_lines()) - 1:
-                self.cursor_y += 1
-                self._adjust_cursor_x()
-                
-                # Scroll if needed
-                if self.display and self.cursor_y >= self.scroll_y + self.display.max_text_height:
-                    self.scroll_y = self.cursor_y - self.display.max_text_height + 1
-        
-        elif key == ord('k') or key == curses.KEY_UP:
-            # Move cursor up
-            if self.cursor_y > 0:
-                self.cursor_y -= 1
-                self._adjust_cursor_x()
-                
-                # Scroll if needed
-                if self.cursor_y < self.scroll_y:
-                    self.scroll_y = self.cursor_y
-        
-        elif key == ord('l') or key == curses.KEY_RIGHT:
-            # Move cursor right
-            line = self.buffer.get_line(self.cursor_y)
-            if self.cursor_x < len(line):
-                self.cursor_x += 1
-                self.preferred_x = self.cursor_x
-        
-        elif key == ord('d') and self.display and self.display.is_dialog_open():
-            # Close dialog with 'd' key
-            self.display.close_dialog()
-            
-        elif key == curses.KEY_LEFT and curses.keyname(key).decode("utf-8").startswith("^") and self.display and self.display.is_dialog_open():
-            # Navigate to previous dialog view with Ctrl+Left
-            self.display.prev_dialog_view()
-            
-        elif key == curses.KEY_RIGHT and curses.keyname(key).decode("utf-8").startswith("^") and self.display and self.display.is_dialog_open():
-            # Navigate to next dialog view with Ctrl+Right
-            self.display.next_dialog_view()
-        
-        elif key == ord('d'):
-            # Delete operation - need another 'd' for line delete
-            if self.display and self.display.stdscr:
-                next_key = self.display.stdscr.getch()
-            else:
+    def _handle_normal_mode(self, key):
+        ch = chr(key) if 0 <= key < 256 else ''
+        if ch.isdigit() and (ch != '0' or self._numeric_prefix):
+            self._numeric_prefix = min(100000, self._numeric_prefix * 10 + int(ch)); return
+        count = self._numeric_prefix or 1
+        if self._pending_key:
+            pending=self._pending_key; self._pending_key=None; self._numeric_prefix=0
+            if pending == ch and ch in 'dy':
+                self.clipboard=list(self.buffer.get_lines()[self.cursor_y:self.cursor_y+count]); self._clipboard_linewise=True
+                if ch == 'd':
+                    for _ in self.clipboard: self.buffer.delete_line(self.cursor_y)
+                    self.cursor_y=min(self.cursor_y,len(self.buffer.get_lines())-1); self._adjust_cursor_x()
                 return
-            if next_key == ord('d'):
-                # Delete current line
-                # Store line count before deletion
-                line_count = 1
-                
-                # Check if there's a numeric prefix
-                if hasattr(self, '_numeric_prefix') and self._numeric_prefix > 0:
-                    line_count = self._numeric_prefix
-                    self._numeric_prefix = 0
-                
-                # Delete the specified number of lines
-                for _ in range(min(line_count, len(self.buffer.get_lines()))):
-                    self.buffer.delete_line(self.cursor_y)
-                
-                # Adjust cursor position if needed
-                if self.cursor_y >= len(self.buffer.get_lines()):
-                    self.cursor_y = max(0, len(self.buffer.get_lines()) - 1)
-                self._adjust_cursor_x()
-                
-                # Add to history
-                self.history.add_version(self.buffer.get_lines())
-                self.set_status_message(f"{line_count} line(s) deleted")
-        
-        # Handle numeric prefixes for commands like "5dd"
-        elif key >= ord('0') and key <= ord('9'):
-            digit = key - ord('0')
-            if not hasattr(self, '_numeric_prefix'):
-                self._numeric_prefix = 0
-            
-            if self._numeric_prefix == 0 and digit == 0:
-                # Special case: '0' by itself means go to beginning of line
-                self.cursor_x = 0
-                self.preferred_x = 0
-            else:
-                # Build up the numeric prefix
-                self._numeric_prefix = self._numeric_prefix * 10 + digit
+            if pending == ch == 'g': self.cursor_y=self.cursor_x=self.scroll_y=0; return
+            # Unrecognized second keys are dispatched normally rather than consumed.
+        if ch in 'dyg': self._pending_key=ch; return
+        self._numeric_prefix=0
+        if ch in 'iaAIsoO':
+            self.history.add_version(self.buffer.get_lines()); self._insert_base=self.buffer.get_content()
+            if ch == 'a': self.cursor_x=min(len(self.buffer.get_line(self.cursor_y)),self.cursor_x+1)
+            elif ch == 'A': self.cursor_x=len(self.buffer.get_line(self.cursor_y))
+            elif ch == 'I': self.cursor_x=len(self.buffer.get_line(self.cursor_y))-len(self.buffer.get_line(self.cursor_y).lstrip())
+            elif ch == 's':
+                line=self.buffer.get_line(self.cursor_y); self.buffer.set_line(self.cursor_y,line[:self.cursor_x]+line[self.cursor_x+1:])
+            elif ch == 'o': self._open_line_below()
+            elif ch == 'O': self._open_line_above()
+            self.mode='INSERT'; self.set_status_message('-- INSERT --')
+        elif ch == 'u' or key == 18:
+            for _ in range(count):
+                lines,_=self.history.undo() if ch == 'u' else self.history.redo()
+                if lines is not None: self.buffer.set_lines(lines)
+            self.cursor_y=min(self.cursor_y,len(self.buffer.get_lines())-1); self._adjust_cursor_x()
+        elif ch == 'x':
+            line=self.buffer.get_line(self.cursor_y); self.buffer.set_line(self.cursor_y,line[:self.cursor_x]+line[self.cursor_x+count:])
+        elif ch in 'pP':
+            if self.clipboard:
+                if getattr(self,'_clipboard_linewise',False):
+                    start=self.cursor_y+(ch=='p')
+                    for i,line in enumerate(self.clipboard*count): self.buffer.insert_line(start+i,line)
+                    self.cursor_y=start; self.cursor_x=0
+                else: self.insert_text('\n'.join(self.clipboard)*count)
+        elif ch == ':': self.mode='COMMAND'; self.command_buffer=':'; self.command_cursor=1
+        elif ch == 'v': self.mode='VISUAL'; self.buffer.start_selection(self.cursor_y,self.cursor_x)
+        elif ch in '/?': self.enter_search_mode('forward' if ch=='/' else 'backward')
+        elif ch in 'nN' and self.search_pattern: self._find_next_search_match(opposite_direction=ch=='N')
+        elif ch in '*#': self.search_word_under_cursor(backward=ch=='#')
+        elif ch == 'G': self.cursor_y=len(self.buffer.get_lines())-1; self.cursor_x=0
+        elif ch == '0': self.cursor_x=0
+        elif ch == '$': self.cursor_x=len(self.buffer.get_line(self.cursor_y))
+        elif ch == '^': self.cursor_x=len(self.buffer.get_line(self.cursor_y))-len(self.buffer.get_line(self.cursor_y).lstrip())
+        elif ch in 'wbe':
+            text=self.buffer.get_content(); pos=sum(len(x)+1 for x in self.buffer.get_lines()[:self.cursor_y])+self.cursor_x
+            import re
+            starts=[m.start() for m in re.finditer(r'\w+|[^\w\s]+',text)]
+            ends=[m.end()-1 for m in re.finditer(r'\w+|[^\w\s]+',text)]
+            for _ in range(count):
+                choices=[p for p in (ends if ch=='e' else starts) if p<pos] if ch=='b' else [p for p in (ends if ch=='e' else starts) if p>pos]
+                pos=(max(choices) if ch=='b' else min(choices)) if choices else (0 if ch=='b' else len(text))
+            prefix=text[:pos]; self.cursor_y=prefix.count('\n'); self.cursor_x=len(prefix.rsplit('\n',1)[-1])
+        elif ch == 'h' or key == curses.KEY_LEFT: self.cursor_x=max(0,self.cursor_x-count)
+        elif ch == 'l' or key == curses.KEY_RIGHT: self.cursor_x=min(len(self.buffer.get_line(self.cursor_y)),self.cursor_x+count)
+        elif ch == 'j' or key == curses.KEY_DOWN: self.cursor_y=min(len(self.buffer.get_lines())-1,self.cursor_y+count); self._adjust_cursor_x()
+        elif ch == 'k' or key == curses.KEY_UP: self.cursor_y=max(0,self.cursor_y-count); self._adjust_cursor_x()
+        self.preferred_x=self.cursor_x
                 
     def _open_line_below(self) -> None:
         """
@@ -883,12 +635,11 @@ class Editor:
             self.search_case_sensitive = False
         elif 'C' in flags:
             self.search_case_sensitive = True
-        elif self.search_case_sensitive is None:
+        else:
             # Smart case: case insensitive unless pattern has uppercase
-            self.search_case_sensitive = any(c.isupper() for c in actual_pattern)
+            self.search_case_sensitive = not self.settings.search.ignorecase or (self.settings.search.smartcase and any(c.isupper() for c in actual_pattern))
         
-        if 'v' in flags:
-            self.search_very_magic = True
+        self.search_very_magic = 'v' in flags
         
         # Find all matches
         self.search_results = []
@@ -1026,6 +777,7 @@ class Editor:
                     
             # Wrap around if needed
             if next_match_idx is None:
+                if not self.settings.search.wrapscan:self.set_status_message('Search reached end');return
                 next_match_idx = 0
                 wrapped = True
             else:
@@ -1042,6 +794,7 @@ class Editor:
                     
             # Wrap around if needed
             if prev_match_idx is None:
+                if not self.settings.search.wrapscan:self.set_status_message('Search reached start');return
                 prev_match_idx = len(self.search_results) - 1
                 wrapped = True
             else:
@@ -1187,7 +940,7 @@ class Editor:
             self.search_cursor_pos += 1
             self._update_search_display()
             # Incremental search
-            if self.search_input_buffer:
+            if self.search_input_buffer and self.settings.search.incsearch:
                 self._start_search(self.search_input_buffer, incremental=True)
     
     def _update_search_display(self) -> None:
@@ -1195,366 +948,63 @@ class Editor:
         prompt = "/" if self.search_direction == "forward" else "?"
         self.set_status_message(f"{prompt}{self.search_input_buffer}")
     
-    def substitute(self, pattern: str, replacement: str, line_range: Tuple[int, int] = None,
-                  global_flag: bool = False, confirm: bool = False) -> int:
-        """
-        Perform substitution/replacement
-        
-        Args:
-            pattern: The pattern to search for
-            replacement: The replacement text
-            line_range: Tuple of (start_line, end_line) 0-indexed, None for current line
-            global_flag: Whether to replace all occurrences in each line
-            confirm: Whether to ask for confirmation for each replacement
-            
-        Returns:
-            Number of substitutions made
-        """
-        # Store current version in history
-        self.history.add_version(self.buffer.get_lines())
-        
-        # Determine line range
-        if line_range is None:
-            # Current line only
-            start_line = self.cursor_y
-            end_line = self.cursor_y
-        else:
-            start_line, end_line = line_range
-            
-        # Ensure valid range
-        lines = self.buffer.get_lines()
-        start_line = max(0, min(start_line, len(lines) - 1))
-        end_line = max(0, min(end_line, len(lines) - 1))
-        
-        substitution_count = 0
-        
-        # Parse search flags from pattern
-        actual_pattern, flags = self._parse_search_pattern(pattern)
-        
-        # Apply flags
-        case_sensitive = self.search_case_sensitive
-        if 'c' in flags:
-            case_sensitive = False
-        elif 'C' in flags:
-            case_sensitive = True
-        elif case_sensitive is None:
-            # Smart case
-            case_sensitive = any(c.isupper() for c in actual_pattern)
-        
-        is_regex = self.search_regex or self.search_very_magic or 'v' in flags
-        
-        # Prepare regex if needed
-        if is_regex:
-            try:
-                regex_flags = 0 if case_sensitive else re.IGNORECASE
-                compiled_pattern = re.compile(actual_pattern, regex_flags)
-            except re.error:
-                self.set_status_message(f"Invalid regex pattern: {actual_pattern}")
-                return 0
-        
-        # Perform substitution on each line in range
-        for line_num in range(start_line, end_line + 1):
-            line = self.buffer.get_line(line_num)
-            new_line = line
-            line_substitutions = 0
-            
-            if is_regex:
-                # Regex substitution
-                if global_flag:
-                    if confirm:
-                        # Confirm each replacement
-                        matches = list(compiled_pattern.finditer(line))
-                        offset = 0
-                        for match in matches:
-                            # Show the match and ask for confirmation
-                            self.cursor_y = line_num
-                            self.cursor_x = match.start() + offset
-                            self._update_display()
-                            
-                            # Ask for confirmation (simplified version)
-                            self.set_status_message(f"Replace '{match.group()}' with '{replacement}'? (y/n/a/q)")
-                            if self.display:
-                                response = self.display.stdscr.getch()
-                                if response == ord('y'):
-                                    # Replace this occurrence
-                                    new_text = compiled_pattern.sub(replacement, match.group())
-                                    new_line = new_line[:match.start() + offset] + new_text + new_line[match.end() + offset:]
-                                    offset += len(new_text) - len(match.group())
-                                    line_substitutions += 1
-                                elif response == ord('n'):
-                                    # Skip this occurrence
-                                    continue
-                                elif response == ord('a'):
-                                    # Replace all remaining without asking
-                                    new_line = compiled_pattern.sub(replacement, new_line)
-                                    line_substitutions = len(matches)
-                                    break
-                                elif response == ord('q'):
-                                    # Quit substitution
-                                    break
-                    else:
-                        # Replace all occurrences
-                        new_line, count = compiled_pattern.subn(replacement, line)
-                        line_substitutions = count
-                else:
-                    # Replace only first occurrence
-                    new_line, count = compiled_pattern.subn(replacement, line, count=1)
-                    line_substitutions = count
-            else:
-                # Literal substitution
-                search_pat = actual_pattern
-                if not case_sensitive:
-                    # Case-insensitive literal search
-                    search_line = line.lower()
-                    search_pat = actual_pattern.lower()
-                    
-                    if global_flag:
-                        # Replace all occurrences
-                        positions = []
-                        start_pos = 0
-                        while True:
-                            pos = search_line.find(search_pat, start_pos)
-                            if pos == -1:
-                                break
-                            positions.append((pos, pos + len(search_pat)))
-                            start_pos = pos + 1
-                        
-                        # Replace from end to start to preserve positions
-                        for start, end in reversed(positions):
-                            new_line = new_line[:start] + replacement + new_line[end:]
-                            line_substitutions += 1
-                    else:
-                        # Replace first occurrence only
-                        pos = search_line.find(search_pat)
-                        if pos != -1:
-                            new_line = line[:pos] + replacement + line[pos + len(actual_pattern):]
-                            line_substitutions = 1
-                else:
-                    # Case-sensitive literal search
-                    if global_flag:
-                        new_line = line.replace(actual_pattern, replacement)
-                        line_substitutions = line.count(actual_pattern)
-                    else:
-                        # Replace first occurrence only
-                        pos = line.find(actual_pattern)
-                        if pos != -1:
-                            new_line = line[:pos] + replacement + line[pos + len(actual_pattern):]
-                            line_substitutions = 1
-            
-            # Update the line if changed
-            if line_substitutions > 0:
-                self.buffer.set_line(line_num, new_line)
-                substitution_count += line_substitutions
-        
-        # Store updated version in history
-        if substitution_count > 0:
-            self.history.add_version(self.buffer.get_lines())
-            
-        # Report results
-        if substitution_count == 0:
-            self.set_status_message(f"Pattern not found: {actual_pattern}")
-        else:
-            lines_affected = end_line - start_line + 1
-            self.set_status_message(f"{substitution_count} substitution(s) on {lines_affected} line(s)")
-            
-        return substitution_count
+    def substitute(self, pattern, replacement, line_range=None, global_flag=False, confirm=False, flags=''):
+        start,end=line_range or (self.cursor_y,self.cursor_y)
+        lines=self.buffer.get_lines()
+        if not pattern or not 0 <= start <= end < len(lines): raise ValueError('Invalid substitution pattern or range')
+        regex=re.compile(pattern,re.IGNORECASE if 'i' in flags else 0)
+        self.history.add_version(lines);text=self.buffer.get_content();matches=[];offset=sum(len(x)+1 for x in lines[:start])
+        for line in lines[start:end+1]:
+            for i,m in enumerate(regex.finditer(line)):
+                if i and not global_flag: break
+                matches.append((offset+m.start(),offset+m.end(),m.expand(replacement)))
+            offset+=len(line)+1
+        if not matches: self.set_status_message('Pattern not found');return 0
+        if confirm:
+            self._substitution_review={'text':text,'matches':matches,'accepted':[],'index':0};self.set_status_message('Replace next match? y/n/a/q');return 0
+        for a,b,value in reversed(matches): text=text[:a]+value+text[b:]
+        self.buffer.set_content(text);self.history.add_version(self.buffer.get_lines());self.set_status_message(f'{len(matches)} substitutions');return len(matches)
     
-    def _handle_insert_mode(self, key: int) -> None:
-        """Handle keypresses in insert mode"""
-        if key == 27:  # Escape key
-            # Return to normal mode
-            self.mode = "NORMAL"
-            # Add current buffer state to history
-            self.history.add_version(self.buffer.get_lines())
-            self.set_status_message("")
-            
-        # Ctrl+X + Ctrl+N shortcut removed as requested
-                
-        elif key == 22:  # Ctrl+V (22 is ASCII for SYN - synchronous idle, typically sent by Ctrl+V)
-            # Paste from clipboard in insert mode
-            if self.clipboard:
-                # Store current version in history before paste
-                self.history.add_version(self.buffer.get_lines())
-                
-                # Get the current line
-                current_line = self.buffer.get_line(self.cursor_y)
-                
-                if len(self.clipboard) == 1:
-                    # Single line paste - insert at cursor position on current line
-                    new_line = current_line[:self.cursor_x] + self.clipboard[0] + current_line[self.cursor_x:]
-                    self.buffer.set_line(self.cursor_y, new_line)
-                    self.cursor_x += len(self.clipboard[0])
-                    self.preferred_x = self.cursor_x
-                else:
-                    # Multi-line paste
-                    # First line: combine with first part of current line
-                    new_first_line = current_line[:self.cursor_x] + self.clipboard[0]
-                    self.buffer.set_line(self.cursor_y, new_first_line)
-                    
-                    # Middle lines: insert as new lines
-                    for i in range(1, len(self.clipboard) - 1):
-                        self.buffer.insert_line(self.cursor_y + i, self.clipboard[i])
-                    
-                    # Last line: combine with second part of current line
-                    last_clipboard_line = self.clipboard[-1]
-                    new_last_line = last_clipboard_line + current_line[self.cursor_x:]
-                    self.buffer.insert_line(self.cursor_y + len(self.clipboard) - 1, new_last_line)
-                    
-                    # Move cursor to end of pasted content
-                    self.cursor_y += len(self.clipboard) - 1
-                    self.cursor_x = len(last_clipboard_line)
-                    self.preferred_x = self.cursor_x
-                
-                # Store updated version in history
-                self.history.add_version(self.buffer.get_lines())
-                self.set_status_message(f"Pasted {len(self.clipboard)} lines")
-        
-        elif key == 65:  # ASCII 'A' (likely Shift+A)
-            # Go to end of line and remain in insert mode (Shift+A equivalent)
-            line = self.buffer.get_line(self.cursor_y)
-            self.cursor_x = len(line)
-            self.preferred_x = self.cursor_x
-        
-        elif key == curses.KEY_BACKSPACE or key == 127:
-            # Backspace
-            line = self.buffer.get_line(self.cursor_y)
-            if self.cursor_x > 0:
-                # Remove character from current line
-                new_line = line[:self.cursor_x-1] + line[self.cursor_x:]
-                self.buffer.set_line(self.cursor_y, new_line)
-                self.cursor_x -= 1
-                self.preferred_x = self.cursor_x
-            elif self.cursor_y > 0:
-                # Merge with previous line
-                prev_line = self.buffer.get_line(self.cursor_y - 1)
-                new_cursor_x = len(prev_line)
-                self.buffer.set_line(self.cursor_y - 1, prev_line + line)
-                self.buffer.delete_line(self.cursor_y)
-                self.cursor_y -= 1
-                self.cursor_x = new_cursor_x
-                self.preferred_x = self.cursor_x
-                
-                # Adjust scroll if needed
-                if self.cursor_y < self.scroll_y:
-                    self.scroll_y = self.cursor_y
-        
+    def _handle_insert_mode(self, key):
+        if key == 27:
+            self.mode='NORMAL'; self.history.add_version(self.buffer.get_lines()); self._insert_base=None; self.set_status_message(''); return
+        if key == 22:
+            self.insert_text('\n'.join(self.clipboard)); return
+        if key in (curses.KEY_BACKSPACE,127,8):
+            line=self.buffer.get_line(self.cursor_y)
+            if self.cursor_x:
+                self.buffer.set_line(self.cursor_y,line[:self.cursor_x-1]+line[self.cursor_x:]);self.cursor_x-=1
+            elif self.cursor_y:
+                previous=self.buffer.get_line(self.cursor_y-1);self.buffer.set_line(self.cursor_y-1,previous+line);self.buffer.delete_line(self.cursor_y);self.cursor_y-=1;self.cursor_x=len(previous)
         elif key == curses.KEY_DC:
-            # Delete key
-            line = self.buffer.get_line(self.cursor_y)
-            if self.cursor_x < len(line):
-                # Remove character after cursor
-                new_line = line[:self.cursor_x] + line[self.cursor_x+1:]
-                self.buffer.set_line(self.cursor_y, new_line)
-            elif self.cursor_y < len(self.buffer.get_lines()) - 1:
-                # Merge with next line
-                next_line = self.buffer.get_line(self.cursor_y + 1)
-                self.buffer.set_line(self.cursor_y, line + next_line)
-                self.buffer.delete_line(self.cursor_y + 1)
-        
-        elif key == curses.KEY_LEFT:
-            # Move cursor left
-            if self.cursor_x > 0:
-                self.cursor_x -= 1
-                self.preferred_x = self.cursor_x
-        
-        elif key == curses.KEY_RIGHT:
-            # Move cursor right
-            line = self.buffer.get_line(self.cursor_y)
-            if self.cursor_x < len(line):
-                self.cursor_x += 1
-                self.preferred_x = self.cursor_x
-        
-        elif key == curses.KEY_UP:
-            # Move cursor up
-            if self.cursor_y > 0:
-                self.cursor_y -= 1
-                self._adjust_cursor_x()
-                
-                # Scroll if needed
-                if self.cursor_y < self.scroll_y:
-                    self.scroll_y = self.cursor_y
-        
-        elif key == curses.KEY_DOWN:
-            # Move cursor down
-            if self.cursor_y < len(self.buffer.get_lines()) - 1:
-                self.cursor_y += 1
-                self._adjust_cursor_x()
-                
-                # Scroll if needed
-                if self.display and self.cursor_y >= self.scroll_y + self.display.max_text_height:
-                    self.scroll_y = self.cursor_y - self.display.max_text_height + 1
-        
-        elif key == ord('\n') or key == curses.KEY_ENTER:
-            # Enter key - split line
-            line = self.buffer.get_line(self.cursor_y)
-            self.buffer.set_line(self.cursor_y, line[:self.cursor_x])
-            self.buffer.insert_line(self.cursor_y + 1, line[self.cursor_x:])
-            self.cursor_y += 1
-            self.cursor_x = 0
-            self.preferred_x = 0
-            
-            # Scroll if needed
-            if self.display and self.cursor_y >= self.scroll_y + self.display.max_text_height:
-                self.scroll_y = self.cursor_y - self.display.max_text_height + 1
-        
-        elif key == curses.KEY_HOME:
-            # Move to beginning of line
-            self.cursor_x = 0
-            self.preferred_x = 0
-        
-        elif key == curses.KEY_END:
-            # Move to end of line
-            line = self.buffer.get_line(self.cursor_y)
-            self.cursor_x = len(line)
-            self.preferred_x = self.cursor_x
-        
-        elif key == curses.KEY_PPAGE:  # Page Up
-            # Move up a page
-            if self.display:
-                self.cursor_y = max(0, self.cursor_y - self.display.max_text_height)
-                self.scroll_y = max(0, self.scroll_y - self.display.max_text_height)
+            line=self.buffer.get_line(self.cursor_y)
+            if self.cursor_x < len(line): self.buffer.set_line(self.cursor_y,line[:self.cursor_x]+line[self.cursor_x+1:])
+            elif self.cursor_y < len(self.buffer.get_lines())-1:
+                self.buffer.set_line(self.cursor_y,line+self.buffer.get_line(self.cursor_y+1));self.buffer.delete_line(self.cursor_y+1)
+        elif key in (10,13,curses.KEY_ENTER):
+            line=self.buffer.get_line(self.cursor_y); indent=''
+            if self.settings.editor.autoindent: indent=line[:len(line)-len(line.lstrip())]
+            self.buffer.set_line(self.cursor_y,line[:self.cursor_x]);self.buffer.insert_line(self.cursor_y+1,indent+line[self.cursor_x:]);self.cursor_y+=1;self.cursor_x=len(indent)
+        elif key in (20,4):
+            line=self.buffer.get_line(self.cursor_y);width=self.settings.editor.shiftwidth
+            if key==20:self.buffer.set_line(self.cursor_y,' '*width+line);self.cursor_x+=width
             else:
-                # Fallback when display is not available
-                self.cursor_y = max(0, self.cursor_y - 20)
-                self.scroll_y = max(0, self.scroll_y - 20)
-            self._adjust_cursor_x()
-        
-        elif key == curses.KEY_NPAGE:  # Page Down
-            # Move down a page
-            max_y = len(self.buffer.get_lines()) - 1
-            if self.display:
-                self.cursor_y = min(max_y, self.cursor_y + self.display.max_text_height)
-                self.scroll_y = min(max_y - self.display.max_text_height + 1, 
-                                   self.scroll_y + self.display.max_text_height)
-            else:
-                # Fallback when display is not available
-                self.cursor_y = min(max_y, self.cursor_y + 20)
-                self.scroll_y = min(max_y - 20 + 1, self.scroll_y + 20)
-            self.scroll_y = max(0, self.scroll_y)
-            self._adjust_cursor_x()
-        
-        elif key == 9:  # Tab key
-            # Insert 4 spaces for tab
-            self.buffer.set_line(
-                self.cursor_y,
-                self.buffer.get_line(self.cursor_y)[:self.cursor_x] + 
-                "    " + 
-                self.buffer.get_line(self.cursor_y)[self.cursor_x:]
-            )
-            self.cursor_x += 4
-            self.preferred_x = self.cursor_x
-        
-        elif 32 <= key <= 126:  # Printable ASCII characters
-            # Insert character at current position
-            line = self.buffer.get_line(self.cursor_y)
-            char = chr(key)
-            new_line = line[:self.cursor_x] + char + line[self.cursor_x:]
-            self.buffer.set_line(self.cursor_y, new_line)
-            self.cursor_x += 1
-            self.preferred_x = self.cursor_x
+                remove=min(width,len(line)-len(line.lstrip(' ')));self.buffer.set_line(self.cursor_y,line[remove:]);self.cursor_x=max(0,self.cursor_x-remove)
+        elif key == 9:
+            text=' '*(self.settings.editor.tabstop-self.cursor_x%self.settings.editor.tabstop) if self.settings.editor.expandtab else '\t';self.insert_text(text)
+        elif key == curses.KEY_LEFT: self.cursor_x=max(0,self.cursor_x-1)
+        elif key == curses.KEY_RIGHT: self.cursor_x=min(len(self.buffer.get_line(self.cursor_y)),self.cursor_x+1)
+        elif key in (curses.KEY_UP,curses.KEY_DOWN,curses.KEY_PPAGE,curses.KEY_NPAGE):
+            delta={curses.KEY_UP:-1,curses.KEY_DOWN:1,curses.KEY_PPAGE:-20,curses.KEY_NPAGE:20}[key];self.cursor_y=max(0,min(len(self.buffer.get_lines())-1,self.cursor_y+delta));self._adjust_cursor_x()
+        elif key == curses.KEY_HOME: self.cursor_x=0
+        elif key == curses.KEY_END: self.cursor_x=len(self.buffer.get_line(self.cursor_y))
+        elif 32 <= key <= 126: self.insert_text(chr(key))
+        self.preferred_x=self.cursor_x
     
     def _handle_visual_mode(self, key: int) -> None:
         """Handle keypresses in visual mode"""
+        if key == ord(':'):
+            self.mode='COMMAND';self.command_buffer=":'<,'>";self.command_cursor=len(self.command_buffer);return
         if key == 27:  # Escape key
             # Return to normal mode
             self.mode = "NORMAL"
@@ -1602,13 +1052,14 @@ class Editor:
             # Yank (copy) selection
             selection_text = self.buffer.get_selection_text()
             self.clipboard = selection_text.split('\n')
+            self._clipboard_linewise = False
             
             # Ensure the clipboard isn't empty (can happen with empty selections)
             if not self.clipboard:
                 self.clipboard = [""]
                 
             # Log the clipboard contents for debugging
-            logging.info(f"Clipboard contents: {self.clipboard}")
+            logging.info("Selection copied")
             
             # Return to normal mode
             self.mode = "NORMAL"
@@ -1739,112 +1190,14 @@ class Editor:
             if self.display:
                 self.display.update_command_line(self.command_buffer, self.command_cursor)
     
-    def _process_command(self) -> None:
-        """Process entered command"""
-        command = self.command_buffer
-        
-        # Check if this is a search command
-        if command.startswith('/'):
-            # Forward search
-            pattern = command[1:]
-            if pattern:
-                self._start_search(pattern)
-            # Return to normal mode
-            self.mode = "NORMAL"
-            self.command_buffer = ""
-            self.command_cursor = 0
-            return
-            
-        elif command.startswith('?'):
-            # Backward search
-            pattern = command[1:]
-            if pattern:
-                self.search_direction = "backward"
-                self._start_search(pattern)
-            # Return to normal mode
-            self.mode = "NORMAL"
-            self.command_buffer = ""
-            self.command_cursor = 0
-            return
-            
-        elif command.startswith(':'):
-            # Check for substitution command
-            if command.startswith(':%s/'):
-                # Global substitution: :%s/pattern/replacement/g
-                try:
-                    # Parse the command
-                    parts = command[4:].split('/')
-                    if len(parts) >= 3:
-                        pattern = parts[0]
-                        replacement = parts[1]
-                        
-                        # Check for flags
-                        global_replace = False
-                        if len(parts) > 3 and 'g' in parts[2]:
-                            global_replace = True
-                            
-                        # Do the replacement
-                        self._replace_text(pattern, replacement, global_replace)
-                        
-                        # Return to normal mode
-                        self.mode = "NORMAL"
-                        self.command_buffer = ""
-                        self.command_cursor = 0
-                        return
-                except Exception as e:
-                    # Handle any errors
-                    self.set_status_message(f"Error in substitution: {str(e)}")
-                    self.mode = "NORMAL"
-                    self.command_buffer = ""
-                    self.command_cursor = 0
-                    return
-                    
-            # Check for line navigation commands: ":123" or ":$"
-            line_number_match = re.match(r':(\d+)$', command)
-            last_line_match = re.match(r':\$$', command)
-            
-            if line_number_match:
-                # Navigate to specified line number
-                try:
-                    line_number = int(line_number_match.group(1))
-                    self._navigate_to_line(line_number - 1)  # Convert to 0-based index
-                    
-                    # Return to normal mode
-                    self.mode = "NORMAL"
-                    self.command_buffer = ""
-                    self.command_cursor = 0
-                    return
-                except Exception as e:
-                    # Handle any errors
-                    self.set_status_message(f"Error navigating to line: {str(e)}")
-                    self.mode = "NORMAL"
-                    self.command_buffer = ""
-                    self.command_cursor = 0
-                    return
-                    
-            elif last_line_match:
-                # Navigate to last line
-                self._navigate_to_line(len(self.buffer.get_lines()) - 1)
-                
-                # Return to normal mode
-                self.mode = "NORMAL"
-                self.command_buffer = ""
-                self.command_cursor = 0
-                return
-            
-            # If not a special command, handle as a normal command
-            if self.command_handler:
-                result = self.command_handler.execute(command[1:])  # Remove the leading ':'
-            else:
-                result = False
-            
-            # Return to normal mode
-            self.mode = "NORMAL"
-            self.command_buffer = ""
-            self.command_cursor = 0
-            
-            if not result:
-                self.set_status_message(f"Invalid command")
+    def _process_command(self):
+        command=self.command_buffer
+        self.mode='NORMAL'; self.command_buffer='';self.command_cursor=0
+        if re.fullmatch(r':\d+',command): self._navigate_to_line(int(command[1:])-1);return
+        if command==':$': self._navigate_to_line(len(self.buffer.get_lines())-1);return
+        if command.startswith(('/', '?')):
+            self.search_direction='backward' if command[0]=='?' else 'forward';self._start_search(command[1:]);return
+        self.command_handler.execute(command)
                 
     def _replace_text(self, pattern: str, replacement: str, global_replace: bool = False) -> None:
         """
@@ -1890,6 +1243,10 @@ class Editor:
         if not self.display:
             return
         
+        height=max(1,self.display.max_text_height)
+        margin=min(self.settings.editor.scrolloff,height//2)
+        if self.cursor_y<self.scroll_y+margin:self.scroll_y=max(0,self.cursor_y-margin)
+        elif self.cursor_y>=self.scroll_y+height-margin:self.scroll_y=max(0,self.cursor_y-height+margin+1)
         # Check if we're in a dialog
         if self.display.is_dialog_open():
             # Only handle dialog close key
@@ -1907,7 +1264,7 @@ class Editor:
         if hasattr(self, '_last_display_state'):
             current_state = (
                 self.cursor_y, self.cursor_x, self.scroll_y,
-                self.mode, len(self.buffer.get_lines()),
+                self.mode, self.current_tab.document_id, self.buffer.revision, self.status_message, self.command_buffer, len(self.buffer.get_lines()),
                 self.buffer.is_modified()
             )
             if self._last_display_state == current_state:
@@ -1918,7 +1275,7 @@ class Editor:
             # Initialize state tracking
             self._last_display_state = (
                 self.cursor_y, self.cursor_x, self.scroll_y,
-                self.mode, len(self.buffer.get_lines()),
+                self.mode, self.current_tab.document_id, self.buffer.revision, self.status_message, self.command_buffer, len(self.buffer.get_lines()),
                 self.buffer.is_modified()
             )
             
@@ -1992,14 +1349,8 @@ class Editor:
                 self.command_cursor
             )
     
-    def _handle_resize(self, *args) -> None:
-        """Handle terminal resize event"""
-        # Debounce resize events
-        if self.resize_timer:
-            self.resize_timer.cancel()
-        
-        self.resize_timer = threading.Timer(0.1, self._do_resize)
-        self.resize_timer.start()
+    def _handle_resize(self, *args):
+        self._do_resize()
     
     def _do_resize(self) -> None:
         """Actually perform the resize operation"""
@@ -2029,8 +1380,11 @@ class Editor:
         
         # No delay for ESC key
         curses.set_escdelay(25)
+        import sys
+        sys.stdout.write("\x1b[?2004h");sys.stdout.flush()
         
         # Other initialization
+        stdscr.timeout(30)
         stdscr.keypad(True)       # Enable keypad mode for function keys
         curses.cbreak()           # No line buffering
         curses.noecho()           # Don't echo typed characters
@@ -2090,7 +1444,7 @@ class Editor:
     def set_status_message(self, message: str) -> None:
         """Set the status message"""
         self.status_message = message
-        logging.info(f"Status: {message}")
+        logging.debug("Editor status updated")
         
     def show_dialog(self, title: str, content: List[str]) -> None:
         """
@@ -2150,604 +1504,42 @@ class Editor:
         else:
             self.set_status_message(f"Unknown AI command: {command}")
     
-    def ai_generate(self, start_line: int, description: str, blocking: bool = False) -> None:
-        """
-        Generate code at the specified line based on description
-        
-        Args:
-            start_line: Line number where code should be inserted (0-based)
-            description: Description of what to generate
-            blocking: If True, block UI until AI completes, otherwise allow editing
-        """
-        if self.ai_processing:
-            self.set_status_message("AI is already processing a request")
-            return
-        
-        # Get current buffer content for context
-        lines = self.buffer.get_lines()
-        context = "\n".join(lines)
-        
-        # Setup metadata
-        metadata = {
-            "command": "generate",
-            "start_line": start_line,
-            "description": description
-        }
-        
-        # Mark as processing
-        self.ai_processing = True
-        self.ai_blocking = blocking
-        self.last_ai_status_update = time.time()
-        
-        # Start loading animation
-        if self.display:
-            self.display.start_loading_animation("AI generating code")
-        else:
-            status_msg = "AI generating code..." + (" (blocking)" if blocking else " (background)")
-            self.set_status_message(status_msg)
-        
-        # Run in a separate thread
-        self.ai_thread = threading.Thread(
-            target=self._ai_generate_thread,
-            args=(start_line, description, context, metadata)
-        )
-        self.ai_thread.daemon = True
-        self.ai_thread.start()
+    def ai_generate(self,start_line,description,blocking=False):
+        if not 0<=start_line<=len(self.buffer.get_lines()):self.set_status_message('Invalid insertion line');return False
+        offset=sum(len(x)+1 for x in self.buffer.get_lines()[:start_line]);offset=min(offset,len(self.buffer.get_content()))
+        return self.submit_ai('generate',((offset,offset),),f'Insert before zero-based character offset {offset}: {description}')
     
-    def _ai_generate_thread(self, start_line: int, description: str, context: str, metadata: Dict[str, Any]) -> None:
-        """Thread function for AI code generation"""
-        try:
-            generated_code = self.ai_service.generate_code(description, context)
-            
-            # Apply changes in main thread
-            with self.thread_lock:
-                # Stop loading animation if active
-                if self.display:
-                    self.display.stop_loading_animation()
-                
-                # Create a new tab with the generated code
-                lines = generated_code.strip().split("\n")
-                
-                # Generate a descriptive tab name based on description
-                timestamp = time.strftime("%Y%m%d%H%M%S")
-                short_desc = description.split()[:3]  # First 3 words of description
-                short_desc = "_".join(short_desc)[:20]  # Limit length
-                tab_name = f"AI_{short_desc}_{timestamp}"
-                
-                # Create a new buffer with the generated code
-                new_buffer = Buffer()
-                new_buffer.set_lines(lines)
-                
-                # Create a docstring at the top of the file to describe what was generated
-                docstring = [
-                    f"""Generated by AIVim
-                    Description: {description}
-                    Date: {time.strftime('%Y-%m-%d %H:%M:%S')}
-                    """
-                ]
-                
-                # Add the docstring to the buffer before the code
-                for i, line in enumerate(docstring):
-                    new_buffer.insert_line(i, line)
-                
-                # Create the new tab
-                tab_index = self.create_tab(tab_name, new_buffer)
-                
-                # Switch to the new tab
-                self.switch_to_tab(tab_index)
-                
-                # Add model info to status message if available
-                model_info = ""
-                if hasattr(self, 'ai_service'):
-                    model_info = self.ai_service.get_current_model_info()
-                    if model_info:
-                        model_info = f" using {model_info}"
-                
-                # Update status
-                self.ai_processing = False
-                self.set_status_message(f"Generated {len(lines)} lines of code{model_info} in new tab")
-        
-        except Exception as e:
-            with self.thread_lock:
-                # Stop loading animation if active
-                if self.display:
-                    self.display.stop_loading_animation()
-                
-                self.ai_processing = False
-                self.set_status_message(f"Error generating code: {str(e)}")
-            logging.error(f"AI generation error: {str(e)}")
     
-    def ai_explain(self, start_line: int, end_line: int, blocking: bool = False) -> None:
-        """
-        Explain code in the specified line range
-        
-        Args:
-            start_line: Starting line number (0-based)
-            end_line: Ending line number (0-based)
-            blocking: If True, block UI until AI completes, otherwise allow editing
-        """
-        if self.ai_processing:
-            self.set_status_message("AI is already processing a request")
-            return
-        
-        lines = self.buffer.get_lines()
-        
-        # Validate range
-        if start_line < 0 or end_line >= len(lines) or start_line > end_line:
-            self.set_status_message("Invalid line range")
-            return
-        
-        # Get code and context
-        code_lines = lines[start_line:end_line+1]
-        code = "\n".join(code_lines)
-        context = "\n".join(lines)
-        
-        # Setup metadata
-        metadata = {
-            "command": "explain",
-            "start_line": start_line,
-            "end_line": end_line
-        }
-        
-        # Mark as processing
-        self.ai_processing = True
-        self.ai_blocking = blocking
-        self.last_ai_status_update = time.time()
-        
-        # Start loading animation
-        if self.display:
-            self.display.start_loading_animation("AI explaining code")
-        else:
-            status_msg = "AI explaining code..." + (" (blocking)" if blocking else " (background)")
-            self.set_status_message(status_msg)
-        
-        # Run in a separate thread
-        self.ai_thread = threading.Thread(
-            target=self._ai_explain_thread,
-            args=(code, context, metadata)
-        )
-        self.ai_thread.daemon = True
-        self.ai_thread.start()
+    def ai_explain(self,start_line,end_line,blocking=False):
+        return self.submit_ai('explain',self.line_offsets(start_line,end_line),context=self.line_context(start_line,end_line))
     
-    def _ai_explain_thread(self, code: str, context: str, metadata: Dict[str, Any]) -> None:
-        """Thread function for AI code explanation"""
-        try:
-            explanation = self.ai_service.get_explanation(code, context)
-            
-            # Show the explanation in a dialog
-            with self.thread_lock:
-                # Stop loading animation if active
-                if self.display:
-                    self.display.stop_loading_animation()
-                
-                # Split into lines of appropriate width
-                explanation_lines = explanation.split("\n")
-                
-                # Update status
-                self.ai_processing = False
-                self.set_status_message("Explanation ready")
-                
-                # Show dialog
-                if self.display:
-                    self.display.show_dialog("Code Explanation", explanation_lines)
-        
-        except Exception as e:
-            with self.thread_lock:
-                # Stop loading animation if active
-                if self.display:
-                    self.display.stop_loading_animation()
-                
-                self.ai_processing = False
-                self.set_status_message(f"Error explaining code: {str(e)}")
-            logging.error(f"AI explanation error: {str(e)}")
     
-    def ai_improve(self, start_line: int, end_line: int, blocking: bool = False) -> None:
-        """
-        Improve code in the specified line range
-        
-        Args:
-            start_line: Starting line number (0-based)
-            end_line: Ending line number (0-based)
-            blocking: If True, block UI until AI completes, otherwise allow editing
-        """
-        if self.ai_processing:
-            self.set_status_message("AI is already processing a request")
-            return
-        
-        lines = self.buffer.get_lines()
-        
-        # Validate range
-        if start_line < 0 or end_line >= len(lines) or start_line > end_line:
-            self.set_status_message("Invalid line range")
-            return
-        
-        # Get code and context
-        code_lines = lines[start_line:end_line+1]
-        code = "\n".join(code_lines)
-        context = "\n".join(lines)
-        
-        # Setup metadata
-        metadata = {
-            "command": "improve",
-            "start_line": start_line,
-            "end_line": end_line
-        }
-        
-        # Mark as processing
-        self.ai_processing = True
-        self.ai_blocking = blocking
-        self.last_ai_status_update = time.time()
-        
-        # Start loading animation
-        if self.display:
-            self.display.start_loading_animation("AI improving code")
-        else:
-            status_msg = "AI improving code..." + (" (blocking)" if blocking else " (background)")
-            self.set_status_message(status_msg)
-        
-        # Run in a separate thread
-        self.ai_thread = threading.Thread(
-            target=self._ai_improve_thread,
-            args=(start_line, end_line, code, context, metadata)
-        )
-        self.ai_thread.daemon = True
-        self.ai_thread.start()
+    def ai_improve(self,start_line,end_line,blocking=False):
+        return self.submit_ai('improve',self.line_offsets(start_line,end_line),context=self.line_context(start_line,end_line))
     
-    def _ai_improve_thread(self, start_line: int, end_line: int, code: str, context: str, metadata: Dict[str, Any]) -> None:
-        """Thread function for AI code improvement"""
-        try:
-            # Get the AI improvement with the new structured format
-            improvement = self.ai_service.get_improvement(code, context)
-            
-            # Parse the structured response
-            explanation_text = ""
-            improved_code = code  # Default to original code if parsing fails
-            
-            # Check if we have the expected format with separate sections
-            if "# EXPLANATION" in improvement and "# IMPROVED_CODE" in improvement:
-                # Extract the explanation section
-                explanation_start = improvement.find("# EXPLANATION")
-                improved_code_start = improvement.find("# IMPROVED_CODE")
-                
-                if explanation_start >= 0 and improved_code_start > explanation_start:
-                    # Get the explanation part
-                    explanation_text = improvement[explanation_start + len("# EXPLANATION"):improved_code_start].strip()
-                    
-                    # Get the improved code part
-                    improved_code = improvement[improved_code_start + len("# IMPROVED_CODE"):].strip()
-            else:
-                # Fallback: try to extract code from markdown code blocks
-                import re
-                code_blocks = re.findall(r'```(?:\w+)?\n(.*?)\n```', improvement, re.DOTALL)
-                if code_blocks:
-                    # Use the largest code block
-                    improved_code = max(code_blocks, key=len)
-                    # Everything else is potentially explanation
-                    explanation_text = improvement
-            
-            # Split into lines
-            improved_lines = improved_code.strip().split("\n")
-            explanation_lines = explanation_text.split("\n")
-            
-            # Clean up the explanation lines
-            if explanation_lines:
-                # Remove empty lines at the beginning and end
-                while explanation_lines and not explanation_lines[0].strip():
-                    explanation_lines.pop(0)
-                while explanation_lines and not explanation_lines[-1].strip():
-                    explanation_lines.pop()
-                
-                # Remove markdown code blocks from explanation
-                explanation_lines = [line for line in explanation_lines 
-                                   if not line.strip().startswith("```")]
-            
-            # Create a diff between original and improved code
-            from aivim.utils import create_diff, create_backup_file
-            diff_lines = create_diff(code, improved_code)
-            
-            # Deal with the display in the main thread
-            with self.thread_lock:
-                # Stop loading animation if active
-                if self.display:
-                    self.display.stop_loading_animation()
-                
-                # Update status
-                self.ai_processing = False
-                
-                # Store the improvement for confirmation
-                self.pending_ai_action = {
-                    "type": "improve",
-                    "start_line": start_line,
-                    "end_line": end_line,
-                    "new_code": improved_code,
-                    "metadata": metadata
-                }
-                
-                # Prepare all views needed for the multi-view dialog
-                if self.display:
-                    # Original code view
-                    original_code_lines = code.split("\n")
-                    
-                    # Improved code view
-                    improved_code_lines = improved_code.split("\n")
-                    
-                    # Build a clean, structured set of views
-                    views = [
-                        {"title": "Original Code", "content": original_code_lines},
-                        {"title": "AI Improved Code", "content": improved_code_lines},
-                        {"title": "Code Improvement Diff", "content": diff_lines},
-                    ]
-                    
-                    # Show multi-view dialog with explanation as a separate view
-                    self.display.show_multi_view_dialog(
-                        views=views,
-                        explanation=explanation_lines if explanation_lines else None,
-                        default_view=1  # Show the AI Improved Code by default
-                    )
-                
-                # Set status message to prompt user for confirmation
-                self.set_status_message(f"Review changes and use :y to accept or :n to reject ({len(improved_lines)} lines)")
-                
-                # Note: The actual application of changes will happen when the user
-                # confirms with :y command, which will call confirm_ai_action(True)
-        
-        except Exception as e:
-            with self.thread_lock:
-                # Stop loading animation if active
-                if self.display:
-                    self.display.stop_loading_animation()
-                
-                self.ai_processing = False
-                self.set_status_message(f"Error improving code: {str(e)}")
-            logging.error(f"AI improvement error: {str(e)}")
     
-    def ai_analyze_code(self, start_line: int, end_line: int, blocking: bool = False) -> None:
-        """
-        Analyze code complexity and identify potential bugs in the specified line range
-        
-        Args:
-            start_line: Starting line number (0-based)
-            end_line: Ending line number (0-based)
-            blocking: If True, block UI until AI completes, otherwise allow editing
-        """
-        if self.ai_processing:
-            self.set_status_message("AI is already processing a request")
-            return
-        
-        # Get the code to analyze
-        lines = self.buffer.get_lines()
-        if not lines or start_line > end_line or end_line >= len(lines):
-            self.set_status_message("Invalid line range")
-            return
-        
-        # Extract the selected lines
-        code_lines = lines[start_line:end_line+1]
-        code = "\n".join(code_lines)
-        
-        # Get surrounding context (up to 20 lines before and after)
-        context_start = max(0, start_line - 20)
-        context_end = min(len(lines) - 1, end_line + 20)
-        context_lines = lines[context_start:context_end+1]
-        context = "\n".join(context_lines)
-        
-        # Setup metadata
-        metadata = {
-            "command": "analyze_code",
-            "start_line": start_line,
-            "end_line": end_line,
-        }
-        
-        # Mark as processing
-        self.ai_processing = True
-        self.ai_blocking = blocking
-        self.last_ai_status_update = time.time()
-        
-        # Start loading animation
-        if self.display:
-            self.display.start_loading_animation("AI analyzing code complexity and bugs")
-        else:
-            status_msg = "AI analyzing code..." + (" (blocking)" if blocking else " (background)")
-            self.set_status_message(status_msg)
-        
-        # Run in a separate thread
-        self.ai_thread = threading.Thread(
-            target=self._ai_analyze_code_thread,
-            args=(code, context, metadata)
-        )
-        self.ai_thread.daemon = True
-        self.ai_thread.start()
+    def ai_analyze_code(self,start_line,end_line,blocking=False):
+        return self.submit_ai('analyze',self.line_offsets(start_line,end_line),context=self.line_context(start_line,end_line))
     
-    def _ai_analyze_code_thread(self, code: str, context: str, metadata: Dict[str, Any]) -> None:
-        """Thread function for AI code analysis"""
-        try:
-            analysis = self.ai_service.analyze_code(code, context)
-            
-            # Show the analysis in a dialog
-            with self.thread_lock:
-                # Stop loading animation if active
-                if self.display:
-                    self.display.stop_loading_animation()
-                
-                # Split into lines
-                analysis_lines = analysis.split("\n")
-                
-                # Update status
-                self.ai_processing = False
-                self.set_status_message("Code analysis complete")
-                
-                # Show dialog
-                if self.display:
-                    self.display.show_dialog("Code Analysis Results", analysis_lines)
-        
-        except Exception as e:
-            with self.thread_lock:
-                # Stop loading animation if active
-                if self.display:
-                    self.display.stop_loading_animation()
-                
-                self.ai_processing = False
-                self.set_status_message(f"Error analyzing code: {str(e)}")
-            logging.error(f"AI analysis error: {str(e)}")
     
-    def ai_custom_query(self, query: str, blocking: bool = False) -> None:
-        """
-        Run a custom AI query on the current buffer
-        
-        Args:
-            query: The query string
-            blocking: If True, block UI until AI completes, otherwise allow editing
-        """
-        if self.ai_processing:
-            self.set_status_message("AI is already processing a request")
-            return
-        
-        # Get current buffer content for context
-        context = self.buffer.get_content()
-        
-        # Setup metadata
-        metadata = {
-            "command": "custom_query",
-            "query": query
-        }
-        
-        # Mark as processing
-        self.ai_processing = True
-        self.ai_blocking = blocking
-        self.last_ai_status_update = time.time()
-        
-        # Start loading animation
-        if self.display:
-            self.display.start_loading_animation("AI processing query")
-        else:
-            self.set_status_message("AI processing query..." + (" (blocking)" if blocking else " (background)"))
-        
-        # Run in a separate thread
-        self.ai_thread = threading.Thread(
-            target=self._ai_custom_query_thread,
-            args=(query, context, metadata)
-        )
-        self.ai_thread.daemon = True
-        self.ai_thread.start()
+    def ai_custom_query(self,query,blocking=False):
+        return self.submit_ai('query',((0,len(self.buffer.get_content())),),query)
     
-    def _ai_custom_query_thread(self, query: str, context: str, metadata: Dict[str, Any]) -> None:
-        """Thread function for AI custom query"""
-        try:
-            response = self.ai_service.custom_query(query, context)
-            
-            # Show the response in a dialog
-            with self.thread_lock:
-                # Stop loading animation if active
-                if self.display:
-                    self.display.stop_loading_animation()
-                
-                # Split into lines
-                response_lines = response.split("\n")
-                
-                # Update status
-                self.ai_processing = False
-                self.set_status_message("Query response ready")
-                
-                # Show dialog
-                if self.display:
-                    self.display.show_dialog("Query Response", response_lines)
-        
-        except Exception as e:
-            with self.thread_lock:
-                # Stop loading animation if active
-                if self.display:
-                    self.display.stop_loading_animation()
-                
-                self.ai_processing = False
-                self.set_status_message(f"Error processing query: {str(e)}")
-            logging.error(f"AI query error: {str(e)}")
     
-    def _cancel_ai_processing(self) -> None:
-        """Cancel current AI processing operation"""
-        if self.ai_processing:
-            # Stop the loading animation if it's active
-            if self.display:
-                self.display.stop_loading_animation()
-                
-            # Set status message
-            self.set_status_message("AI operation cancelled")
-            
-            # Reset AI processing flags
-            self.ai_processing = False
-            self.ai_blocking = False
-            
-            # Note: We can't really stop the thread, but we can mark it as cancelled
-            # The thread functions will check for this flag and exit early if possible
-            logging.info("AI operation cancelled by user")
+    def _cancel_ai_processing(self):
+        if self.current_job_id:self.jobs.cancel(self.current_job_id)
+        self.current_job_id=None;self.ai_processing=False;self.ai_blocking=False
+        self.set_status_message('AI request cancelled; document preserved')
     
-    def quit(self, force: bool = False) -> None:
-        """Quit the editor"""
-        if not force and self.buffer.is_modified():
-            self.set_status_message("No write since last change (use :q! to override)")
-            return
+    def quit(self, force=False):
+        if not force and any(t.buffer.is_modified() for t in self.tabs):
+            self.set_status_message('Unsaved documents: save each tab or use :q! to discard all'); return False
+        if hasattr(self, 'jobs'): self.jobs.close()
+        self.should_quit = True; return True
         
-        self.should_quit = True
+    def start_ai_chat(self):
+        self.show_dialog('AI Chat',[f'{role}: {text}' for role,text in self.chat_history]+['Use :ai <message> to submit; each response stays outside the document.'])
         
-    def start_ai_chat(self) -> None:
-        """Start an interactive chat with the AI"""
-        # We need to ensure we're not already processing an AI request
-        if self.ai_processing:
-            self.set_status_message("Already processing an AI request")
-            return
-        
-        # Create a new thread for the chat
-        with self.thread_lock:
-            self.ai_processing = True
-            
-        # Get some context from the current buffer
-        context = self.buffer.get_content()
-            
-        # Start the chat in a new thread
-        metadata = {"operation": "chat"}
-        self.ai_thread = threading.Thread(
-            target=self._ai_chat_thread,
-            args=(context, metadata)
-        )
-        self.ai_thread.daemon = True
-        self.ai_thread.start()
-        
-    def _ai_chat_thread(self, context: str, metadata: Dict[str, Any]) -> None:
-        """Thread function for AI chat"""
-        try:
-            # Start loading animation if display is available
-            if self.display:
-                self.display.start_loading_animation("Starting AI chat...")
-                
-            # Display initial chat interface
-            chat_lines = ["Welcome to AIVim Chat", ""]
-            if self.chat_history:
-                # Add existing chat history
-                for i, (role, message) in enumerate(self.chat_history):
-                    prefix = "You: " if role == "user" else "AI: "
-                    # Split long messages
-                    lines = message.split('\n')
-                    for line in lines:
-                        chat_lines.append(f"{prefix}{line}")
-                    chat_lines.append("")  # Empty line between messages
-            
-            chat_lines.append("(Type your message and press Enter to send, Escape to exit)")
-            
-            # Stop loading animation and show the chat dialog
-            with self.thread_lock:
-                if self.display:
-                    self.display.stop_loading_animation()
-                self.ai_processing = False
-                
-                # Show the chat dialog
-                if self.display:
-                    self.display.show_dialog("AI Chat", chat_lines)
-            
-        except Exception as e:
-            logging.error(f"Error in AI chat thread: {str(e)}")
-            with self.thread_lock:
-                if self.display:
-                    self.display.stop_loading_animation()
-                self.ai_processing = False
-            self.set_status_message(f"Error starting chat: {str(e)}")
             
     def set_ai_model(self, model_name: str) -> None:
         """
@@ -2794,135 +1586,103 @@ class Editor:
                 return True
         return False
             
-    def confirm_ai_action(self, confirmed: bool, create_new_tab: bool = False) -> None:
-        """
-        Confirm or reject a pending AI action
-        
-        Args:
-            confirmed: True to confirm, False to reject
-            create_new_tab: If True, create a new tab with the improved content
-                           instead of modifying the current buffer
-        """
-        if not self.pending_ai_action:
-            self.set_status_message("No pending AI action to confirm")
-            return
-            
-        if confirmed:
-            try:
-                # Extract the action details
-                action_type = self.pending_ai_action.get("type")
-                
-                if action_type == "improve":
-                    # Apply the improved code
-                    start_line = self.pending_ai_action.get("start_line")
-                    end_line = self.pending_ai_action.get("end_line")
-                    new_code = self.pending_ai_action.get("new_code")
-                    
-                    if start_line is not None and end_line is not None and new_code:
-                        # Always create a backup file with timestamp if we have a filename
-                        # This helps maintain a history of AI changes
-                        backup_path = ""
-                        if self.filename:
-                            from aivim.utils import create_backup_file
-                            backup_path = create_backup_file(self.filename)
-                            if backup_path:
-                                self.set_status_message(f"Backup created: {backup_path}")
-                        
-                        # Store metadata about this AI change for future reference
-                        timestamp = time.strftime("%Y%m%d%H%M%S")
-                        metadata = self.pending_ai_action.get("metadata", {})
-                        metadata["timestamp"] = timestamp
-                        metadata["backup_path"] = backup_path if backup_path else "None"
-                        
-                        # Add model info to metadata if available
-                        if hasattr(self, 'ai_service'):
-                            model_info = self.ai_service.get_current_model_info()
-                            metadata["model"] = model_info
-                        
-                        # Convert new code to lines
-                        new_lines = new_code.split("\n")
-                        
-                        # Check if we need to create a new tab
-                        # Always create a new tab for Local LLM results
-                        is_local_llm = False
-                        if hasattr(self, 'ai_service') and self.ai_service.current_model == "local":
-                            is_local_llm = True
-                            create_new_tab = True
-                            
-                        if create_new_tab:
-                            # Create a new tab with the improved content
-                            # Generate a new filename based on the current filename
-                            new_filename = None
-                            timestamp = time.strftime("%Y%m%d%H%M%S")
-                            
-                            if self.filename:
-                                # Get the directory and base name
-                                directory = os.path.dirname(self.filename)
-                                basename = os.path.basename(self.filename)
-                                name, ext = os.path.splitext(basename)
-                                
-                                # Create new filename (name_improved_timestamp.ext)
-                                new_basename = f"{name}_improved_{timestamp}{ext}"
-                                new_filename = os.path.join(directory, new_basename) if directory else new_basename
-                                
-                                # Create tab name from the new basename
-                                tab_name = new_basename
-                            else:
-                                # No filename, just use "Improved Code"
-                                tab_name = f"Improved_{timestamp}"
-                            
-                            # Create a new buffer with the improved code
-                            new_buffer = Buffer()
-                            new_buffer.set_lines(new_lines)
-                            
-                            # Create the new tab
-                            tab_index = self.create_tab(tab_name, new_buffer, new_filename)
-                            
-                            # Switch to the new tab
-                            self.switch_to_tab(tab_index)
-                            
-                            # Add model info to status message if available
-                            model_info = ""
-                            if hasattr(self, 'ai_service'):
-                                model_info = self.ai_service.get_current_model_info()
-                                model_info = f" using {model_info}"
-                                
-                            self.set_status_message(f"Created new tab with improved code{model_info} ({len(new_lines)} lines)")
-                        else:
-                            # Apply to current buffer
-                            # Save current buffer state to history for undo/redo
-                            self.history.add_version(self.buffer.get_lines())
-                            
-                            # Delete the old lines
-                            for _ in range(end_line - start_line + 1):
-                                self.buffer.delete_line(start_line)
-                                
-                            # Insert the new lines
-                            for i, line in enumerate(new_lines):
-                                self.buffer.insert_line(start_line + i, line)
-                                
-                            # Save the updated state in history
-                            metadata = self.pending_ai_action.get("metadata", {})
-                            self.history.add_version(self.buffer.get_lines(), metadata)
-                            
-                            # Add model info to status message if available
-                            model_info = ""
-                            if hasattr(self, 'ai_service'):
-                                model_info = self.ai_service.get_current_model_info()
-                                model_info = f" using {model_info}"
-                                
-                            self.set_status_message(f"AI improvement applied{model_info} ({len(new_lines)} lines)")
-                    else:
-                        self.set_status_message("Invalid AI action data")
-                else:
-                    self.set_status_message(f"Unknown AI action type: {action_type}")
-                    
-            except Exception as e:
-                self.set_status_message(f"Error applying AI action: {str(e)}")
-                logging.error(f"Error applying AI action: {str(e)}")
+    def confirm_ai_action(self,confirmed,create_new_tab=False,copy=None):
+        proposal=self.pending_ai_action
+        if not proposal:self.set_status_message('No pending proposal');return False
+        if not confirmed:
+            self.pending_ai_action=None
+            if self.display:self.display.close_dialog()
+            self.set_status_message('Proposal rejected');return True
+        if copy is None:copy=create_new_tab
+        tab=next((t for t in self.tabs if t.document_id==proposal.document_id),None)
+        try:proposal.validate_document(tab)
+        except AIError as exc:self.set_status_message(str(exc));return False
+        content=proposal.content()
+        if copy:
+            buffer=Buffer();buffer.set_content(content)
+            index=self.create_tab('AI proposal copy',buffer=buffer);self.switch_to_tab(index)
         else:
-            # User rejected the action
-            self.set_status_message("AI action rejected")
-            
-        # Clear the pending action
-        self.pending_ai_action = None
+            tab.history.add_version(tab.buffer.get_lines());tab.buffer.set_content(content);tab.history.add_version(tab.buffer.get_lines())
+            if tab is self.current_tab:
+                self.cursor_y=min(self.cursor_y,len(tab.buffer.get_lines())-1);self._adjust_cursor_x()
+        self.pending_ai_action=None
+        if self.display:self.display.close_dialog()
+        self.set_status_message('Proposal copied' if copy else 'Proposal applied; u undoes it');return True
+    def insert_text(self, text):
+        line=self.buffer.get_line(self.cursor_y); parts=text.replace('\r\n','\n').replace('\r','\n').split('\n')
+        self.buffer.set_line(self.cursor_y,line[:self.cursor_x]+parts[0]+(line[self.cursor_x:] if len(parts)==1 else ''))
+        for i,part in enumerate(parts[1:],1): self.buffer.insert_line(self.cursor_y+i,part+(line[self.cursor_x:] if i==len(parts)-1 else ''))
+        self.cursor_y+=len(parts)-1;self.cursor_x=(self.cursor_x+len(parts[0])) if len(parts)==1 else len(parts[-1]);self.preferred_x=self.cursor_x
+
+    def _review_substitution(self, key):
+        review=self._substitution_review
+        if key not in (ord('y'),ord('n'),ord('a'),ord('q')): return
+        if key == ord('q'): review['index']=len(review['matches'])
+        elif key == ord('a'): review['accepted'].extend(review['matches'][review['index']:]);review['index']=len(review['matches'])
+        else:
+            if key == ord('y'): review['accepted'].append(review['matches'][review['index']])
+            review['index']+=1
+        if review['index'] == len(review['matches']):
+            text=review['text']
+            for start,end,replacement in reversed(review['accepted']): text=text[:start]+replacement+text[end:]
+            self.buffer.set_content(text);self.history.add_version(self.buffer.get_lines());self._substitution_review=None;self.set_status_message('Substitution complete')
+        else: self.set_status_message('Replace next match? y/n/a/q')
+
+    def handle_input(self, key):
+        self.poll_ai_events()
+        if isinstance(key,Paste):
+            self.history.add_version(self.buffer.get_lines());self.insert_text(key.text)
+            if self.mode not in ('INSERT','NLP'):self.history.add_version(self.buffer.get_lines())
+            return
+        if key == -1: return
+        if getattr(self,'_substitution_review',None):
+            self._review_substitution(ord(key) if isinstance(key,str) else key); return
+        before=self.buffer.revision;tab=self.current_tab; mode=self.mode
+        if isinstance(key,str) and len(key)==1:
+            if ord(key)>127:
+                if self.mode in ('INSERT','NLP'): self.insert_text(key)
+                elif self.mode=='COMMAND': self.command_buffer=self.command_buffer[:self.command_cursor]+key+self.command_buffer[self.command_cursor:];self.command_cursor+=1
+                elif self.mode=='SEARCH': self.search_input_buffer+=key
+                return
+            key=ord(key)
+        if self.mode=='NORMAL' and key not in (ord('u'),18): self.history.add_version(self.buffer.get_lines())
+        self._dispatch_input(key)
+        if tab is self.current_tab and before != self.buffer.revision and self.mode not in ('INSERT','NLP') and key not in (ord('u'),18): self.history.add_version(self.buffer.get_lines())
+
+    def line_offsets(self,start,end):
+        lines=self.buffer.get_lines()
+        if not 0<=start<=end<len(lines): raise ValueError('Invalid line range')
+        a=sum(len(x)+1 for x in lines[:start]);b=sum(len(x)+1 for x in lines[:end])+len(lines[end])
+        return ((a,b),)
+
+    def submit_ai(self,action,ranges,instruction='',context=''):
+        if self.ai_processing:self.set_status_message('AI request is pending; Esc cancels');return False
+        tab=self.current_tab;provider=self.ai_service.current_model;model=self.ai_service.models()[provider]
+        job=AIJob(tab.document_id,tab.buffer.revision,tab.buffer.get_content(),action,provider,model,tuple(ranges),context,instruction,time.monotonic()+self.settings.ai.timeout)
+        try:self.current_job_id=self.jobs.submit(job)
+        except AIError as exc:self.set_status_message(str(exc));return False
+        self.ai_processing=True;self.ai_blocking=False;self.last_ai_status_update=time.time()
+        self.set_status_message(f'AI pending: {provider}/{model}; context only this document unless explicitly selected; Esc cancels')
+        return True
+
+    def poll_ai_events(self):
+        if not hasattr(self,'jobs'):return
+        if self.nlp_handler:self.nlp_handler.tick()
+        for event in self.jobs.drain():
+            if event.job.request_id!=self.current_job_id:continue
+            self.current_job_id=None;self.ai_processing=False;self.ai_blocking=False
+            if event.error:self.set_status_message(f'{event.error.code}: {event.error}');continue
+            tab=next((t for t in self.tabs if t.document_id==event.job.document_id),None)
+            if tab is None or tab.buffer.revision!=event.job.base_revision or tab.buffer.get_content()!=event.job.source_snapshot:
+                self.set_status_message('STALE_PROPOSAL: Document changed; result discarded');continue
+            if event.job.action in ('improve','generate','nlp'):
+                try:proposal=parse_proposal(event.job,event.result)
+                except AIError as exc:self.set_status_message(f'{exc.code}: {exc}');continue
+                self.pending_ai_action=proposal
+                if self.display:self.display.show_multi_view_dialog([{'title':'Original','content':proposal.snapshot.split('\n')},{'title':'Proposal','content':proposal.content().split('\n')},{'title':'Diff','content':proposal.diff()}],explanation=proposal.explanation.split('\n'),default_view=2)
+                self.set_status_message('Proposal ready: :apply changes original; :y copies full document; :reject dismisses; :n changes tab')
+            else:
+                self.chat_history.append(('AI',event.result.text));self.show_dialog('AI '+event.job.action,event.result.text.split('\n'));self.set_status_message('AI response ready; document preserved')
+
+    def line_context(self,start,end):
+        return '\n'.join(self.buffer.get_lines()[max(0,start-20):end+21])

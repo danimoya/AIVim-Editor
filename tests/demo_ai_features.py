@@ -28,7 +28,7 @@ def demonstration():
     
     # Check if AI services are available
     ai_service = AIService()
-    if not ai_service.client:
+    if not ai_service.is_model_configured():
         print("Error: AI services unavailable.")
         print("Please ensure that:")
         print("  1. The OpenAI package is installed ('pip install openai')")
@@ -81,7 +81,7 @@ def explanation_example():
     
     code = """
 def search_items(items, search_term):
-    """Search for items matching the search term"""
+    '''Search for items matching the search term'''
     results = []
     for item in items:
         if search_term in item:
@@ -113,7 +113,7 @@ def improvement_example():
     
     code = """
 def search_items(items, search_term):
-    """Search for items matching the search term"""
+    '''Search for items matching the search term'''
     results = []
     for item in items:
         if search_term in item:
@@ -182,7 +182,7 @@ def custom_query_example():
     
     context = """
 def calculate_fibonacci(n: int) -> int:
-    """
+    '''
     Calculate the nth Fibonacci number using a simple recursive approach.
     
     Args:
@@ -190,7 +190,7 @@ def calculate_fibonacci(n: int) -> int:
         
     Returns:
         The nth Fibonacci number
-    """
+    '''
     if n <= 0:
         return 0
     elif n == 1:
@@ -217,7 +217,7 @@ def run_api_examples():
     
     # Check if AI services are available
     ai_service = AIService()
-    if not ai_service.client:
+    if not ai_service.is_model_configured():
         print("Error: AI services unavailable.")
         print("Please ensure that:")
         print("  1. The OpenAI package is installed ('pip install openai')")

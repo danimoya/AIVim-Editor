@@ -76,18 +76,26 @@ class DisplaySettings:
 class AISettings:
     """AI-related settings"""
     default_model: str = "openai"
-    openai_model: str = "gpt-4o"
-    anthropic_model: str = "claude-3-5-sonnet-20241022"
-    timeout: int = 30
-    auto_suggestions: bool = True
+    openai_model: str = "gpt-4.1-mini"
+    anthropic_model: str = "claude-sonnet-5-5"
+    timeout: float = 30.0
+    auto_suggestions: bool = False
     nlp_live_mode: bool = False
     max_tokens: int = 2048
     temperature: float = 0.7
-    stream_responses: bool = True
+    stream_responses: bool = False
     show_thinking: bool = False
-    cache_responses: bool = True
+    cache_responses: bool = False
     retry_on_error: bool = True
-    max_retries: int = 3
+    max_retries: int = 1
+    local_model_path: str = ''
+    local_model_sha256: str = ''
+    local_memory_mb: int = 4096
+    local_cpu_seconds: int = 60
+    local_threads: int = 2
+    local_context: int = 4096
+    content_log_dir: str = '~/.local/state/aivim/content-logs'
+    content_log_retention: int = 10
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
@@ -113,9 +121,9 @@ class FileSettings:
     autowriteall: bool = False
     backup: bool = False  # Keep backup after successful write
     writebackup: bool = True  # Make backup before overwriting
-    swapfile: bool = True
+    swapfile: bool = False
     updatetime: int = 4000  # Milliseconds before swap file write
-    undofile: bool = True
+    undofile: bool = False
     undodir: str = "~/.aivim/undo"
     undolevels: int = 1000
     
@@ -159,6 +167,14 @@ class SearchSettings:
 class Settings:
     """Main settings manager for AIVim"""
     
+    SUPPORTED={
+        'editor': {'tabstop','expandtab','shiftwidth','autoindent','number','relativenumber','cursorline','cursorcolumn','scrolloff'},
+        'display': {'syntax'},
+        'ai': {'default_model','openai_model','anthropic_model','timeout','nlp_live_mode','max_tokens','temperature','retry_on_error','max_retries','local_model_path','local_model_sha256','local_memory_mb','local_cpu_seconds','local_threads','local_context','content_log_dir','content_log_retention'},
+        'file': {'auto_backup','backup_dir','encoding','fileformat','undolevels'},
+        'search': {'ignorecase','smartcase','hlsearch','incsearch','wrapscan','gdefault'}
+    }
+
     def __init__(self, config_path: Optional[str] = None):
         """Initialize settings manager
         
@@ -223,75 +239,30 @@ class Settings:
         # Load configuration
         self.load()
         
-    def _find_config_file(self, config_path: Optional[str] = None) -> Path:
-        """Find the configuration file
-        
-        Args:
-            config_path: Optional explicit config path
-            
-        Returns:
-            Path to the config file
-        """
-        if config_path:
-            return Path(config_path).expanduser()
-        
-        # Check common config locations
-        config_locations = [
-            Path.home() / '.aivimrc',
-            Path.home() / '.config' / 'aivim' / 'settings.json',
-            Path.home() / '.aivim' / 'config.json',
-        ]
-        
-        for path in config_locations:
-            if path.exists():
-                logging.info(f"Found config file at: {path}")
-                return path
-        
-        # Default to ~/.config/aivim/settings.json
-        default_path = Path.home() / '.config' / 'aivim' / 'settings.json'
-        logging.info(f"No config file found, using default: {default_path}")
-        return default_path
+    def _find_config_file(self, config_path=None):
+        return Path(config_path).expanduser() if config_path else Path('~/.config/aivim/settings.json').expanduser()
     
-    def load(self, path: Optional[str] = None) -> bool:
-        """Load settings from file
-        
-        Args:
-            path: Optional path to load from
-            
-        Returns:
-            True if successful, False otherwise
-        """
-        config_file = Path(path).expanduser() if path else self.config_path
-        
-        if not config_file.exists():
-            logging.info(f"Config file not found: {config_file}")
-            return False
-        
-        try:
-            with open(config_file, 'r') as f:
-                data = json.load(f)
-            
-            # Load each category
-            if 'editor' in data:
-                self.editor = EditorSettings.from_dict(data['editor'])
-            if 'display' in data:
-                self.display = DisplaySettings.from_dict(data['display'])
-            if 'ai' in data:
-                self.ai = AISettings.from_dict(data['ai'])
-            if 'file' in data:
-                self.file = FileSettings.from_dict(data['file'])
-            if 'search' in data:
-                self.search = SearchSettings.from_dict(data['search'])
-            
-            # Store original values for reset
-            self._store_original_values()
-            
-            logging.info(f"Settings loaded from: {config_file}")
-            return True
-            
-        except Exception as e:
-            logging.error(f"Error loading settings: {e}")
-            return False
+    def load(self, path=None):
+        import configparser
+        target=Path(path).expanduser() if path else self.config_path
+        self.loaded=False;self.legacy_credentials={}
+        if not target.exists(): return False
+        text=target.read_text(encoding='utf-8')
+        if text.lstrip().startswith('['):
+            legacy=configparser.ConfigParser();legacy.read_string(text)
+            data={'schema_version':1,'ai':{}}
+            for section,old,new in [('General','default_model','default_model'),('OpenAI','model','openai_model'),('Anthropic','model','anthropic_model'),('LocalLLM','model_path','local_model_path')]:
+                if legacy.has_option(section,old): data['ai'][new]=legacy[section][old]
+            for section,provider in [('OpenAI','openai'),('Anthropic','claude')]:
+                if legacy.has_option(section,'api_key'):self.legacy_credentials[provider]=legacy[section]['api_key']
+            for section,key,dest,kind in [('General','ai_timeout','timeout',int),('General','timeout','timeout',int),('LocalLLM','model_sha256','local_model_sha256',str)]:
+                if legacy.has_option(section,key):data['ai'][dest]=kind(legacy[section][key])
+            # Legacy credentials stay transient and are never serialized.
+        else: data=json.loads(text)
+        self.validate_config(data)
+        for name,kind in [('editor',EditorSettings),('display',DisplaySettings),('ai',AISettings),('file',FileSettings),('search',SearchSettings)]:
+            if name in data: setattr(self,name,kind.from_dict(data[name]))
+        self.loaded=True;self._store_original_values();return True
     
     def save(self, path: Optional[str] = None) -> bool:
         """Save settings to file
@@ -308,22 +279,21 @@ class Settings:
         config_file.parent.mkdir(parents=True, exist_ok=True)
         
         try:
-            data = {
-                'editor': self.editor.to_dict(),
-                'display': self.display.to_dict(),
-                'ai': self.ai.to_dict(),
-                'file': self.file.to_dict(),
-                'search': self.search.to_dict(),
-            }
+            data={'schema_version':1,**self.get_all()}
+            self.validate_config(data)
+            import tempfile
+            fd,temp=tempfile.mkstemp(dir=config_file.parent,prefix='.aivim-settings-')
+            try:
+                with os.fdopen(fd,'w') as f: json.dump(data,f,indent=2);f.flush();os.fsync(f.fileno())
+                os.replace(temp,config_file)
+            finally:
+                if os.path.exists(temp):os.unlink(temp)
             
-            with open(config_file, 'w') as f:
-                json.dump(data, f, indent=2)
-            
-            logging.info(f"Settings saved to: {config_file}")
+            logging.info("Settings saved")
             return True
             
         except Exception as e:
-            logging.error(f"Error saving settings: {e}")
+            logging.error("settings operation failed")
             return False
     
     def _store_original_values(self):
@@ -393,6 +363,7 @@ class Settings:
                     if isinstance(current_value, bool):
                         # Handle boolean conversions
                         if isinstance(value, str):
+                            if value.lower() not in ('true','1','yes','on','false','0','no','off'):raise ValueError('Invalid boolean')
                             value = value.lower() in ('true', '1', 'yes', 'on')
                         else:
                             value = bool(value)
@@ -403,6 +374,8 @@ class Settings:
                     elif isinstance(current_value, str):
                         value = str(value)
                     
+                    name=next(name for name in ('editor','display','ai','file','search') if getattr(self,name) is category)
+                    self.validate_config({name:{option:value}})
                     setattr(category, option, value)
                     
                     # Auto-save if enabled
@@ -411,7 +384,7 @@ class Settings:
                     
                     return True
                 except (ValueError, TypeError) as e:
-                    logging.error(f"Error setting {option}: {e}")
+                    logging.error("settings operation failed")
                     return False
         
         return False
@@ -430,79 +403,11 @@ class Settings:
             return self.set(option, not current)
         return False
     
-    def get_all(self) -> Dict[str, Dict[str, Any]]:
-        """Get all settings as a dictionary
-        
-        Returns:
-            Dictionary with all settings organized by category
-        """
-        return {
-            'editor': self.editor.to_dict(),
-            'display': self.display.to_dict(),
-            'ai': self.ai.to_dict(),
-            'file': self.file.to_dict(),
-            'search': self.search.to_dict(),
-        }
+    def get_all(self):
+        return {name:{key:getattr(getattr(self,name),key) for key in sorted(keys)} for name,keys in self.SUPPORTED.items()}
     
-    def get_help(self) -> List[str]:
-        """Get help text for all settings
-        
-        Returns:
-            List of help lines
-        """
-        help_lines = [
-            "AIVim Settings Help",
-            "==================",
-            "",
-            "Usage:",
-            "  :set option          - Show current value",
-            "  :set option=value    - Set value",
-            "  :set option!         - Toggle boolean option",
-            "  :set nooption        - Turn off boolean option",
-            "  :set all             - Show all settings",
-            "  :set?                - Show this help",
-            "",
-            "Editor Settings:",
-            "  tabstop (ts)         - Number of spaces for tab character",
-            "  expandtab (et)       - Use spaces instead of tabs",
-            "  shiftwidth (sw)      - Number of spaces for indent",
-            "  autoindent (ai)      - Copy indent from current line",
-            "  wrap                 - Wrap long lines",
-            "  number (nu)          - Show line numbers",
-            "  relativenumber (rnu) - Show relative line numbers",
-            "  cursorline (cul)     - Highlight current line",
-            "  scrolloff (so)       - Lines to keep above/below cursor",
-            "",
-            "Display Settings:",
-            "  theme                - Color theme",
-            "  syntax (syn)         - Enable syntax highlighting",
-            "  statusline           - Status line format",
-            "  showmode (smd)       - Show current mode",
-            "  showcmd (sc)         - Show partial command",
-            "  ruler                - Show cursor position",
-            "",
-            "AI Settings:",
-            "  default_model        - Default AI model to use",
-            "  timeout              - AI request timeout in seconds",
-            "  auto_suggestions     - Enable automatic AI suggestions",
-            "  nlp_live_mode        - Enable NLP live mode by default",
-            "",
-            "File Settings:",
-            "  auto_backup          - Create backups automatically",
-            "  backup_dir           - Directory for backup files",
-            "  encoding (enc)       - File encoding",
-            "  fileformat (ff)      - Line ending format (unix/dos/mac)",
-            "  undolevels (ul)      - Number of undo levels",
-            "",
-            "Search Settings:",
-            "  ignorecase (ic)      - Case insensitive search",
-            "  smartcase (sc)       - Override ignorecase if uppercase used",
-            "  hlsearch (hls)       - Highlight search matches",
-            "  incsearch (is)       - Show matches while typing",
-            "  wrapscan (ws)        - Wrap search at end of file",
-        ]
-        
-        return help_lines
+    def get_help(self):
+        return ['Supported settings; unsupported options are rejected:']+[name+': '+', '.join(sorted(keys)) for name,keys in self.SUPPORTED.items()]
     
     def export_config(self, path: str) -> bool:
         """Export current settings to a file
@@ -525,3 +430,30 @@ class Settings:
             True if successful, False otherwise
         """
         return self.load(path)
+    @staticmethod
+    def validate_config(data):
+        if not isinstance(data,dict) or data.get('schema_version',1)!=1: raise ValueError('Expected settings schema_version 1')
+        kinds={'editor':EditorSettings,'display':DisplaySettings,'ai':AISettings,'file':FileSettings,'search':SearchSettings}
+        if set(data)-set(kinds)-{'schema_version'}: raise ValueError('Unknown settings category; credentials must be supplied separately')
+        for category,values in data.items():
+            if category=='schema_version': continue
+            if not isinstance(values,dict): raise ValueError('Settings category must be an object')
+            defaults=kinds[category]()
+            for key,value in values.items():
+                if key not in Settings.SUPPORTED[category]: raise ValueError('Unsupported setting: '+key)
+                if key not in defaults.__dataclass_fields__: raise ValueError('Unknown setting: '+key)
+                if isinstance(value,str) and '\0' in value:raise ValueError('Setting contains a null character')
+                if key=='encoding':__import__('codecs').lookup(value)
+                if key=='undolevels' and not 1<=value<=10000:raise ValueError('Invalid undo limit')
+                expected=type(getattr(defaults,key))
+                if expected is float and type(value) in (int,float): pass
+                elif type(value) is not expected: raise ValueError('Invalid setting type: '+key)
+                if key in {'stream_responses','cache_responses','auto_suggestions','swapfile','undofile','autowrite','autowriteall'} and value: raise ValueError('Unsupported setting: '+key)
+                if key in {'tabstop','shiftwidth'} and not 1<=value<=32: raise ValueError('Invalid indentation width')
+                if key=='timeout' and not .01<=value<=300: raise ValueError('Invalid timeout')
+                if key=='default_model' and value not in {'openai','claude','local'}: raise ValueError('Unknown provider')
+                if key=='fileformat' and value not in {'unix','dos','mac'}: raise ValueError('Unknown newline convention')
+                if key=='max_retries' and not 0<=value<=3: raise ValueError('Invalid retry budget')
+                if key=='temperature' and not 0<=value<=1: raise ValueError('Invalid temperature')
+                if key=='max_tokens' and not 1<=value<=32768: raise ValueError('Invalid token budget')
+                if key in {'local_memory_mb','local_cpu_seconds','local_threads','local_context','content_log_retention'} and value<=0: raise ValueError('Invalid resource limit')

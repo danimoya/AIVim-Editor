@@ -1,3 +1,7 @@
+# 0.6.0 candidate (unpublished)
+
+Document-safe saves and dirty-tab guards; lossless Unicode and bracketed paste; undo transactions; cancellable snapshot AI jobs and strict reviewed proposals; explicit NLP context; packaged browser security and ergonomics; unified settings, locks and qualification gates. Live provider entitlement, platform-matrix and native-model qualification remain release prerequisites.
+
 # Changelog
 
 All notable changes to this project will be documented in this file.

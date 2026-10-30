@@ -31,6 +31,12 @@ class CommandHandler:
         """
         commands = {
             # File operations
+            r'^w!(?:\s+(.+))?$': lambda filename: bool(self.editor.save_file(filename, force=True)),
+            r'^tabclose\s+(save|discard|cancel)$': self.editor.close_current_tab,
+            r'^nexttab$': self._cmd_next_tab,
+            r'^prevtab$': self._cmd_prev_tab,
+            r'^reject$': self._cmd_confirm_no,
+            r'^apply$': lambda: self.editor.confirm_ai_action(True, copy=False),
             r'^w$': self._cmd_write,
             r'^w\s+(.+)$': self._cmd_write_as,
             r'^q$': self._cmd_quit,
@@ -70,6 +76,8 @@ class CommandHandler:
             r'^tabnew\s+(.+)$': self._cmd_tab_new_file,
             r'^tabclose$': self._cmd_tab_close,
             # NLP mode commands
+            r'^nlpcontext$': lambda: self.editor.show_dialog('Selected context', [str(c) for c in self.editor.nlp_handler.context_preview()] if self.editor.nlp_handler else ['No context selected']),
+            r'^nlpcontext\s+(.+)$': self._cmd_nlp_context,
             r'^nlp$': self._cmd_enter_nlp_mode,
             r'^nlpmark\s+(\d+)\s+(\d+)$': self._cmd_mark_nlp_section,
             r'^nlptranslate$': self._cmd_translate_nlp,
@@ -102,56 +110,35 @@ class CommandHandler:
         if command_line.startswith(':'):
             command_line = command_line[1:]
         
+        from .substitution import parse
+        try:
+            parsed=parse(command_line,self.editor)
+            if parsed:
+                pattern,replacement,bounds,flags=parsed
+                self.editor.substitute(pattern,replacement,bounds,('g' in flags)^self.editor.settings.search.gdefault,'c' in flags,flags=flags)
+                return True
+        except (ValueError,re.error) as exc:
+            self.editor.set_status_message(str(exc));return False
         # Find matching command pattern
         for pattern, handler in self.commands.items():
             match = re.match(pattern, command_line)
             if match:
-                logging.info(f"Executing command: {command_line}")
-                return handler(*match.groups())
+                logging.info("Command dispatched")
+                try:return handler(*match.groups())
+                except (ValueError,OSError) as exc:
+                    self.editor.set_status_message('Command failed; input preserved: '+str(exc));return False
         
         self.editor.set_status_message(f"Unknown command: {command_line}")
         return False
     
-    def _cmd_write(self) -> bool:
-        """
-        Handle the write command (:w).
-
-        Returns:
-            True if successful, False otherwise
-        """
-        try:
-            self.editor.save_file()
-            return True
-        except Exception as e:
-            self.editor.set_status_message(f"Error saving file: {str(e)}")
-            return False
+    def _cmd_write(self):
+        return bool(self.editor.save_file())
     
-    def _cmd_write_as(self, filename: str) -> bool:
-        """
-        Handle the write as command (:w filename).
-
-        Args:
-            filename: Target filename
-
-        Returns:
-            True if successful, False otherwise
-        """
-        try:
-            self.editor.save_file(filename)
-            return True
-        except Exception as e:
-            self.editor.set_status_message(f"Error saving file: {str(e)}")
-            return False
+    def _cmd_write_as(self, filename):
+        return bool(self.editor.save_file(os.path.expanduser(filename)))
     
-    def _cmd_quit(self) -> bool:
-        """
-        Handle the quit command (:q).
-
-        Returns:
-            True if successful, False otherwise
-        """
-        self.editor.quit()
-        return True
+    def _cmd_quit(self):
+        return self.editor.quit()
     
     def _cmd_write_quit(self) -> bool:
         """
@@ -485,6 +472,11 @@ class CommandHandler:
             option: Setting name
             value: Setting value
         """
+        self.editor.ai_service.settings=self.editor.settings
+        self.editor.ai_service.ai_timeout=self.editor.settings.ai.timeout
+        self.editor.ai_service.current_openai_model=self.editor.settings.ai.openai_model
+        self.editor.ai_service.current_anthropic_model=self.editor.settings.ai.anthropic_model
+        for tab in self.editor.tabs:tab.history.max_history=self.editor.settings.file.undolevels
         # Map settings to editor properties/methods
         if option == "number" or option == "relativenumber":
             # Trigger display refresh
@@ -506,7 +498,7 @@ class CommandHandler:
         elif option == "nlp_live_mode":
             # Update NLP live mode
             if hasattr(self.editor, 'nlp_handler') and self.editor.nlp_handler:
-                self.editor.nlp_handler.live_mode = value
+                self.editor.nlp_handler.live_mode_enabled = value
     
     def _apply_all_settings(self) -> None:
         """
@@ -515,6 +507,7 @@ class CommandHandler:
         if not hasattr(self.editor, 'settings'):
             return
         
+        self._apply_setting("",None)
         # Apply display settings
         if hasattr(self.editor, 'display') and self.editor.display:
             self.editor.display.refresh = True
@@ -565,37 +558,11 @@ class CommandHandler:
             return False
             
 
-    def _cmd_confirm_yes(self) -> bool:
-        """
-        Handle the confirm yes command (:y).
-        Used to confirm AI improvement suggestions and create a new tab with
-        the improved content.
-
-        Returns:
-            True if successful, False otherwise
-        """
-        try:
-            # Pass True for create_new_tab to open the improved code in a new tab
-            self.editor.confirm_ai_action(True, create_new_tab=True)
-            return True
-        except Exception as e:
-            self.editor.set_status_message(f"Error handling confirmation: {str(e)}")
-            return False
+    def _cmd_confirm_yes(self):
+        return self.editor.confirm_ai_action(True,copy=True)
             
-    def _cmd_confirm_no(self) -> bool:
-        """
-        Handle the confirm no command (:n).
-        Used to reject AI improvement suggestions.
-
-        Returns:
-            True if successful, False otherwise
-        """
-        try:
-            self.editor.confirm_ai_action(False)
-            return True
-        except Exception as e:
-            self.editor.set_status_message(f"Error handling rejection: {str(e)}")
-            return False
+    def _cmd_confirm_no(self):
+        return self.editor.confirm_ai_action(False)
     
     def _cmd_next_tab(self) -> bool:
         """
@@ -889,34 +856,8 @@ class CommandHandler:
             self.editor.set_status_message(f"Error creating new buffer: {str(e)}")
             return False
     
-    def _cmd_save_as(self, filename: str) -> bool:
-        """
-        Handle the saveas command (:saveas filename).
-        Saves the current buffer to a different filename.
-        
-        Args:
-            filename: New filename to save to
-            
-        Returns:
-            True if successful, False otherwise
-        """
-        try:
-            # Expand path (handle ~, etc.)
-            filename = os.path.expanduser(filename)
-            
-            # Check if we can write to the directory
-            directory = os.path.dirname(filename) or '.'
-            if not os.access(directory, os.W_OK):
-                self.editor.set_status_message(f"Cannot write to directory: {directory}")
-                return False
-            
-            self.editor.save_file(filename)
-            self.editor.filename = filename
-            self.editor.current_tab.name = os.path.basename(filename)
-            return True
-        except Exception as e:
-            self.editor.set_status_message(f"Error saving file as {filename}: {str(e)}")
-            return False
+    def _cmd_save_as(self, filename):
+        return bool(self.editor.save_file(os.path.expanduser(filename)))
     
     def _cmd_browse_files(self) -> bool:
         """
@@ -995,43 +936,11 @@ class CommandHandler:
             self.editor.set_status_message(f"Error marking NLP section: {str(e)}")
             return False
             
-    def _cmd_translate_nlp(self) -> bool:
-        """
-        Handle the command to force translation of NLP sections (:nlptranslate).
-        
-        Returns:
-            True if successful, False otherwise
-        """
-        try:
-            # Make sure NLP handler is initialized
-            if not self.editor.nlp_handler:
-                from aivim.nlp_mode import NLPHandler
-                self.editor.nlp_handler = NLPHandler(self.editor)
-            
-            # Show loading animation
-            if hasattr(self.editor.display, "start_loading_animation"):
-                self.editor.display.start_loading_animation("Processing NLP sections...")
-                
-            # First scan for any NLP sections
-            self.editor.nlp_handler.scan_buffer_for_nlp_sections()
-            
-            # Check if we found any sections
-            if not hasattr(self.editor.nlp_handler, "nlp_sections") or not self.editor.nlp_handler.nlp_sections:
-                if hasattr(self.editor.display, "stop_loading_animation"):
-                    self.editor.display.stop_loading_animation()
-                self.editor.set_status_message("No NLP sections found to translate")
-                return False
-                
-            # Process NLP sections
-            self.editor.nlp_handler.process_nlp_sections()
-            return True
-        except Exception as e:
-            # Make sure to stop the animation if there's an error
-            if hasattr(self.editor.display, "stop_loading_animation"):
-                self.editor.display.stop_loading_animation()
-            self.editor.set_status_message(f"Error translating NLP sections: {str(e)}")
-            logging.error(f"Error executing nlptranslate command: {str(e)}")
-            return False
+    def _cmd_translate_nlp(self):
+        if not self.editor.nlp_handler:
+            from .nlp_mode import NLPHandler
+            self.editor.nlp_handler=NLPHandler(self.editor)
+        return self.editor.nlp_handler.force_submit()
     
     def _cmd_toggle_nlp_live_mode(self) -> bool:
         """
@@ -1057,7 +966,7 @@ class CommandHandler:
             
         except Exception as e:
             self.editor.set_status_message(f"Error toggling NLP live mode: {str(e)}")
-            logging.error(f"Error executing nlplive command: {str(e)}")
+            logging.error("command_handler operation failed")
             return False
             
     def _cmd_toggle_debug_mode(self) -> bool:
@@ -1078,7 +987,7 @@ class CommandHandler:
                 
         except Exception as e:
             self.editor.set_status_message(f"Error toggling debug mode: {str(e)}")
-            logging.error(f"Error executing debug command: {str(e)}")
+            logging.error("command_handler operation failed")
             return False
     
     def _cmd_no_highlight(self) -> bool:
@@ -1219,3 +1128,13 @@ class CommandHandler:
             self.editor.set_status_message(f"Error in substitution: {str(e)}")
             return False
 
+
+    def _cmd_nlp_context(self,value):
+        from .nlp_mode import NLPHandler
+        if not self.editor.nlp_handler:self.editor.nlp_handler=NLPHandler(self.editor)
+        try:
+            indices=[] if value=='none' else [int(x)-1 for x in value.split(',')]
+            if any(i<0 or i>=len(self.editor.tabs) for i in indices):raise ValueError('Invalid context tab')
+            self.editor.nlp_handler.select_context([self.editor.tabs[i].document_id for i in indices])
+            self.editor.show_dialog('Context that will be transmitted',[str(c) for c in self.editor.nlp_handler.context_preview()]);return True
+        except ValueError as exc:self.editor.set_status_message(str(exc));return False

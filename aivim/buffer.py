@@ -12,6 +12,8 @@ class Buffer:
         """Initialize an empty buffer"""
         self.lines = [""]
         self.modified = False
+        self.revision = 0
+        self._saved_content = ""
         
         # Selection state
         self.selection_start = None  # (y, x)
@@ -39,6 +41,7 @@ class Buffer:
             if self.lines[index] != content:
                 self.lines[index] = content
                 self.modified = True
+                self.revision += 1
                 self._content_cache = None  # Invalidate content cache
     
     def insert_line(self, index: int, content: str) -> None:
@@ -46,6 +49,7 @@ class Buffer:
         if 0 <= index <= len(self.lines):
             self.lines.insert(index, content)
             self.modified = True
+            self.revision += 1
             self._line_count_cache = len(self.lines)  # Update cache
             self._content_cache = None  # Invalidate content cache
     
@@ -57,6 +61,7 @@ class Buffer:
             if not self.lines:
                 self.lines = [""]
             self.modified = True
+            self.revision += 1
             self._line_count_cache = len(self.lines)  # Update cache
             self._content_cache = None  # Invalidate content cache
     
@@ -74,6 +79,7 @@ class Buffer:
         else:
             self.lines = [""]
         self.modified = True
+        self.revision += 1
         self._line_count_cache = len(self.lines)  # Update cache
         self._content_cache = content  # Update content cache
     
@@ -85,16 +91,18 @@ class Buffer:
         else:
             self.lines = [""]
         self.modified = True
+        self.revision += 1
         self._line_count_cache = len(self.lines)  # Update cache
         self._content_cache = None  # Invalidate content cache
     
     def is_modified(self) -> bool:
         """Check if the buffer has been modified"""
-        return self.modified
+        return self.modified and self.get_content() != self._saved_content
     
     def mark_as_saved(self) -> None:
         """Mark the buffer as saved (not modified)"""
         self.modified = False
+        self._saved_content = self.get_content()
     
     def start_selection(self, y: int, x: int) -> None:
         """Start a selection at the specified position"""
@@ -142,6 +150,7 @@ class Buffer:
         """Clear the buffer contents"""
         self.lines = [""]
         self.modified = True
+        self.revision += 1
         self.selection_start = None
         self.selection_end = None
         self._line_count_cache = 1  # Reset cache

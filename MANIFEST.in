@@ -1,61 +1,12 @@
-# MANIFEST.in - Specify additional files to include in source distribution
-# https://packaging.python.org/guides/using-manifest-in/
-
-# Include essential project files
-include LICENSE
-include README.md
-include VERSION
-include pyproject.toml
-include requirements.txt
-
-# Include configuration files
-include .bandit
-include .flake8
-include .pylintrc
-include .pre-commit-config.yaml
-
-# Include source code
-recursive-include aivim *.py
-
-# Include web resources
-recursive-include templates *.html
-recursive-include static *.css *.js *.png
-
-# Include model files (if applicable)
-recursive-include models *.gguf
-
-# Include tests for source distribution
+include LICENSE README.md VERSION pyproject.toml requirements.txt requirements-lock.txt uv.lock example-settings.json example_config
+recursive-include aivim *.py *.typed *.html *.css *.js
+recursive-include verification *.py
 recursive-include tests *.py
-
-# Exclude compiled Python files
-global-exclude *.py[cod]
-global-exclude __pycache__
-global-exclude *.so
-
-# Exclude development and build artifacts
-prune .git
-prune .github
-prune .venv
-prune venv
+recursive-include scripts *.py *.md
+recursive-include .github *.yml
+include docs/RELEASE.md
+global-exclude *.pyc
+prune __pycache__
+prune models
 prune build
 prune dist
-prune *.egg-info
-prune .pytest_cache
-prune .mypy_cache
-prune .tox
-prune htmlcov
-prune .swarm
-prune .hive-mind
-prune .claude-flow
-
-# Exclude IDE and editor files
-global-exclude .DS_Store
-global-exclude .vscode
-global-exclude .idea
-global-exclude *.swp
-global-exclude *~
-
-# Exclude CI/CD files
-exclude .gitignore
-exclude .gitattributes
-exclude .editorconfig

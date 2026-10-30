@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "editor": {"tabstop": 4, "expandtab": true, "autoindent": true},
+  "file": {"auto_backup": true, "encoding": "utf-8", "fileformat": "unix"},
+  "ai": {"default_model": "openai", "openai_model": "gpt-4.1-mini", "anthropic_model": "claude-sonnet-5-5", "timeout": 30, "nlp_live_mode": false, "max_retries": 1, "max_tokens": 2048}
+}

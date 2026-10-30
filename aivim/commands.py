@@ -64,7 +64,7 @@ class CommandProcessor:
             return False
         
         # Log command
-        logging.info(f"Processing command: {command}")
+        logging.info("Legacy command dispatched")
         
         # Match command against patterns
         for pattern, handler in self.command_handlers.items():
@@ -74,7 +74,7 @@ class CommandProcessor:
                     # Call the handler with matched groups as arguments
                     return handler(*match.groups())
                 except Exception as e:
-                    logging.error(f"Error executing command '{command}': {str(e)}")
+                    logging.error("Legacy command failed")
                     self.editor.set_status_message(f"Error: {str(e)}")
                     return False
         

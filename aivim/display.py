@@ -84,6 +84,7 @@ class Display:
         
         # For dialog and dialog navigation
         self.dialog_win = None
+        if hasattr(self,"model_callback"):del self.model_callback
         self.dialog_content = []
         self.dialog_views = []
         self.current_view_index = 0
@@ -137,198 +138,58 @@ class Display:
         if self.dialog_win:
             self._setup_dialog_window()
     
-    def update_text(self, lines: List[str], cursor_y: int, cursor_x: int, 
-                    scroll_y: int, selection: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None,
-                    search_results: List[Tuple[int, int, int]] = None, current_search_index: int = -1, 
-                    editor=None) -> None:
-        """
-        Update the text display
-        
-        Args:
-            lines: Text lines to display
-            cursor_y: Cursor y position (line number)
-            cursor_x: Cursor x position (column)
-            scroll_y: First visible line number
-            selection: Optional tuple of ((start_y, start_x), (end_y, end_x)) for selection
-            search_results: Optional list of search matches as (line_num, start_col, length)
-            current_search_index: Index of current search match in search_results
-        """
-        if self.is_dialog_open():
-            return
-        
-        # Store current state to determine if we need to redraw
-        self._last_cursor_pos = getattr(self, '_last_cursor_pos', None)
-        self._last_scroll_y = getattr(self, '_last_scroll_y', None)
-        current_cursor_pos = (cursor_y, cursor_x)
-        
-        # Optimize: Only clear and redraw if something significant changed
-        need_full_redraw = (
-            self._last_cursor_pos != current_cursor_pos or
-            self._last_scroll_y != scroll_y or
-            not hasattr(self, '_has_drawn_initial_screen')
-        )
-        
-        # Update saved state
-        self._last_cursor_pos = current_cursor_pos
-        self._last_scroll_y = scroll_y
-        self._has_drawn_initial_screen = True
-        
-        if need_full_redraw:
-            self.text_win.clear()
-            self.text_win.bkgd(' ', self.COLOR_NORMAL)
-        
-        # Number of lines to display
-        display_lines = min(self.max_text_height, len(lines) - scroll_y)
-        
-        # Process selection
-        selection_start = None
-        selection_end = None
-        
-        if selection and selection[0] and selection[1]:
-            start_y, start_x = selection[0]
-            end_y, end_x = selection[1]
-            
-            # Ensure start is before end
-            if (start_y > end_y) or (start_y == end_y and start_x > end_x):
-                start_y, start_x, end_y, end_x = end_y, end_x, start_y, start_x
-                
-            selection_start = (start_y, start_x)
-            selection_end = (end_y, end_x)
-        
-        # Get window dimensions to prevent writing outside the window
-        max_y, max_x = self.text_win.getmaxyx()
-        
-        # Display lines
-        for i in range(display_lines):
-            line_num = scroll_y + i
-            line = lines[line_num]
-            
-            # Check if we're at the bottom edge of the window
-            if i >= max_y:
-                break
-                
-            # Display line number if enabled
-            gutter_offset = 0
-            if editor and hasattr(editor, 'settings') and editor.settings.editor.number:
-                # Show line numbers
-                gutter = f"{line_num+1:3d} "
-                try:
-                    self.text_win.addstr(i, 0, gutter, self.COLOR_LINENO)
-                except curses.error:
-                    # Skip if we can't write the line number (shouldn't happen)
-                    continue
-                gutter_offset = self.gutter_width
-            
-            # Calculate available width for text (don't draw past edge)
-            available_width = max_x - gutter_offset - 1  # Leave 1 char margin
-            
-            # If the line is too long, truncate it
-            display_line = line
-            if len(display_line) > available_width:
-                display_line = display_line[:available_width]
-            
-            # Get search matches for this line
-            line_search_matches = []
-            if search_results:
-                for idx, match in enumerate(search_results):
-                    if match[0] == line_num:
-                        is_current = idx == current_search_index
-                        line_search_matches.append((match[1], match[2], is_current))
-            
-            # Handle displaying line content with or without selection
-            # Each section has its own try/except to handle potential curses errors safely
-            if not selection_start or not selection_end:
-                # No selection, display with search highlighting
-                if line_search_matches:
-                    # Render line with search highlights
-                    self._render_line_with_search_highlights(i, display_line, line_search_matches)
+    def update_text(self,lines,cursor_y,cursor_x,scroll_y,selection=None,search_results=None,current_search_index=-1,editor=None):
+        from wcwidth import wcwidth
+        if self.is_dialog_open():return
+        height,width=self.text_win.getmaxyx();number=editor.settings.editor.number if editor else True
+        gutter=min(max(4,len(str(len(lines)))+1),max(0,width-3)) if number else 0
+        self.gutter_width=gutter;available=max(1,width-gutter-1)
+        tabstop=editor.settings.editor.tabstop if editor else 4
+        from .syntax import SyntaxHighlighter
+        highlighter=SyntaxHighlighter();highlighter.set_language(editor.filename or '' if editor else '')
+        def spans(line):
+            column=0
+            for index,char in enumerate(line):
+                size=tabstop-column%tabstop if char=='\t' else max(0,wcwidth(char))
+                yield index,column,size,(' '*size if char=='\t' else char if wcwidth(char)>=0 else '�')
+                column+=size
+        cursor_column=sum(size for index,col,size,char in spans(lines[cursor_y]) if index<cursor_x) if 0<=cursor_y<len(lines) else 0
+        left=getattr(editor.current_tab if editor else self,'scroll_x',0)
+        if cursor_column<left:left=cursor_column
+        elif cursor_column>=left+available:left=cursor_column-available+1
+        if editor:editor.current_tab.scroll_x=left
+        else:self.scroll_x=left
+        self.text_win.erase()
+        selected=tuple(sorted(selection)) if selection and selection[0] is not None and selection[1] is not None else None
+        for row,line in enumerate(lines[scroll_y:scroll_y+height]):
+            line_number=scroll_y+row
+            if number:
+                value=abs(line_number-cursor_y) if editor and editor.settings.editor.relativenumber and line_number!=cursor_y else line_number+1
+                try:self.text_win.addstr(row,0,str(value).rjust(gutter-1)+' ',self.COLOR_LINENO)
+                except curses.error:pass
+            highlights=highlighter.highlight(line) if editor and editor.settings.display.syntax else {}
+            matches=[(i,m) for i,m in enumerate(search_results or []) if m[0]==line_number]
+            for index,column,size,char in spans(line):
+                if column+size<left:continue
+                x=column-left+gutter
+                if x>=width-1:break
+                attr=curses.color_pair(highlights[index]) if index in highlights else self.COLOR_NORMAL
+                if editor and editor.settings.editor.cursorline and line_number==cursor_y:attr|=curses.A_UNDERLINE
+                if editor and editor.settings.editor.cursorcolumn and column<=cursor_column<column+max(size,1):attr|=curses.A_REVERSE
+                if selected and selected[0]<=(line_number,index)<selected[1]:attr=self.COLOR_SELECTION
                 else:
-                    # Simple display without highlights
-                    try:
-                        self.text_win.addstr(i, self.gutter_width, display_line)
-                    except curses.error:
-                        pass
-            else:
-                # With selection - determine which case applies
-                if line_num < selection_start[0] or line_num > selection_end[0]:
-                    # Line is outside selection
-                    try:
-                        self.text_win.addstr(i, self.gutter_width, display_line)
-                    except curses.error:
-                        pass
-                        
-                elif line_num == selection_start[0] and line_num == selection_end[0]:
-                    # Selection starts and ends on this line
-                    try:
-                        # Calculate safe bounds
-                        sel_start = min(selection_start[1], len(display_line))
-                        sel_end = min(selection_end[1], len(display_line))
-                        
-                        # Display pre-selection segment
-                        if sel_start > 0:
-                            self.text_win.addstr(i, self.gutter_width, display_line[:sel_start])
-                        
-                        # Display selected segment
-                        selected_text = display_line[sel_start:sel_end]
-                        if selected_text:
-                            self.text_win.addstr(i, self.gutter_width + sel_start, 
-                                               selected_text, self.COLOR_SELECTION)
-                        
-                        # Display post-selection segment
-                        if sel_end < len(display_line):
-                            self.text_win.addstr(i, self.gutter_width + sel_end, 
-                                               display_line[sel_end:])
-                    except curses.error:
-                        pass
-                        
-                elif line_num == selection_start[0]:
-                    # Selection starts on this line
-                    try:
-                        sel_start = min(selection_start[1], len(display_line))
-                        
-                        # Display pre-selection segment
-                        if sel_start > 0:
-                            self.text_win.addstr(i, self.gutter_width, display_line[:sel_start])
-                        
-                        # Display selected segment
-                        if sel_start < len(display_line):
-                            self.text_win.addstr(i, self.gutter_width + sel_start, 
-                                               display_line[sel_start:], self.COLOR_SELECTION)
-                    except curses.error:
-                        pass
-                        
-                elif line_num == selection_end[0]:
-                    # Selection ends on this line
-                    try:
-                        sel_end = min(selection_end[1], len(display_line))
-                        
-                        # Display selected segment
-                        if sel_end > 0:
-                            self.text_win.addstr(i, self.gutter_width, display_line[:sel_end], 
-                                               self.COLOR_SELECTION)
-                        
-                        # Display post-selection segment
-                        if sel_end < len(display_line):
-                            self.text_win.addstr(i, self.gutter_width + sel_end, 
-                                               display_line[sel_end:])
-                    except curses.error:
-                        pass
-                        
-                else:
-                    # Line is fully selected
-                    try:
-                        self.text_win.addstr(i, self.gutter_width, display_line, self.COLOR_SELECTION)
-                    except curses.error:
-                        pass
-        
-        # Position cursor
-        if cursor_y >= scroll_y and cursor_y < scroll_y + self.max_text_height:
-            curses.curs_set(1)  # Show cursor
-            self.text_win.move(cursor_y - scroll_y, self.gutter_width + cursor_x)
+                    for i,(_,start,length) in matches:
+                        if start<=index<start+length:attr=self.COLOR_SEARCH_CURRENT if i==current_search_index else self.COLOR_SEARCH_OTHER;break
+                if x<gutter:char=' '*(column+size-left);x=gutter
+                if x+size>width-1:break
+                try:self.text_win.addstr(row,x,char,attr)
+                except curses.error:pass
+        if 0<=cursor_y-scroll_y<height:
+            try:curses.curs_set(1);self.text_win.move(cursor_y-scroll_y,min(width-1,max(gutter,gutter+cursor_column-left)))
+            except curses.error:pass
         else:
-            curses.curs_set(0)  # Hide cursor
-        
-        # Refresh display
+            try:curses.curs_set(0)
+            except curses.error:pass
         self.text_win.refresh()
     
     def update_status(self, status: str) -> None:
@@ -562,6 +423,7 @@ class Display:
     def close_dialog(self) -> None:
         """Close the dialog"""
         self.dialog_win = None
+        if hasattr(self,"model_callback"):del self.model_callback
         self.dialog_content = []
         self.dialog_views = []
         self.dialog_view_titles = []
@@ -593,8 +455,8 @@ class Display:
         """
         # Create model options
         models = [
-            {"id": "openai", "name": "OpenAI", "description": "GPT-4o: The latest OpenAI model"},
-            {"id": "claude", "name": "Claude", "description": "Claude 3.5 Sonnet: Anthropic's newest model"},
+            {"id": "openai", "name": "OpenAI", "description": "Configured OpenAI model"},
+            {"id": "claude", "name": "Claude", "description": "Configured Anthropic model"},
             {"id": "local", "name": "Local", "description": "Run local LLMs through llama-cpp-python"}
         ]
         
@@ -1109,54 +971,15 @@ class Display:
         self.dialog_win.refresh()
         
     # Loading indicator methods
-    def start_loading_animation(self, message: str) -> None:
-        """
-        Start an animated loading indicator in the status line
-        
-        Args:
-            message: Status message to display alongside the animation
-        """
-        # Store the original message
-        self._loading_base_message = message
-        self._loading_active = True
-        self._loading_frame = 0
-        self._loading_frames = ['⣾', '⣽', '⣻', '⢿', '⡿', '⣟', '⣯', '⣷']  # Spinner animation frames
-        
-        # Start the animation thread
-        self._loading_thread = threading.Thread(target=self._animate_loading)
-        self._loading_thread.daemon = True
-        self._loading_thread.start()
+    def start_loading_animation(self,message):
+        self._loading_base_message=message;self._loading_active=True;self._loading_frame=0
     
-    def stop_loading_animation(self) -> None:
-        """Stop the loading animation"""
-        if hasattr(self, '_loading_active') and self._loading_active:
-            self._loading_active = False
-            if hasattr(self, '_loading_thread') and self._loading_thread.is_alive():
-                self._loading_thread.join(0.5)  # Wait for thread to finish with timeout
-            
-            # Clear the animation from status line
-            self.update_status(self._loading_base_message)
+    def stop_loading_animation(self):
+        self._loading_active=False
     
-    def _animate_loading(self) -> None:
-        """Thread function to animate the loading indicator"""
-        try:
-            while self._loading_active:
-                # Get the current frame
-                frame = self._loading_frames[self._loading_frame % len(self._loading_frames)]
-                
-                # Update status with animation
-                animated_message = f"{self._loading_base_message} {frame}"
-                self.update_status(animated_message)
-                
-                # Advance to next frame
-                self._loading_frame += 1
-                
-                # Sleep for a short time
-                time.sleep(0.1)
-        except Exception as e:
-            import logging
-            logging.error(f"Error in loading animation: {str(e)}")
-            self._loading_active = False
+    def _animate_loading(self):
+        if getattr(self,'_loading_active',False):
+            self.update_status(self._loading_base_message+' '+('|/-\\'[self._loading_frame%4]));self._loading_frame+=1
     def show_optimization_message(self) -> None:
         """Method implementation removed as requested"""
         pass

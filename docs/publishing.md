@@ -1,3 +1,5 @@
+> Historical document retained for comparison. It describes an earlier version and is not current release, deployment, provider or test evidence. See README.md and docs/RELEASE.md for the 0.6.0 candidate.
+
 # Publishing AIVim to PyPI
 
 This document explains how to set up your GitHub repository to automatically publish AIVim to PyPI when you create a new release.

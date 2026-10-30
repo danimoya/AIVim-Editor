@@ -154,7 +154,7 @@ class FileBrowser:
                 self.selected_index = 0
                 
         except Exception as e:
-            logging.error(f"Error loading directory: {str(e)}")
+            logging.error("file_browser operation failed")
             self.editor.set_status_message(f"Error loading directory: {str(e)}")
     
     def _render(self, stdscr) -> None:

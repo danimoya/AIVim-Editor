@@ -48,33 +48,13 @@ def check_environment():
 
 def start_editor(stdscr, filename: Optional[str] = None, model: Optional[str] = None, config_path: Optional[str] = None):
     """Initialize and start the editor"""
-    # Enable logging
-    logging.basicConfig(
-        filename="aivim.log",
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    
-    editor = Editor(filename)
-    
-    # Set model if specified
-    if model:
-        from aivim.ai_service import AIService
-        ai_service = editor.ai_service
-        if ai_service:
-            ai_service.set_model(model)
-    
-    # Show config status on startup
-    if hasattr(editor, 'ai_service') and editor.ai_service is not None:
-        config_status = editor.ai_service.config_status
-        if config_status.get("loaded", False):
-            config_message = f"Config loaded from: {config_status.get('path', 'unknown')}"
-        else:
-            config_message = config_status.get("message", "Config not loaded")
-        
-        editor.set_status_message(config_message)
-    
-    editor.start(stdscr)
+    from aivim.settings import Settings
+    from aivim.ai_service import AIService
+    settings=Settings(config_path)
+    if model: settings.ai.default_model=model
+    editor=Editor(filename,settings=settings,ai_service=AIService(settings=settings))
+    try:editor.start(stdscr)
+    finally:sys.stdout.write("\x1b[?2004l");sys.stdout.flush()
 
 
 def embed_editor(filename: Optional[str] = None, model: Optional[str] = None, config_path: Optional[str] = None):
@@ -92,7 +72,7 @@ def embed_editor(filename: Optional[str] = None, model: Optional[str] = None, co
 def main():
     """Main entry point for AIVim"""
     args = parse_arguments()
-    check_environment()
+
     
     print(f"Starting AIVim with file: {args.filename}")
     if args.model:

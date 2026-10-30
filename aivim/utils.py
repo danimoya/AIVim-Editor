@@ -154,5 +154,5 @@ def create_backup_file(filename: str) -> str:
         return backup_path
     except Exception as e:
         import logging
-        logging.error(f"Failed to create backup file: {str(e)}")
+        logging.error("utils operation failed")
         return ""

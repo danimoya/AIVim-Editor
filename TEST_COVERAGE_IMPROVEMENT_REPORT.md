@@ -1,3 +1,5 @@
+> Historical document retained for comparison. It describes an earlier version and is not current release, deployment, provider or test evidence. See README.md and docs/RELEASE.md for the 0.6.0 candidate.
+
 # Test Coverage Improvement Report
 
 ## Summary

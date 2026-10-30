@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Pytest configuration and fixtures for AIVim tests
+Historical mock-based fixtures retained for comparison.
+Release verification uses verification/conftest.py with real dispatch and curses constants.
 """
 import os
 import sys
