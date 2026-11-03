@@ -48,10 +48,14 @@ def test_opt_in_content_logs_permissions_retention_and_default_privacy(settings,
             assert (tmp_path/'logs').stat().st_mode & 0o777 == 0o700
         else:
             import subprocess
+            import shutil
             # Inspect the actual OS ACL rather than POSIX mode emulation.
             for path in [tmp_path/'logs',*logs]:
                 script='(Get-Acl -LiteralPath $env:AIVIM_PERMISSION_FIXTURE).Access | Select-Object IdentityReference,FileSystemRights,AccessControlType | ConvertTo-Json -Compress'
-                result=subprocess.run(['powershell','-NoProfile','-NonInteractive','-Command',script],env={**os.environ,'AIVIM_PERMISSION_FIXTURE':str(path)},capture_output=True,text=True,check=True)
+                powershell=shutil.which('pwsh') or shutil.which('powershell')
+                assert powershell, 'PowerShell is required for OS ACL verification'
+                result=subprocess.run([powershell,'-NoProfile','-NonInteractive','-Command',script],env={**os.environ,'AIVIM_PERMISSION_FIXTURE':str(path)},capture_output=True,text=True)
+                assert result.returncode==0,result.stderr
                 acl=json.loads(result.stdout)
                 assert isinstance(acl,dict) and acl['FileSystemRights']==2032127 and acl['AccessControlType']==0
         s.disable_debug_logging();s.request('query',instruction='MORE_SYNTHETIC');assert len(list((tmp_path/'logs').glob('*.json')))==2
