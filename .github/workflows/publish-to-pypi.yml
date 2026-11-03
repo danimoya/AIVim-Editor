@@ -6,308 +6,113 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Deployment environment'
+        description: Deployment environment
         required: true
         type: choice
-        options:
-          - testpypi
-          - pypi
+        options: [testpypi, pypi]
 
 permissions:
   contents: read
-  id-token: write
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  pre-publish-checks:
-    name: Pre-publish Security and Quality Checks
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-        cache: 'pip'
-        cache-dependency-path: |
-          requirements.txt
-          pyproject.toml
-
-    - name: Cache Python dependencies
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-publish-${{ hashFiles('**/requirements.txt', '**/pyproject.toml') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-publish-
-          ${{ runner.os }}-pip-
-
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip setuptools wheel
-        pip install -e .
-        pip install bandit safety pytest pytest-cov twine check-manifest
-
-    - name: Security scan with bandit
-      run: |
-        bandit -r aivim -ll -i -x ./aivim/tests
-
-    - name: Check dependencies for vulnerabilities
-      run: |
-        safety check --json
-
-    - name: Run critical tests
-      continue-on-error: true  # Don't block on test failures (92 tests are known failing)
-      run: |
-        pytest tests/ -v -m "not slow" --tb=short || echo "⚠️ Some tests failed but continuing with publish"
-      env:
-        PYTHONPATH: ${{ github.workspace }}
-
-    - name: Check manifest
-      continue-on-error: true  # Don't block on manifest issues
-      run: |
-        check-manifest || echo "⚠️ Manifest check failed but continuing"
-
-    - name: Validate version consistency
-      run: |
-        python -c "
-        import re
-        import sys
-        from pathlib import Path
-
-        # Read version from pyproject.toml
-        pyproject = Path('pyproject.toml').read_text()
-        version_match = re.search(r'version = \"(.+?)\"', pyproject)
-        if not version_match:
-            print('ERROR: Could not find version in pyproject.toml')
-            sys.exit(1)
-
-        pyproject_version = version_match.group(1)
-        print(f'pyproject.toml version: {pyproject_version}')
-
-        # Check if VERSION file exists
-        version_file = Path('VERSION')
-        if version_file.exists():
-            file_version = version_file.read_text().strip()
-            print(f'VERSION file version: {file_version}')
-            if pyproject_version != file_version:
-                print('ERROR: Version mismatch between pyproject.toml and VERSION file')
-                sys.exit(1)
-
-        print('Version validation passed')
-        "
-
   build:
-    name: Build Distribution
-    needs: pre-publish-checks
+    name: Verify and build distributions
     runs-on: ubuntu-latest
-
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/aivim-browsers
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install '.[test,build]'
+      - run: python -m playwright install --with-deps chromium
+      - run: python scripts/check_source.py
+      - run: python scripts/bump_version.py --validate
+      - name: Validate release tag
+        if: github.event_name == 'release'
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          python - <<'PY'
+          import os
+          from aivim._version import __version__
+          assert os.environ['RELEASE_TAG'] == 'v' + __version__, 'Tag/version mismatch'
+          PY
+      - run: python -m pytest -o addopts= -p no:cacheprovider verification
+      - run: python -m unittest tests.test_buffer tests.test_history tests.test_utils
+      - run: python -m build
+      - run: python -m twine check dist/*
+      - name: Verify installed wheel outside checkout
+        run: |
+          python -m venv "$RUNNER_TEMP/aivim-wheel"
+          "$RUNNER_TEMP/aivim-wheel/bin/python" -m pip install dist/*.whl
+          cp scripts/installed_smoke.py "$RUNNER_TEMP/aivim-installed-smoke.py"
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/aivim-wheel/bin/python" aivim-installed-smoke.py
+      - name: Verify sdist can build independently
+        run: |
+          mkdir "$RUNNER_TEMP/aivim-sdist"
+          tar -xzf dist/*.tar.gz -C "$RUNNER_TEMP/aivim-sdist"
+          python -m build --wheel --outdir "$RUNNER_TEMP/sdist-wheel" "$RUNNER_TEMP"/aivim-sdist/aivim-*
+      - run: sha256sum dist/* > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: checksums
+          path: SHA256SUMS
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-        cache: 'pip'
-
-    - name: Cache Python dependencies
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-build-${{ hashFiles('**/pyproject.toml') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-build-
-          ${{ runner.os }}-pip-
-
-    - name: Install build tools
-      run: |
-        python -m pip install --upgrade pip build twine cyclonedx-bom
-
-    - name: Build package
-      run: |
-        python -m build
-
-    - name: Verify package
-      run: |
-        twine check dist/*
-
-    - name: List package contents
-      run: |
-        tar -tzf dist/*.tar.gz | head -20
-
-    - name: Generate SBOM (Software Bill of Materials)
-      run: |
-        cyclonedx-py requirements --format json --output sbom.json pyproject.toml || echo "SBOM generation completed with warnings"
-        if [ -f sbom.json ]; then
-          echo "SBOM generated successfully"
-          ls -lh sbom.json
-        fi
-
-    - name: Generate checksums
-      run: |
-        cd dist
-        sha256sum *.whl *.tar.gz > SHA256SUMS
-        sha512sum *.whl *.tar.gz > SHA512SUMS
-        cat SHA256SUMS
-        # Move checksums out of dist to avoid PyPI upload errors
-        mv SHA256SUMS SHA512SUMS ../
-        cd ..
-
-    - name: Store distribution packages
-      uses: actions/upload-artifact@v4
-      with:
-        name: python-package-distributions
-        path: dist/
-        retention-days: 7
-
-    - name: Store checksums
-      uses: actions/upload-artifact@v4
-      with:
-        name: checksums
-        path: |
-          SHA256SUMS
-          SHA512SUMS
-        retention-days: 90
-
-    - name: Store SBOM
-      uses: actions/upload-artifact@v4
-      with:
-        name: sbom
-        path: sbom.json
-        retention-days: 90
-      if: always()
-
-  publish-to-testpypi:
-    name: Publish to TestPyPI
+  publish:
+    name: Publish verified distributions
     needs: build
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'testpypi'
     runs-on: ubuntu-latest
     environment:
-      name: testpypi
-      url: https://test.pypi.org/project/aivim/
-
-    steps:
-    - name: Download distribution packages
-      uses: actions/download-artifact@v4
-      with:
-        name: python-package-distributions
-        path: dist/
-
-    - name: Generate attestation for TestPyPI
-      uses: actions/attest-build-provenance@v1
-      with:
-        subject-path: 'dist/*'
-
-    - name: Publish to TestPyPI
-      uses: pypa/gh-action-pypi-publish@release/v1
-      with:
-        password: ${{ secrets.TEST_PYPI_API_TOKEN }}
-        repository-url: https://test.pypi.org/legacy/
-        skip-existing: true
-        verbose: true
-        attestations: true
-        print-hash: true
-
-  publish-to-pypi:
-    name: Publish to PyPI
-    needs: build
-    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'pypi')
-    runs-on: ubuntu-latest
-    environment:
-      name: pypi
-      url: https://pypi.org/project/aivim/
+      name: ${{ github.event_name == 'release' && 'pypi' || inputs.environment }}
     permissions:
       id-token: write
       contents: read
-
     steps:
-    - name: Download distribution packages
-      uses: actions/download-artifact@v4
-      with:
-        name: python-package-distributions
-        path: dist/
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+      - name: Publish to PyPI
+        if: github.event_name == 'release' || inputs.environment == 'pypi'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          attestations: false
+      - name: Publish to TestPyPI
+        if: github.event_name == 'workflow_dispatch' && inputs.environment == 'testpypi'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.TEST_PYPI_API_TOKEN }}
+          repository-url: https://test.pypi.org/legacy/
+          attestations: false
 
-    # Generate artifact attestation for public repository
-    - name: Generate artifact attestation
-      uses: actions/attest-build-provenance@v1
-      with:
-        subject-path: 'dist/*'
-
-    - name: Publish to PyPI
-      uses: pypa/gh-action-pypi-publish@release/v1
-      with:
-        # Try trusted publishing first, fall back to API token if not configured
-        password: ${{ secrets.PYPI_API_TOKEN }}
-        skip-existing: false
-        verbose: true
-        attestations: true  # Enabled for public repository
-        print-hash: true  # Print package hashes for verification
-
-  post-publish-validation:
-    name: Post-publish Installation Test
-    needs: [publish-to-pypi]
-    if: success()
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-
-    - name: Wait for package availability
-      run: |
-        sleep 60
-
-    - name: Install from PyPI
-      run: |
-        pip install aivim
-
-    - name: Verify installation
-      run: |
-        python -c "import aivim; print(f'AIVim version installed: {aivim.__version__ if hasattr(aivim, \"__version__\") else \"unknown\"}')"
-        aivim --help || echo "CLI executed"
-
-  create-github-release-assets:
-    name: Upload Assets to GitHub Release
-    needs: [publish-to-pypi]
+  release-assets:
+    needs: publish
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: write
     steps:
-    - name: Download distribution packages
-      uses: actions/download-artifact@v4
-      with:
-        name: python-package-distributions
-        path: dist/
-
-    - name: Download checksums
-      uses: actions/download-artifact@v4
-      with:
-        name: checksums
-        path: .
-      continue-on-error: true
-
-    - name: Download SBOM
-      uses: actions/download-artifact@v4
-      with:
-        name: sbom
-        path: .
-      continue-on-error: true
-
-    - name: Upload to GitHub Release
-      uses: softprops/action-gh-release@v1
-      with:
-        files: |
-          dist/*
-          SHA256SUMS
-          SHA512SUMS
-          sbom.json
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+      - uses: actions/download-artifact@v4
+        with:
+          name: checksums
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release upload "$RELEASE_TAG" dist/* SHA256SUMS

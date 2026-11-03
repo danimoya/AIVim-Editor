@@ -1,12 +1,12 @@
 # AIVim
 
-AIVim is a local terminal editor with a browser companion and explicit AI review. This 0.6.0 candidate adds document safety, lossless Unicode input, undo/redo, bounded provider requests and validated proposals. It has not been published or deployed.
+AIVim is a local terminal editor with a browser companion and explicit AI review. Version 0.6.0 adds document safety, lossless Unicode input, undo/redo, bounded provider requests and validated proposals.
 
 Install with Python 3.9 or newer:
 
 ```sh
-python -m pip install .
-aivim document.py --config example-settings.json
+python -m pip install aivim==0.6.0
+aivim document.py
 aivim-web --port 5000
 ```
 
@@ -22,7 +22,7 @@ NLP uses explicit `#nlp instruction`, paired `#nlp` markers, or `NLP-BEGIN` / `N
 
 Configuration precedence is explicit CLI provider, explicit `--config`, `~/.config/aivim/settings.json`, then defaults. Ordinary settings use `schema_version: 1`. Explicit legacy INI files are accepted; API keys stay transient. Explicit injected credentials override environment credentials, which override legacy INI keys. Environment keys are `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`. No `.env` files are automatically read. `aivim-config-migrate legacy.ini new-settings.json` preserves the original, refuses an existing destination and excludes credentials. Unsupported streaming, response caching, swap files and persistent undo are rejected clearly. The temperature setting applies to OpenAI and local inference; current Anthropic models use their provider default.
 
-Configured defaults are `gpt-4.1-mini` and `claude-sonnet-5-5`, with model IDs overridable in settings. They are configured allowlists rather than entitlement claims. Real account authorization, model entitlement and budget must be qualified before release. See [OpenAI model documentation](https://developers.openai.com/api/docs/models/gpt-4.1-mini), [Anthropic models](https://platform.claude.com/docs/en/models/overview) and [Anthropic request parameters](https://platform.claude.com/docs/en/api/messages/create).
+Configured defaults are `gpt-4.1-mini` and `claude-sonnet-5-5`, with model IDs overridable in settings. They are configured allowlists rather than entitlement claims. Real account authorization, model entitlement and budget must be qualified for your account before use. See [OpenAI model documentation](https://developers.openai.com/api/docs/models/gpt-4.1-mini), [Anthropic models](https://platform.claude.com/docs/en/models/overview) and [Anthropic request parameters](https://platform.claude.com/docs/en/api/messages/create).
 
 Default logs contain metadata, not code, prompts, keys or complete file paths. `:debug` explicitly enables content recording; files have mode 0600, directories 0700 and a configured retention count. Existing user documents and legacy configuration are never rewritten by migration or inference.
 

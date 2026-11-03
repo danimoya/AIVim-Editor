@@ -1,6 +1,6 @@
-# 0.6.0 candidate (unpublished)
+# 0.6.0 — 2026-11-03
 
-Document-safe saves and dirty-tab guards; lossless Unicode and bracketed paste; undo transactions; cancellable snapshot AI jobs and strict reviewed proposals; explicit NLP context; packaged browser security and ergonomics; unified settings, locks and qualification gates. Live provider entitlement, platform-matrix and native-model qualification remain release prerequisites.
+Document-safe saves and dirty-tab guards; lossless Unicode and bracketed paste; undo transactions; cancellable snapshot AI jobs and strict reviewed proposals; explicit NLP context; packaged browser security and ergonomics; unified settings, locks and qualification gates. Live provider entitlement and native-model qualification remain operator responsibilities; native Windows console and macOS terminal behavior require manual qualification.
 
 # Changelog
 
