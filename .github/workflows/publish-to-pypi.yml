@@ -23,7 +23,7 @@ jobs:
     name: Verify and build distributions
     runs-on: ubuntu-latest
     env:
-      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/aivim-browsers
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/../aivim-browsers
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
