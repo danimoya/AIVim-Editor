@@ -2,6 +2,7 @@
 import hashlib
 import multiprocessing
 import os
+import sys
 from pathlib import Path
 import time
 from .ai_service import AIError
@@ -53,6 +54,7 @@ class LocalWorker:
     def complete(self,system,prompt,timeout,cancel=None):
         s=self.settings
         if cancel and cancel.is_set():raise AIError('CANCELLED','Local inference cancelled')
+        if sys.platform=='darwin':raise AIError('NOT_CONFIGURED','Local inference is unavailable on macOS: hard worker memory limits are not supported')
         deadline=time.monotonic()+timeout
         config={'path':str(Path(s.local_model_path).expanduser()),'sha256':s.local_model_sha256,'memory_mb':s.local_memory_mb,'cpu_seconds':s.local_cpu_seconds,'threads':s.local_threads,'context':s.local_context,'max_tokens':s.max_tokens,'temperature':s.temperature}
         ctx=multiprocessing.get_context('spawn');parent,child=ctx.Pipe(duplex=False);process=ctx.Process(target=guarded_child,args=(child,config,system,prompt,self.worker_target),daemon=True)

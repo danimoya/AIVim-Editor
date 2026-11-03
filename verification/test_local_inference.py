@@ -1,6 +1,7 @@
 import hashlib
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 import multiprocessing
+import sys
 import threading
 import time
 import pytest
@@ -18,6 +19,7 @@ def model(settings,tmp_path):
     settings.ai.local_model_path=str(path);settings.ai.local_model_sha256=hashlib.sha256(raw).hexdigest();return path
 
 
+@pytest.mark.skipif(sys.platform=='darwin',reason='macOS cannot enforce the required hard worker memory limit; refusal is tested separately')
 def test_integrity_and_child_lifecycle_limits(settings,tmp_path):
     path=model(settings,tmp_path)
     with pytest.raises(AIError):verify_model(path,'0'*64)
@@ -38,6 +40,7 @@ def test_real_native_boundary_without_optional_engine(settings,tmp_path):
     assert error.value.code in ('NOT_CONFIGURED','LOCAL_FAILED')
 
 
+@pytest.mark.skipif(sys.platform=='darwin',reason='macOS refuses local inference before spawning a worker; refusal is tested separately')
 def test_integrity_failure_is_typed_and_cannot_reach_inference(settings,tmp_path):
     path=model(settings,tmp_path)
     settings.ai.local_model_sha256='0'*64
@@ -46,6 +49,14 @@ def test_integrity_failure_is_typed_and_cannot_reach_inference(settings,tmp_path
     path.unlink()
     with pytest.raises(AIError) as error:LocalWorker(settings.ai,healthy_child).complete('synthetic','synthetic',2)
     assert error.value.code=='MODEL_INTEGRITY'
+
+
+def test_macos_refuses_local_inference_before_worker_start(settings,monkeypatch):
+    monkeypatch.setattr(sys,'platform','darwin')
+    def unexpected_spawn(*args,**kwargs):raise AssertionError('An unbounded worker must not start')
+    monkeypatch.setattr(multiprocessing,'get_context',unexpected_spawn)
+    with pytest.raises(AIError) as error:LocalWorker(settings.ai).complete('synthetic','synthetic',2)
+    assert error.value.code=='NOT_CONFIGURED' and 'macOS' in str(error.value)
 
 
 def test_download_resume_integrity_and_recovery(tmp_path):
