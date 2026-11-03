@@ -135,8 +135,9 @@ class TestUtils(unittest.TestCase):
         
         # Test creating backup for a file in a different directory
         result = create_backup_file("/path/to/test.txt")
-        self.assertEqual(result, "/path/to/.test.txt.20240415123456")
-        mock_copy2.assert_called_once_with("/path/to/test.txt", "/path/to/.test.txt.20240415123456")
+        expected = os.path.join("/path/to", ".test.txt.20240415123456")
+        self.assertEqual(result, expected)
+        mock_copy2.assert_called_once_with("/path/to/test.txt", expected)
     
     @patch('os.path.exists')
     def test_create_backup_file_nonexistent(self, mock_exists):
