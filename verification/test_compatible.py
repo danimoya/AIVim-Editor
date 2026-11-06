@@ -144,12 +144,15 @@ def test_connection_dialog_discover_save_and_generate(settings, tls_server):
                 and bool(app.screen.query("#connect-url")),
             )
             dialog = app.screen
+            await settle(pilot, lambda: dialog.query_one("#connect-url", Input).region.width > 0)
+            await pilot.pause()
             dialog.query_one("#connect-url", Input).value = stub.url
             dialog.query_one("#connect-token", Input).value = stub.required_token
             assert dialog.query_one("#connect-token", Input).password
             dialog.query_one("#connect-ca", Input).value = ca_file
             dialog.query_one("#connect-remember", Checkbox).value = True
-            await pilot.click("#connect-discover")
+            await pilot.pause()
+            assert await pilot.click("#connect-discover")
             await settle(
                 pilot, lambda: dialog.query_one("#connect-model", Input).value == "openshift-coder"
             )
