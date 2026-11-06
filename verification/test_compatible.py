@@ -138,8 +138,11 @@ def test_connection_dialog_discover_save_and_generate(settings, tls_server):
     async def journey():
         app = TerminalWorkspace(settings=settings, connect_on_start=True)
         async with app.run_test(size=(110, 44)) as pilot:
-            await pilot.pause()
-            assert isinstance(app.screen, ConnectionDialog)
+            await settle(
+                pilot,
+                lambda: isinstance(app.screen, ConnectionDialog)
+                and bool(app.screen.query("#connect-url")),
+            )
             dialog = app.screen
             dialog.query_one("#connect-url", Input).value = stub.url
             dialog.query_one("#connect-token", Input).value = stub.required_token
