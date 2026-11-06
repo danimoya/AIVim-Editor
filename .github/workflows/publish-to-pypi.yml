@@ -45,7 +45,7 @@ jobs:
           from bump_version import tag_for, version
           assert os.environ['RELEASE_TAG'] == tag_for(version()), 'Tag/version mismatch'
           PY
-      - run: python -m pytest -o addopts= -p no:cacheprovider verification
+      - run: python -m pytest -o addopts= -p no:cacheprovider --timeout=120 verification
       - run: python -m unittest tests.test_buffer tests.test_history tests.test_utils
       - run: python -m build
       - run: python -m twine check dist/*

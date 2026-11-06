@@ -1,5 +1,6 @@
 """Real Chromium workspace journeys through the real SDK streaming adapters."""
 import json
+import hashlib
 from pathlib import Path
 import threading
 import time
@@ -16,7 +17,8 @@ def fill_document(page,text):
     editor=page.locator('.cm-content');editor.click();page.keyboard.press('Meta+a' if sys.platform=='darwin' else 'Control+a');page.keyboard.insert_text(text)
 
 def document_text(page):
-    page.click('#copy');return page.evaluate('navigator.clipboard.readText()')
+    # The Windows system clipboard represents text line endings as CRLF.
+    page.click('#copy');return page.evaluate('navigator.clipboard.readText()').replace('\r\n','\n')
 
 def select_all(page):
     page.locator('.cm-content').click();page.keyboard.press('Meta+a' if sys.platform=='darwin' else 'Control+a')
@@ -57,7 +59,9 @@ def test_browser_review_failure_cancel_copy_download_and_responsive(workspace,tm
     stub.delay=.3;select_all(page);page.click('#submit');expect(page.locator('#cancel')).to_be_enabled();page.click('#cancel');expect(page.locator('#status')).to_contain_text('Cancelled');page.wait_for_timeout(400)
     assert document_text(page)=='new user input'
     page.set_viewport_size({'width':375,'height':812});assert page.evaluate('document.body.scrollWidth <= window.innerWidth')
-    large='line\n'*200000;start=time.monotonic();page.set_input_files('#upload',{'name':'synthetic-large.txt','mimeType':'text/plain','buffer':large.encode()});expect(page.locator('#status')).to_contain_text('Local file opened');assert document_text(page)==large
+    large='line\n'*200000;start=time.monotonic();page.set_input_files('#upload',{'name':'synthetic-large.txt','mimeType':'text/plain','buffer':large.encode()});expect(page.locator('#status')).to_contain_text('Local file opened')
+    # Digest comparison also avoids quadratic assertion diffs on repeated lines.
+    assert hashlib.sha256(document_text(page).encode()).digest()==hashlib.sha256(large.encode()).digest()
     elapsed=time.monotonic()-start;assert elapsed<10
     (tmp_path/'browser-metrics.json').write_text(json.dumps({'document_bytes':len(large.encode()),'fill_read_seconds':elapsed,'viewport_width':375}))
     page.screenshot(path=str(tmp_path/'browser-mobile.png'),full_page=True)
