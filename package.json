@@ -1,0 +1,40 @@
+{
+  "name": "aivim-editor",
+  "version": "1.0.0-alpha.1",
+  "description": "Local AIVim workspace frontend",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "build": "node scripts/build_frontend.mjs",
+    "test": "node --test frontend/*.test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/danimoya/AIVim-Editor.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "GPL-3.0-only",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/danimoya/AIVim-Editor/issues"
+  },
+  "homepage": "https://github.com/danimoya/AIVim-Editor#readme",
+  "dependencies": {
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/lang-javascript": "^6.2.5",
+    "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/lang-python": "^6.2.1",
+    "@codemirror/language": "^6.13.1",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.15",
+    "@replit/codemirror-vim": "^6.4.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "prettier": "^3.9.10"
+  },
+  "private": true
+}

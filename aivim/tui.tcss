@@ -1,0 +1,76 @@
+Screen { background: #0c1411; color: #c9ddc7; layers: base ai; }
+#title-bar { height: 1; background: #192b20; }
+#title-bar Button { height: 1; min-height: 1; min-width: 3; width: 4; padding: 0; border: none; background: #223527; color: #b4d9b4; }
+#main-menu { width: 3; }
+#masthead { height: 1; width: 1fr; color: #b4d9b4; text-wrap: nowrap; text-overflow: ellipsis; }
+#workspace-tabs, ContentSwitcher, TabPane { height: 1fr; padding: 0; }
+#workspace-tabs > Tabs { display: none; }
+#file-bar, #editor-tools, #selection-status, #live-bar, #live-hint { display: none; }
+#workbench { height: 1fr; layout: horizontal; layers: base ai; }
+#editing-pane { height: 1fr; width: 1fr; min-width: 15; layer: base; }
+#editor-stack { height: 1fr; }
+EditorArea { width: 1fr; height: 1fr; border: none; background: #0c1411; }
+EditorArea:focus { border: none; }
+TextArea { background: #0c1411; color: #c9ddc7; border: solid #364d3e; }
+TextArea > .text-area--cursor { color: #0c1411; background: #d6ac66; }
+TextArea > .text-area--selection { background: #375845; }
+#status { height: 1; padding: 0 1; background: #15271e; color: #c6b985; text-wrap: nowrap; text-overflow: ellipsis; }
+Footer { display: none; height: 1; background: #18291d; color: #a5e8ac; }
+Screen.show-shortcuts Footer { display: block; }
+
+/* A temporary overlay consumes no editor rows or columns. Only Pin changes layout. */
+#ai-panel { display: none; layer: ai; overlay: screen; position: absolute; width: 46; max-width: 95%; border: round #658d68; padding: 0 1; background: #111e18; }
+#workbench.show-ai #ai-panel { display: block; }
+#workbench.pinned #ai-panel { overlay: none; position: relative; width: 43; max-width: 60%; border: solid #4d7c55; }
+#ai-panel-tools { height: 1; }
+#ai-panel-tools Button { width: 1fr; min-width: 6; min-height: 1; height: 1; padding: 0; border: none; }
+#ai-action, #provider { height: 3; margin: 0; }
+#instruction { height: 4; min-height: 3; border: solid #706a42; }
+.button-row { height: 1; }
+.button-row Button { width: 1fr; min-width: 7; min-height: 1; height: 1; padding: 0; border: none; }
+#result { height: 1fr; min-height: 4; margin: 1 0 0 0; border: none; }
+#ai-details { height: auto; padding: 0; margin: 0; border: none; }
+#ai-details Contents { padding: 0; }
+#connect-model { height: 1; min-height: 1; width: 1fr; padding: 0; border: none; }
+#model-name { height: 1; color: #93aa92; }
+#context-bar { height: 1; }
+#context-count { width: 1fr; height: 1; color: #d6ac66; }
+#context-bar Button { height: 1; min-height: 1; width: 12; min-width: 7; padding: 0; border: none; }
+#nearby { height: 1; padding: 0; border: none; }
+
+.section-title { height: 1; padding: 0 1; color: #d6ac66; }
+#source-tools { height: 1; }
+#source-tools Button { height: 1; min-height: 1; width: 1fr; min-width: 8; padding: 0; border: none; }
+#source-body { height: 1fr; }
+#source-list { width: 35%; height: 1fr; border: none; }
+#source-preview { width: 1fr; height: 1fr; border: none; }
+#history-log { height: 1fr; padding: 0 1; background: #0c1411; }
+
+ModalScreen { align: center middle; background: #07100c88; }
+#dialog { width: 48; max-width: 98%; height: auto; max-height: 95%; padding: 1; border: round #91a16b; background: #15241b; overflow-y: auto; }
+#dialog-title { height: auto; margin-bottom: 1; color: #dbc68a; text-style: bold; }
+#dialog Button { width: 1fr; margin: 0; }
+ChoiceDialog { background: #07100c33; }
+ChoiceDialog #dialog { width: 42; }
+ChoiceDialog Button { height: 1; min-height: 1; padding: 0 1; border: none; background: transparent; content-align: left middle; }
+ChoiceDialog Button:hover, ChoiceDialog Button:focus { background: #355640; color: #dbefdc; }
+.dialog-buttons { height: 3; margin-top: 1; }
+#dialog-input { width: 1fr; }
+#text-dialog { width: 90%; height: 90%; padding: 1; border: round #91a16b; background: #111e18; }
+#dialog-text { height: 1fr; }
+#text-close { height: 1; min-height: 1; border: none; width: 1fr; }
+Tooltip { background: #cbb57d; color: #0c1411; padding: 0 1; }
+#note-dialog { width: 75%; height: 70%; padding: 1; border: round #91a16b; background: #19271d; }
+#note-content { height: 1fr; }
+#note-dialog .dialog-buttons Button { width: 1fr; }
+#connection-dialog { width: 76; max-width: 98%; height: 94%; border: round #91a16b; background: #19271d; padding: 1 2; }
+#connection-dialog Label { height: auto; margin-top: 1; }
+#connection-dialog Input { height: 3; }
+#connection-dialog Checkbox { height: 3; }
+#connect-discover { width: 1fr; height: 3; }
+#connect-models { height: 3; }
+#connect-status { height: auto; min-height: 2; color: #d8c995; }
+#connection-dialog .dialog-buttons Button { width: 1fr; }
+#workbench.pinned #ai-panel { layer: base; }
+/* Losing focus to an overlay must not add an editor frame or consume another row. */
+EditorArea { border: none; }

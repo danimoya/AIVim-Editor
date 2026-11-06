@@ -1,11 +1,7 @@
-name: Test Suite
+name: Historical test suite (manual)
 
-on:
-  pull_request:
-    branches: [ main, develop ]
-  push:
-    branches: [ main, develop ]
-  workflow_dispatch:
+# Historical checks; the supported cross-platform contract suite is qualification.yml.
+on: workflow_dispatch
 
 jobs:
   test:

@@ -1,21 +1,7 @@
-name: Continuous Integration
+name: Historical CI (manual)
 
-on:
-  push:
-    branches: [ main, develop ]
-    paths-ignore:
-      - '**.md'
-      - 'LICENSE'
-      - '.gitignore'
-      - 'docs/**'
-  pull_request:
-    branches: [ main, develop ]
-    paths-ignore:
-      - '**.md'
-      - 'LICENSE'
-      - '.gitignore'
-      - 'docs/**'
-  workflow_dispatch:
+# Historical checks; the supported cross-platform contract suite is qualification.yml.
+on: workflow_dispatch
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

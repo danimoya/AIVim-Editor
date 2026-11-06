@@ -1,35 +1,236 @@
+<div align="center">
+
 # AIVim
 
-AIVim is a local terminal editor with a browser companion and explicit AI review. Version 0.6.0 adds document safety, lossless Unicode input, undo/redo, bounded provider requests and validated proposals.
+### 1.0 Alpha · a small terminal editor with AI on demand
 
-Install with Python 3.9 or newer:
+Write what you want. Keep typing. Let the code catch up.
+
+[![Release](https://img.shields.io/badge/release-1.0%20Alpha%201-d6ac66)](https://github.com/danimoya/AIVim-Editor/releases/tag/v1.0.0-alpha.1)
+[![Qualification](https://github.com/danimoya/AIVim-Editor/actions/workflows/qualification.yml/badge.svg?branch=main)](https://github.com/danimoya/AIVim-Editor/actions/workflows/qualification.yml)
+[![Python](https://img.shields.io/badge/Python-3.9%2B-84dca0)](pyproject.toml)
+[![License](https://img.shields.io/badge/license-GPL--3.0--only-84dca0)](LICENSE)
+
+</div>
+
+AIVim combines Vim-style keys, familiar typing, mouse selection and contextual AI
+in a minimal terminal workspace. The editor keeps the screen; menus and AI controls
+appear when you ask for them.
+
+## See live blocks become Bash
+
+[![Three natural-language Bash instructions replaced live in AIVim](docs/assets/live-bash.gif)](docs/assets/live-bash.gif)
+
+This recording uses a real local model. Three instructions become Bash while the
+editor stays responsive. Idle inference pauses are shortened; typing and live
+replacements are real. Generated commands are syntax-checked and **never executed**.
+[Recording provenance](docs/assets/live-bash-demo.json) · [Reproduce the demo](#record-your-own-demo)
+
+<details>
+<summary><strong>Workspace carousel — editor, floating AI, menus and HTTPS setup</strong></summary>
+
+![AIVim workspace carousel](docs/assets/workspace-tour.gif)
+
+<table>
+<tr>
+<td align="center"><a href="docs/assets/terminal-workspace.png"><img src="docs/assets/terminal-workspace.png" width="230" alt="Minimal terminal editor" /></a><br />Editor</td>
+<td align="center"><a href="docs/assets/terminal-ai.png"><img src="docs/assets/terminal-ai.png" width="230" alt="Floating AI workbench" /></a><br />Floating AI</td>
+<td align="center"><a href="docs/assets/terminal-actions.png"><img src="docs/assets/terminal-actions.png" width="230" alt="Right-click context menu" /></a><br />Context menu</td>
+<td align="center"><a href="docs/assets/terminal-connect.png"><img src="docs/assets/terminal-connect.png" width="230" alt="OpenShift HTTPS model setup" /></a><br />Connect a model</td>
+</tr>
+</table>
+
+Click a thumbnail for its full-size capture. The carousel is an animated image,
+so it works directly in GitHub without JavaScript.
+
+</details>
+
+## Start in a minute
+
+Python **3.9+**, Git, and a terminal with Unicode support are required.
 
 ```sh
-python -m pip install aivim==0.6.0
-aivim document.py
-aivim-web --port 5000
+git clone --branch v1.0.0-alpha.1 https://github.com/danimoya/AIVim-Editor.git
+cd AIVim-Editor
+python -m venv .venv
+source .venv/bin/activate                 # Windows: .venv\Scripts\Activate.ps1
+python -m pip install '.[terminal-syntax]'
+aivim demo.sh
 ```
 
-The standard install includes OpenAI and Anthropic SDK adapters and the packaged browser assets. It does not compile a native inference engine or include model weights. `pyproject.toml` is dependency authority. `uv.lock` resolves the full optional dependency graph; `requirements-lock.txt` captures the qualified Python 3.9 Linux runtime with hashes.
+Or install the alpha in an isolated command-line environment:
 
-Terminal editing supports `i`, `a`, `A`, `I`, `o`, `O`, `s`, arrows, `h/j/k/l`, `w/b/e`, `0/^/$`, `gg/G`, counted `dd` and `yy`, `p/P`, visual selections, `u` and Ctrl-R. An insert session is one undo transaction. `:w`, `:w filename`, `:saveas filename`, `:e`, `:e!`, `:q` and `:q!` manage documents. `:w!` explicitly overwrites an externally changed target. Save failures leave document identity, content and dirty state intact. UTF-8/BOM, loaded newline convention, final newline, target permissions and symlinks are preserved. Mixed newline input is normalized to the detected convention on save. Backups use unique names when enabled. Dirty tabs offer `:tabclose save`, `:tabclose discard`, or continuing editing to cancel. Exit checks every tab. `:n` / `:nexttab` and `:N` / `:prevtab` navigate tabs.
+```sh
+pipx install 'aivim[terminal-syntax] @ git+https://github.com/danimoya/AIVim-Editor.git@v1.0.0-alpha.1'
+```
 
-Substitution uses one parser: `:%s/pattern/replacement/g`, `:2,5s#pattern#replacement#gc`, or visual `:'<,'>s/.../.../`. Patterns are Python regular expressions; `g`, `c`, `i` and `I` flags are accepted. Escape a delimiter with a backslash. Confirmation accepts `y/n/a/q` without blocking further terminal reads.
+The base package works without native syntax parsers; `terminal-syntax` adds
+highlighting. No model weights are bundled. Connect a provider before using AI:
 
-AI commands are `:explain 1 10`, `:improve 1 10`, `:analyze 1 10`, `:generate 3 description`, and `:ai question`. Generation inserts before the specified one-based line, or at the end using line count + 1. Improvement, generation and NLP return proposals, never automatic edits. `:apply` changes the originating document as one undoable operation; `:y` creates a copy of the full proposed document; `:reject` dismisses it. Editing, closing or cancelling the originating document invalidates outstanding output. Escape cancels a request without dropping newer input or results. Explanations, analyses and chat responses stay outside the document.
+```sh
+aivim --connect
+```
 
-NLP uses explicit `#nlp instruction`, paired `#nlp` markers, or `NLP-BEGIN` / `NLP-END` comment markers. Enter inserts a newline; F9 or `:nlptranslate` submits. Plain comments are not silently submitted. Live submission is opt-in and still requires proposal review. Cross-file context defaults to none. `:nlpcontext 2,3` selects tab numbers, `:nlpcontext` previews transmitted context, and `:nlpcontext none` clears it. A whole-source snapshot supplies stable character coordinates; each returned edit must lie inside marked ranges.
+## An editor that leaves room to edit
 
-Configuration precedence is explicit CLI provider, explicit `--config`, `~/.config/aivim/settings.json`, then defaults. Ordinary settings use `schema_version: 1`. Explicit legacy INI files are accepted; API keys stay transient. Explicit injected credentials override environment credentials, which override legacy INI keys. Environment keys are `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`. No `.env` files are automatically read. `aivim-config-migrate legacy.ini new-settings.json` preserves the original, refuses an existing destination and excludes credentials. Unsupported streaming, response caching, swap files and persistent undo are rejected clearly. The temperature setting applies to OpenAI and local inference; current Anthropic models use their provider default.
+Only **two rows** are permanent: a compact title/menu bar and a status line. An
+80×24 terminal leaves **80×22 cells** for the editor.
 
-Configured defaults are `gpt-4.1-mini` and `claude-sonnet-5-5`, with model IDs overridable in settings. They are configured allowlists rather than entitlement claims. Real account authorization, model entitlement and budget must be qualified for your account before use. See [OpenAI model documentation](https://developers.openai.com/api/docs/models/gpt-4.1-mini), [Anthropic models](https://platform.claude.com/docs/en/models/overview) and [Anthropic request parameters](https://platform.claude.com/docs/en/api/messages/create).
+- Click **≡** for files, buffers, sources, history, live options and view settings.
+- Select with the mouse or Vim Visual mode; **right-click / F2** opens contextual actions.
+- **Alt+A** opens floating AI controls without shrinking the editor. **Pin** docks
+  them beside your document; **Collapse** returns the space.
+- **Ctrl+P** searches commands. Line numbers and the shortcut bar are optional.
+- **F4** switches between Vim-style modal keys and standard typing.
 
-Default logs contain metadata, not code, prompts, keys or complete file paths. `:debug` explicitly enables content recording; files have mode 0600, directories 0700 and a configured retention count. Existing user documents and legacy configuration are never rewritten by migration or inference.
+The retro green-and-amber palette follows your terminal's font. `NO_COLOR` is
+respected. Files are saved with Ctrl+S; changing buffers does not redirect a
+pending AI result into another document.
 
-The browser companion binds to loopback and checks caller address, Host, Origin and CSRF. It renders AI text without HTML interpretation, preserves inputs on errors/cancellation, requires review before applying proposals, and offers copy/download and undo. Generation works with an empty document. Public hosting requires an explicit `create_app(mode='authenticated', principals=..., allowed_hosts=..., quota_path=..., secret_key=...)` operator configuration; bearer principals authorize providers and a SQLite transaction enforces shared quotas. This candidate makes the product decision explicit: the shipped CLI starts a single-user local companion. An operator may configure the authenticated factory for private hosting; no public service has been deployed.
+## Live blocks: intent → code
 
-Optional native inference is installed with `pip install '.[local-llm]'`. Configure a GGUF path and expected SHA-256, memory/CPU/thread/context limits, and explicitly select `local`. The model runs in a separate process that is terminated on cancellation/deadline. `aivim-model-download HTTPS_URL DESTINATION --sha256 DIGEST --max-bytes LIMIT` resumes a identified partial download, verifies size/header/checksum, and atomically installs it. No default model license, weights, machine or hardware quality is assumed. Native engine/model qualification remains an external release prerequisite.
+1. Connect a model and open a file, such as `demo.sh`.
+2. Press **F4** for standard typing, or `i` to use Vim Insert mode.
+3. Press **F9** to enable Live blocks. Enable **Auto replace** from the **≡** menu
+   if you want completed proposals applied automatically.
+4. Write an instruction. A single Enter continues it; a **blank line submits it**.
+5. Continue writing the next instruction while AI works.
 
-Run qualification with `python -m pytest verification`, the retained `python -m unittest tests.test_buffer tests.test_history tests.test_utils`, and `python scripts/bump_version.py --validate`. Browser tests need Playwright Chromium; terminal tests use a real POSIX PTY. Historical tests using mocked editor dispatch are retained for comparison and are not presented as release evidence. [Release and rollback](docs/RELEASE.md) describes artifacts, platform qualification and operator steps. The bundled LICENSE is GPL v3; package metadata follows that file.
+```text
+Print Hello.
 
-Optional local-model inference is unavailable on macOS because the required hard worker memory limit cannot be enforced. It fails before starting a worker; terminal/browser editing and remote provider adapters remain available. Linux and Windows workers require successfully established OS resource limits.
+Show the current directory disk usage in human-readable form.
+
+Count regular files in the current directory, without recursion.
+
+```
+
+Output streams into the AI preview. Review is the default; **F8** accepts a proposal.
+With Auto replace enabled, validated output replaces its original instruction as
+one undoable edit. Partial tokens stay in the preview. Editing a pending instruction
+makes its result stale and preserves your newer text.
+
+Blocks queue in order, and normalized line endings keep later block positions
+correct. **Undo restores an instruction.** Paste, undo and redo do not submit by
+themselves. Turn Live off before editing ordinary code.
+
+## AI that works on the text you choose
+
+Select a function, paragraph or data snippet, then ask AI to **rewrite, explain,
+analyze, answer a question or generate something new**. Add your own instruction
+and inspect the proposed diff before accepting it.
+
+Open **Sources** with **F3**. Add text files, Markdown, code, multiline notes, or a
+snapshot of the current buffer. Check exactly which sources the next request can
+read. Context preview shows those snapshots and optional nearby document text.
+Unchecked sources are excluded.
+
+**History** keeps the session's prompts, target/context snapshots, results and
+acceptance decisions. Sources and history are held in memory and clear on exit;
+save the documents you want to keep.
+
+## Bring your own model
+
+| Provider | Connection |
+| --- | --- |
+| **HTTPS / OpenShift** | `aivim --connect`: paste the route, discover or enter a model ID, and supply an optional bearer token/private CA. |
+| **Local server / Olares** | OpenAI-compatible Chat Completions with ordered LAN and Tailscale routes. Model ID and URLs are configurable. |
+| **OpenAI** | Set `OPENAI_API_KEY`; choose the configured model with `--model openai`. |
+| **Anthropic** | Set `ANTHROPIC_API_KEY`; select `--model claude`. |
+| **Local GGUF** | Optional isolated native inference worker; see the [terminal guide](docs/TERMINAL.md). |
+
+The HTTPS setup verifies certificates, supports private cluster CAs, and provides
+model discovery. Tokens stay in memory unless **Remember token** is selected; a
+remembered token is stored in a separate user-private file, outside the repository
+and JSON settings. `AIVIM_COMPATIBLE_API_KEY` is also supported.
+
+The local-server provider tries its preferred route on every request and falls
+back on connection failure. It never silently switches to a paid cloud provider
+or replays a partial stream. It can connect to a compatible local llama-server or
+Ollama API when configured with that server's URL and model ID.
+
+[HTTPS, LAN/Tailscale and configuration details →](docs/TERMINAL.md)
+
+## Small set of keys, full mouse access
+
+| Key | Action |
+| --- | --- |
+| **F1** | Field manual |
+| **F2 / right-click** | Selection actions |
+| **F3** | Sources |
+| **F4** | Vim / standard typing |
+| **F5 / F6 / F7** | Generate / explain / rewrite |
+| **F8 / F9** | Accept proposal / toggle Live |
+| **Alt+A** | Floating AI controls |
+| **Ctrl+P** | Command palette |
+| **Ctrl+S / Ctrl+O / Ctrl+N** | Save / open / new |
+| **Alt+1 / Alt+2 / Alt+3** | Editor / Sources / History |
+| **Ctrl+Q / F10** | Quit with unsaved-buffer handling |
+
+Vim-style input supports familiar movement, insertion, visual selection, basic
+counts, line copy/delete, paste and undo. `:w`, `:wq`, `:q`, `:e`, `:new` and tab
+navigation are available. F2 is the fallback when your terminal reserves right-click;
+Shift+mouse typically uses the terminal's native copy/selection behavior.
+
+## What 1.0 Alpha means
+
+This is **1.0 Alpha 1**, packaged as `1.0.0a1` and tagged `v1.0.0-alpha.1`. It is a
+prerelease of the new interface, with useful Vim vocabulary rather than complete
+Vim runtime/plugin compatibility. Persistent workspaces/history, language-server
+features, PDF/URL ingestion and per-hunk acceptance are outside this alpha.
+
+Saving uses transactional writes, preserves loaded encoding/newline conventions,
+permissions and symlinks, and checks for external changes. AI output is validated
+before application and generated code is never executed automatically. These
+checks protect editing operations; they do not establish generated-code quality.
+
+The original editor remains available with `aivim --classic file.py`. An optional
+CodeMirror browser workspace ships with `aivim-web --port 5000`; the terminal app
+runs independently of it. See the [browser guide](docs/WORKSPACE.md).
+
+## Develop and verify
+
+```sh
+python -m pip install -e '.[test,build,terminal-syntax]'
+python -m playwright install chromium
+python -m pytest verification
+python -m unittest tests.test_buffer tests.test_history tests.test_utils
+python scripts/check_source.py
+python scripts/bump_version.py --validate
+python -m build
+```
+
+To change the optional browser frontend:
+
+```sh
+npm ci
+npm test
+npm run build
+```
+
+Verification covers real Textual event loops, POSIX terminal sessions, Chromium
+journeys, real SDK calls to loopback HTTP/HTTPS fixtures, certificate/token checks,
+source exclusion, live queues, stale results, Unicode, saving and undo. Installed-wheel
+checks verify packaged assets and terminal entrypoints. The
+[Qualification workflow](https://github.com/danimoya/AIVim-Editor/actions/workflows/qualification.yml)
+checks supported OS/Python combinations. Local live-model checks are separate from
+isolated regression tests; hardware, entitlements and generation quality vary.
+
+### Record your own demo
+
+```sh
+python -m pip install -e '.[demo,terminal-syntax]'
+python -m playwright install chromium
+python scripts/record_live_demo.py
+```
+
+The recorder uses your configured model, captures actual UI frames, validates the
+three replacements and runs `bash -n` without executing the result. It exports a
+looping GIF, a poster and sanitized provenance to `docs/assets/`. Idle inference
+pauses are shortened for readability. No server addresses or credentials are
+included in the provenance.
+
+[Terminal guide](docs/TERMINAL.md) · [Alpha release notes](docs/RELEASE_NOTES_1.0_ALPHA.md) · [Release and rollback](docs/RELEASE.md) · [Contributing](CONTRIBUTING.md)
+
+**License:** [GPL-3.0-only](LICENSE). Bundled frontend dependency notices are
+included in [THIRD_PARTY_LICENSES.txt](aivim/web/static/THIRD_PARTY_LICENSES.txt).

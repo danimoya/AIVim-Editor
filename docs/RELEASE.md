@@ -1,16 +1,71 @@
-# Qualification and rollback
+# Release qualification and rollback
 
-The candidate derives from public commit faf3278eceaeebbd866bde9793195eb1dbf56125. Accepted investigation evidence stays outside source; output provenance and baseline hashes identify the authorized export. The implementation was prepared in isolation. Version 0.6.0 is released through the reviewed GitHub release workflow; publication does not change any hosted service or operator configuration.
+The 1.0 alpha release is **1.0 Alpha 1**, with Python version `1.0.0a1`, frontend
+version `1.0.0-alpha.1`, and Git tag `v1.0.0-alpha.1`. See the
+[alpha release notes](RELEASE_NOTES_1.0_ALPHA.md) for scope and limitations.
 
-1. Install test/build extras in an isolated environment. Set Playwright's browser cache outside source; install Chromium.
-2. Run all `verification` tests, retained Buffer/History/Utils unittest checks, static source parsing and version validation. The suite uses synthetic files and loopback provider servers with real SDKs. It denies external network connections during fixtures.
-3. Build in a disposable source copy with `python -m build --outdir ARTIFACT_DIRECTORY`. Check both archives with `python -m twine check` and record SHA-256. Install the wheel into a fresh environment; run `scripts/installed_smoke.py` from outside source. Check the sdist is independently buildable. Native local inference is optional.
-4. Qualify Linux, macOS and Windows on supported Python interpreters. CI templates cover those OSes and Python 3.9, 3.11 and 3.13. Linux PTY/Chromium checks are locally executable. Native Windows console, macOS terminal behavior and actual optional model/hardware still require their respective runners. On Windows run `aivim` in a native console, insert the Unicode burst used by `test_terminal_journey.py`, resize, undo/redo, write/quit, and compare exact saved bytes. CI alone does not claim that manual console result.
-5. Before a provider release, an operator must supply authorized credentials, confirm model entitlement and a bounded smoke budget. Synthetic keys are not production configuration. Before optional local release, supply licensed GGUF weights with a trusted digest and qualify the native engine under configured resource limits on intended hardware.
-6. For hosted browser use, the operator supplies allowed hostnames, bearer principals/provider grants, a persistent shared quota path and signing-secret custody; TLS is terminated by operator-owned infrastructure. The candidate does not change DNS, reverse proxies, identity or live data. Local CLI starts only loopback mode.
+## Version identity
 
-Keep a qualified previous artifact and its dependency lock. Roll back by installing that artifact into a new isolated environment and selecting its prior explicit configuration. Keep user documents, backups and original INI/JSON settings. Configuration migration refuses overwrite and does not copy keys, so selecting the old config reverses migration. There is no database migration; the optional web quota schema is additive in a separate explicitly supplied file. Stop only an isolated fixture when rehearsing rollback; a live switch/restart needs operator authorization. The old 0.5.4 artifact contains known safety defects and is a comparison artifact, not a qualified safe rollback.
+`aivim/_version.py` is the Python authority. `VERSION`, `package.json` and the root
+of `package-lock.json` mirror it using the appropriate Python/SemVer spelling.
 
-CI fails on source syntax errors, version drift, dispatch/document/AI/security failures, browser failures, packaging drift and broken installed assets. Existing historical coverage reports describe their original runs; they are not current coverage claims. Publishing a version-matched GitHub release runs mandatory Linux verification, builds and checks both distributions, smoke-tests a clean wheel installation, rebuilds the sdist, and publishes to PyPI with the repository API token. The separate Qualification workflow checks the OS/Python matrix. Publication does not deploy a hosted service.
+```sh
+python scripts/bump_version.py 1.0.0a1
+uv lock
+python scripts/bump_version.py --validate
+python scripts/bump_version.py --tag
+```
 
-Optional local-model inference is unavailable on macOS because the required hard worker memory limit cannot be enforced. It fails before starting a worker; terminal/browser editing and remote provider adapters remain available. Linux and Windows workers require successfully established OS resource limits.
+The bump tool supports alpha, beta and release-candidate versions. Release tags
+are checked through the same mapping; Python package filenames use PEP 440 spelling.
+Never hand-edit only a single version mirror.
+
+## Qualification
+
+1. Install `.[test,build,terminal-syntax]` in an isolated environment and install
+   Playwright Chromium. Run all `verification` tests, retained Buffer/History/Utils
+   unittests, static source parsing and version validation.
+2. Rebuild the browser bundle with `npm ci && npm test && npm run build`. Check
+   that committed JS and bundled license notices reproduce exactly.
+3. Build wheel and sdist in a disposable directory; run `python -m twine check`.
+   Install the wheel into a fresh environment and run `scripts/installed_smoke.py`
+   from outside the checkout. Rebuild the sdist independently. Record SHA-256 sums.
+4. `qualification.yml` is the automatic supported contract suite: frontend checks,
+   Linux/macOS/Windows and Python 3.9/3.11/3.13. The old `ci.yml` and `test.yml`
+   contain historical tests and are retained as manual-only comparison workflows.
+   Local Linux results do not establish native macOS/Windows console behavior.
+5. Loopback fixtures test real SDK/HTTP/HTTPS behavior with synthetic credentials.
+   Live provider checks require configured credentials and model entitlement; local
+   model availability, native inference resource limits and generation quality
+   remain hardware/operator-specific. No model weights or production keys ship.
+6. Demo recordings use real application events and the configured model. Generated
+   Bash is syntax-checked without execution. Publish only the GIF, poster and
+   sanitized provenance; raw temporary frames and machine settings stay local.
+
+## Publication
+
+Push the reviewed commit and matching tag, then create a GitHub prerelease.
+The manual **Prepare GitHub release** workflow uses the already-committed version;
+it does not edit metadata or push version bumps behind the reviewer's back.
+
+A published GitHub release triggers verification and artifact creation.
+**Prereleases skip automatic PyPI publication** and can attach verified distribution
+assets to GitHub. Stable releases retain the explicit PyPI publication path.
+An intentional `workflow_dispatch` can target TestPyPI or PyPI separately.
+GitHub publication never deploys a web service or rewrites user configuration.
+
+User-specific endpoint URLs, bearer tokens, CA files, host firewall rules and model
+configuration are outside this repository. Inspect staged files before pushing.
+Release notes should distinguish loopback qualification from live inference evidence.
+
+## Rollback
+
+Keep the previously qualified artifact and lock. Install it in a separate environment
+and retain original JSON/INI configuration, documents and backups. Configuration
+migration refuses destination overwrite and excludes credentials. The new UI can be
+bypassed with `aivim --classic`; that is an interface choice, not a downgrade of
+shared services. Avoid rewriting user files during rollback.
+
+Local GGUF inference remains unavailable on macOS when the required hard worker
+memory limit cannot be enforced. Linux/Windows workers must establish their OS
+resource limits. Terminal editing and remote model providers remain available.

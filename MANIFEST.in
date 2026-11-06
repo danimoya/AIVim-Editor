@@ -1,8 +1,8 @@
 include LICENSE README.md VERSION pyproject.toml requirements.txt requirements-lock.txt uv.lock example-settings.json example_config
-recursive-include aivim *.py *.typed *.html *.css *.js
+recursive-include aivim *.py *.typed *.html *.css *.js *.tcss
 recursive-include verification *.py
 recursive-include tests *.py
-recursive-include scripts *.py *.md
+recursive-include scripts *.py *.md *.mjs
 recursive-include .github *.yml
 include docs/RELEASE.md
 global-exclude *.pyc
@@ -10,3 +10,14 @@ prune __pycache__
 prune models
 prune build
 prune dist
+
+include package.json package-lock.json
+recursive-include frontend *.js
+include docs/WORKSPACE.md
+include aivim/web/static/THIRD_PARTY_LICENSES.txt
+
+include docs/TERMINAL.md
+
+recursive-include docs/assets *.png *.svg *.gif *.json
+
+include docs/RELEASE_NOTES_1.0_ALPHA.md

@@ -37,13 +37,15 @@ class AIService:
         self.current_openai_model=self.settings.ai.openai_model
         self.current_anthropic_model=self.settings.ai.anthropic_model
         self.current_local_model='local-gguf'
+        self.current_olares_model=self.settings.ai.olares_model
+        self.current_compatible_model=self.settings.ai.compatible_model
         self.ai_timeout=self.settings.ai.timeout
         self._client_lock=threading.Lock();self._slots=threading.BoundedSemaphore(2);self._transport_slots=threading.BoundedSemaphore(2)
         self.config_status={'loaded':getattr(self.settings,'loaded',False),'message':'Settings loaded' if getattr(self.settings,'loaded',False) else 'Default settings','path':None}
         self.debug_logging=False;self.debug_log_file=None
 
     def models(self):
-        return {'openai':self.current_openai_model,'claude':self.current_anthropic_model,'local':self.current_local_model}
+        return {'openai':self.current_openai_model,'claude':self.current_anthropic_model,'local':self.current_local_model,'olares':self.current_olares_model,'compatible':self.current_compatible_model}
 
     def capabilities(self):
         return {p:{'available':self.is_model_configured(p),'models':[m]} for p,m in self.models().items()}
@@ -51,6 +53,8 @@ class AIService:
     def is_model_configured(self, provider=None):
         p=provider or self.current_model
         if p in self.clients: return True
+        if p=='compatible':return bool(self.settings.ai.compatible_base_url and self.settings.ai.compatible_model)
+        if p=='olares':return bool(self.endpoints.get(p) or self.settings.ai.olares_base_urls)
         if p=='local': return bool(self.settings.ai.local_model_path and self.settings.ai.local_model_sha256)
         return bool(self.credentials.get(p) or os.environ.get({'openai':'OPENAI_API_KEY','claude':'ANTHROPIC_API_KEY'}.get(p,'AIVIM_UNUSED_KEY')))
 
@@ -58,12 +62,30 @@ class AIService:
         with self._client_lock:
             if provider in self.clients: return self.clients[provider]
             if not self.is_model_configured(provider): raise AIError('NOT_CONFIGURED','Provider is not configured')
-            if provider=='local':
+            if provider=='compatible':
+                import httpx
+                from openai import OpenAI
+                from .compatible import normalize_url, ssl_context, token_for
+                try:
+                    key=token_for(self.settings,self.credentials) or 'local-compatible'
+                    url=normalize_url(self.settings.ai.compatible_base_url)
+                    context=ssl_context(self.settings.ai.compatible_ca_file)
+                except (ValueError,OSError):raise AIError('NOT_CONFIGURED','Check the compatible endpoint, token file and CA certificate') from None
+                client=OpenAI(api_key=key,organization='',project='',base_url=url,http_client=httpx.Client(verify=context,trust_env=False,follow_redirects=False),timeout=self.settings.ai.timeout,max_retries=0)
+            elif provider=='olares':
+                import httpx
+                from openai import OpenAI
+                from .endpoint_transport import OrderedEndpointTransport
+                urls=self.endpoints.get(provider) or self.settings.ai.olares_base_urls
+                if isinstance(urls,str):urls=[urls]
+                transport=OrderedEndpointTransport(urls,self.settings.ai.olares_connect_timeout)
+                client=OpenAI(api_key='local-olares',organization='',project='',base_url=urls[0],http_client=httpx.Client(transport=transport,trust_env=False,follow_redirects=False),timeout=self.settings.ai.timeout,max_retries=0)
+            elif provider=='local':
                 from .local_worker import LocalWorker
                 client=LocalWorker(self.settings.ai)
             else:
                 key=self.credentials.get(provider) or os.environ.get('OPENAI_API_KEY' if provider=='openai' else 'ANTHROPIC_API_KEY')
-                if provider=='openai':
+                if provider in ('openai','olares','compatible'):
                     from openai import OpenAI
                     client=OpenAI(api_key=key,base_url=self.endpoints.get(provider),timeout=self.settings.ai.timeout,max_retries=0)
                 else:
@@ -71,7 +93,7 @@ class AIService:
                     client=Anthropic(api_key=key,base_url=self.endpoints.get(provider),timeout=self.settings.ai.timeout,max_retries=0)
             self.clients[provider]=client;return client
 
-    def request(self, action, code='', context='', instruction='', *, provider=None, model=None, request_id=None, cancel=None):
+    def request(self, action, code='', context='', instruction='', *, provider=None, model=None, request_id=None, cancel=None, on_delta=None):
         p=provider or self.current_model;m=model or self.models().get(p);rid=request_id or uuid.uuid4().hex
         if not isinstance(rid,str) or not rid or len(rid)>128 or not all(c.isalnum() or c in '-_' for c in rid):raise AIError('INVALID_REQUEST','Invalid request ID')
         if p not in self.models() or m != self.models()[p]: raise AIError('INVALID_MODEL','Provider/model is not in the configured allowlist')
@@ -95,7 +117,9 @@ class AIService:
                 remaining=deadline-time.monotonic()
                 if remaining <= 0: raise AIError('TIMEOUT','Provider deadline exceeded',True)
                 try:
-                    if p=='openai':
+                    if on_delta is not None and p in ('openai','claude','olares','compatible'):
+                        text=self._bounded_call(lambda: self._stream_completion(client,p,m,system,prompt,remaining,cancel,on_delta),remaining,cancel)
+                    elif p in ('openai','olares','compatible'):
                         response=self._bounded_call(lambda: client.chat.completions.create(model=m,messages=[{'role':'system','content':system},{'role':'user','content':prompt}],max_tokens=self.settings.ai.max_tokens,temperature=self.settings.ai.temperature,timeout=remaining),remaining,cancel)
                         choice=response.choices[0]
                         if choice.finish_reason != 'stop': raise AIError('INVALID_RESPONSE','Provider returned incomplete or refused output')
@@ -106,6 +130,7 @@ class AIService:
                         text=''.join(b.text for b in response.content if b.type=='text')
                     else: text=client.complete(system,prompt,remaining,cancel)
                     if not isinstance(text,str) or not text.strip() or len(text.encode())>1024*1024: raise AIError('INVALID_RESPONSE','Provider returned invalid text')
+                    if on_delta is not None and p=='local':on_delta(text)
                     if cancel and cancel.is_set(): raise AIError('CANCELLED','Request cancelled')
                     try:self._record(rid,p,m,action,prompt,text)
                     except OSError:raise AIError('LOG_FAILED','Opt-in content recording failed; no document was changed') from None
@@ -119,9 +144,10 @@ class AIService:
                     elif status in (401,403): error=AIError('NOT_CONFIGURED','Provider authorization failed')
                     elif status==404: error=AIError('INVALID_MODEL','Provider model unavailable')
                     elif status and status>=500: error=AIError('UPSTREAM','Provider unavailable',True)
+                    elif p=='compatible' and 'CERTIFICATE_VERIFY_FAILED' in str(getattr(exc,'__cause__','')):error=AIError('TLS','HTTPS certificate verification failed. Configure the cluster CA certificate.')
                     elif name in ('IndexError','AttributeError','TypeError'): error=AIError('INVALID_RESPONSE','Invalid provider response')
                     else: error=AIError('UPSTREAM','Provider request failed',True)
-                    if attempt>=retries or not error.retryable: raise error from None
+                    if on_delta is not None or attempt>=retries or not error.retryable: raise error from None
                     pause=min(.2*(2**attempt),max(0,deadline-time.monotonic()))
                     if cancel: cancel.wait(pause)
                     else: time.sleep(pause)
@@ -130,6 +156,41 @@ class AIService:
         finally:
             logging.info('AI request=%s action=%s provider=%s model=%s duration=%.3f outcome=%s',rid,action,p,m,time.monotonic()-started,outcome)
             self._slots.release()
+
+    def _stream_completion(self,client,provider,model,system,prompt,timeout,cancel,on_delta):
+        """Consume a real SDK stream inside a bounded transport worker."""
+        deadline=time.monotonic()+timeout
+        parts=[];size=0;finished=False
+        if provider in ('openai','olares','compatible'):
+            stream=client.chat.completions.create(model=model,messages=[{'role':'system','content':system},{'role':'user','content':prompt}],max_tokens=self.settings.ai.max_tokens,temperature=self.settings.ai.temperature,timeout=timeout,stream=True)
+        else:
+            stream=client.messages.create(model=model,system=system,messages=[{'role':'user','content':prompt}],max_tokens=self.settings.ai.max_tokens,timeout=timeout,stream=True)
+        try:
+            for event in stream:
+                if cancel and cancel.is_set():raise AIError('CANCELLED','Request cancelled')
+                if time.monotonic()>=deadline:raise AIError('TIMEOUT','Provider deadline exceeded',True)
+                delta=''
+                if provider in ('openai','olares','compatible'):
+                    if not event.choices:continue
+                    choice=event.choices[0]
+                    if choice.finish_reason:
+                        if choice.finish_reason!='stop':raise AIError('INVALID_RESPONSE','Provider returned incomplete or refused output')
+                        finished=True
+                    if getattr(choice.delta,'refusal',None):raise AIError('INVALID_RESPONSE','Provider refused output')
+                    delta=choice.delta.content or ''
+                else:
+                    if event.type=='content_block_delta' and event.delta.type=='text_delta':delta=event.delta.text
+                    elif event.type=='message_delta':
+                        if event.delta.stop_reason!='end_turn':raise AIError('INVALID_RESPONSE','Provider returned incomplete output')
+                        finished=True
+                    elif event.type=='error':raise AIError('UPSTREAM','Provider stream failed')
+                if delta:
+                    size+=len(delta.encode())
+                    if size>1024*1024:raise AIError('INVALID_RESPONSE','Provider output exceeds limit')
+                    parts.append(delta);on_delta(delta)
+            if not finished:raise AIError('INVALID_RESPONSE','Provider stream ended before completion')
+            return ''.join(parts)
+        finally:stream.close()
 
     def _record(self,rid,provider,model,action,prompt,text):
         if not self.debug_logging: return

@@ -78,6 +78,14 @@ class AISettings:
     default_model: str = "openai"
     openai_model: str = "gpt-4.1-mini"
     anthropic_model: str = "claude-sonnet-5-5"
+    olares_model: str = 'bonsai-2-27b'
+    olares_base_urls: list = field(default_factory=list)
+    olares_connect_timeout: float = 2.0
+    compatible_base_url: str = ''
+    compatible_model: str = ''
+    compatible_ca_file: str = ''
+    compatible_token_file: str = ''
+    compatible_token_env: str = 'AIVIM_COMPATIBLE_API_KEY'
     timeout: float = 30.0
     auto_suggestions: bool = False
     nlp_live_mode: bool = False
@@ -170,7 +178,7 @@ class Settings:
     SUPPORTED={
         'editor': {'tabstop','expandtab','shiftwidth','autoindent','number','relativenumber','cursorline','cursorcolumn','scrolloff'},
         'display': {'syntax'},
-        'ai': {'default_model','openai_model','anthropic_model','timeout','nlp_live_mode','max_tokens','temperature','retry_on_error','max_retries','local_model_path','local_model_sha256','local_memory_mb','local_cpu_seconds','local_threads','local_context','content_log_dir','content_log_retention'},
+        'ai': {'default_model','openai_model','anthropic_model','olares_model','olares_base_urls','olares_connect_timeout','compatible_base_url','compatible_model','compatible_ca_file','compatible_token_file','compatible_token_env','timeout','nlp_live_mode','max_tokens','temperature','retry_on_error','max_retries','local_model_path','local_model_sha256','local_memory_mb','local_cpu_seconds','local_threads','local_context','content_log_dir','content_log_retention'},
         'file': {'auto_backup','backup_dir','encoding','fileformat','undolevels'},
         'search': {'ignorecase','smartcase','hlsearch','incsearch','wrapscan','gdefault'}
     }
@@ -450,8 +458,21 @@ class Settings:
                 elif type(value) is not expected: raise ValueError('Invalid setting type: '+key)
                 if key in {'stream_responses','cache_responses','auto_suggestions','swapfile','undofile','autowrite','autowriteall'} and value: raise ValueError('Unsupported setting: '+key)
                 if key in {'tabstop','shiftwidth'} and not 1<=value<=32: raise ValueError('Invalid indentation width')
+                if key=='compatible_base_url' and value:
+                    from .compatible import normalize_url
+                    normalize_url(value)
+                if key=='olares_base_urls':
+                    from urllib.parse import urlsplit
+                    if len(value)>4:raise ValueError('At most four Olares endpoints are supported')
+                    for url in value:
+                        if not isinstance(url,str) or any(c.isspace() or ord(c)<32 or ord(c)==127 for c in url) or '\0' in url:raise ValueError('Invalid Olares endpoint')
+                        parsed=urlsplit(url)
+                        if parsed.scheme not in ('http','https') or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:raise ValueError('Olares endpoints must be HTTP(S) URLs without credentials, query or fragment')
+                        try:parsed.port
+                        except ValueError:raise ValueError('Invalid Olares port') from None
+                if key=='olares_connect_timeout' and not .05<=value<=10:raise ValueError('Invalid Olares connect timeout')
                 if key=='timeout' and not .01<=value<=300: raise ValueError('Invalid timeout')
-                if key=='default_model' and value not in {'openai','claude','local'}: raise ValueError('Unknown provider')
+                if key=='default_model' and value not in {'openai','claude','local','olares','compatible'}: raise ValueError('Unknown provider')
                 if key=='fileformat' and value not in {'unix','dos','mac'}: raise ValueError('Unknown newline convention')
                 if key=='max_retries' and not 0<=value<=3: raise ValueError('Invalid retry budget')
                 if key=='temperature' and not 0<=value<=1: raise ValueError('Invalid temperature')

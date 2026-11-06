@@ -547,11 +547,11 @@ class CommandHandler:
         """
         try:
             # Check if the model name is valid
-            if model_name.lower() in ["openai", "claude", "local"]:
+            if model_name.lower() in ["openai", "claude", "local", "olares", "compatible"]:
                 self.editor.set_ai_model(model_name.lower())
                 return True
             else:
-                self.editor.set_status_message(f"Unknown model: {model_name}. Valid options: openai, claude, local")
+                self.editor.set_status_message(f"Unknown model: {model_name}. Valid options: openai, claude, local, olares, compatible")
                 return False
         except Exception as e:
             self.editor.set_status_message(f"Error setting AI model: {str(e)}")
@@ -685,8 +685,8 @@ class CommandHandler:
             "  :generate l d  - Generate code at line l based on description d",
             "  :ai query      - Ask AI about the current code",
             "  :model         - Show AI model selector popup with arrow key navigation",
-            "  :model name    - Set AI model directly (openai, claude, local)",
-            "  :set model     - Legacy command to set AI model (openai, claude, local)",
+            "  :model name    - Set AI model directly (openai, claude, local, olares)",
+            "  :set model     - Legacy command to set AI model (openai, claude, local, olares)",
             "  :y             - Create a new tab with AI improved code",
             "  :n             - Reject AI suggestion",
             "",

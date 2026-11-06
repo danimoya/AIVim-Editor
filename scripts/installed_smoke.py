@@ -11,9 +11,11 @@ from aivim.web import create_app
 from aivim.settings import Settings
 from aivim.ai_service import AIService
 from aivim.editor import Editor
+from aivim.tui import TerminalWorkspace
 
-assert importlib.metadata.version('aivim')==__version__=='0.6.0'
+assert importlib.metadata.version('aivim')==__version__
 assert importlib.resources.files('aivim').joinpath('py.typed').is_file()
+assert importlib.resources.files('aivim').joinpath('tui.tcss').is_file()
 for resource in ['templates/index.html','static/app.js','static/app.css']:
     assert importlib.resources.files('aivim.web').joinpath(resource).is_file()
 for module in ['aivim.run_editor','aivim.model_download','aivim.config_migrate']:
@@ -27,3 +29,15 @@ assert client.get('/').status_code==200 and client.get('/static/app.js').status_
 assert client.get('/health').json['status']=='ok'
 assert not any(name in sys.modules for name in ['llama_cpp'])
 print('Installed wheel: entrypoints, versions, real dispatch, health and packaged assets passed; no native engine loaded')
+
+import asyncio
+async def terminal_smoke():
+    workspace=TerminalWorkspace(settings=settings)
+    async with workspace.run_test(size=(110,40)) as pilot:
+        await pilot.press('i','A','é','界','escape')
+        assert workspace.editor.text=='Aé界'
+        await pilot.press('f2')
+        assert len(workspace.screen_stack)==2
+        await pilot.press('escape')
+asyncio.run(terminal_smoke())
+print('Installed terminal workspace: editing and context menu passed')

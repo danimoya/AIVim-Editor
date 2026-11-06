@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "aivim"
 dynamic = ["version"]
-description = "AI-enhanced Vim-like text editor with code assistance and generation"
+description = "Minimal terminal AI editor with Vim-style keys, source context and live generation"
 readme = "README.md"
 authors = [
     {name = "Daniel Moya", email = "daniel.moya@dimensigon.com"}
@@ -15,7 +15,7 @@ maintainers = [
 ]
 license = {text = "GPL-3.0-only"}
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
@@ -34,7 +34,6 @@ classifiers = [
     "Topic :: Text Editors :: Integrated Development Environments (IDE)",
     "Topic :: Software Development",
     "Topic :: Software Development :: Code Generators",
-    "Typing :: Typed",
 ]
 keywords = ["vim", "editor", "ai", "code-generation", "code-improvement", "nlp", "terminal", "curses"]
 requires-python = ">=3.9"
@@ -43,14 +42,23 @@ dependencies = [
     "openai>=1.0.0,<3.0.0",
     "anthropic>=0.25.0,<1.0.0",
     "requests>=2.25.0,<3.0.0",
+    "httpx>=0.27,<1",
     "python-dotenv>=1.0.0",
     "configparser>=5.3.0",
     "tqdm>=4.65.0",
     "wcwidth>=0.2,<1",
+    "textual>=8.2.8,<9",
     "windows-curses>=2.3.0;platform_system=='Windows'",
 ]
 
 [project.optional-dependencies]
+demo = [
+    "playwright>=1.49,<2",
+    "pillow>=11,<13",
+]
+terminal-syntax = [
+    "textual[syntax]>=8.2.8,<9",
+]
 local-llm = [
     "llama-cpp-python>=0.2.0",
 ]
@@ -76,6 +84,7 @@ test = [
     "pytest-timeout>=2.1.0",
     "pytest-xdist>=3.0.0",
     "playwright>=1.49,<2",
+    "trustme>=1.2,<2",
 ]
 lint = [
     "black>=23.0.0",
@@ -116,8 +125,8 @@ packages = ["aivim", "aivim.web"]
 include-package-data = true
 
 [tool.setuptools.package-data]
-aivim = ["py.typed"]
-"aivim.web" = ["templates/*.html", "static/*.js", "static/*.css"]
+aivim = ["py.typed", "*.tcss"]
+"aivim.web" = ["templates/*.html", "static/*.js", "static/*.css", "static/*.txt"]
 
 [tool.setuptools.dynamic]
 version = {attr = "aivim._version.__version__"}

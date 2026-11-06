@@ -455,6 +455,8 @@ class Display:
         """
         # Create model options
         models = [
+            {"id": "compatible", "name": "HTTPS / OpenShift", "description": "Configured OpenAI-compatible HTTPS model"},
+            {"id": "olares", "name": "Olares", "description": "Configured LAN / Tailscale model"},
             {"id": "openai", "name": "OpenAI", "description": "Configured OpenAI model"},
             {"id": "claude", "name": "Claude", "description": "Configured Anthropic model"},
             {"id": "local", "name": "Local", "description": "Run local LLMs through llama-cpp-python"}

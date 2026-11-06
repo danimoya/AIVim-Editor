@@ -114,3 +114,5 @@ todo.md
 .claude-flow/
 .hive-mind/
 .swarm/
+node_modules/
+aivim/web/static/*.map

@@ -3,13 +3,14 @@ import hashlib
 import hmac
 import ipaddress
 import json
+import queue
 from pathlib import Path
 import secrets
 import sqlite3
 import threading
 import time
 from urllib.parse import urlsplit
-from flask import Flask, jsonify, request, render_template, session
+from flask import Flask, jsonify, request, render_template, session, Response, g
 from werkzeug.exceptions import HTTPException
 from ..ai_service import AIService, AIError
 from ..ai_jobs import AIJob
@@ -36,7 +37,7 @@ def create_app(service=None, *, mode='loopback', allowed_hosts=None, principals=
     service=service if service is not None else AIService();app.extensions['ai_service']=service
     hosts=set(allowed_hosts or ['localhost','127.0.0.1','::1'])
     quotas=SharedQuota(quota_path,quota_limit) if quota_path else None
-    local_calls=[];lock=threading.Lock();requests={}
+    local_calls=[];lock=threading.Lock();active_requests={}
     tokens={hashlib.sha256(token.encode()).hexdigest():value for token,value in (principals or {}).items()}
     def error(code,message,status,rid=None,retryable=False):
         response=jsonify({'request_id':rid,'error':{'code':code,'message':message,'retryable':retryable}})
@@ -44,6 +45,7 @@ def create_app(service=None, *, mode='loopback', allowed_hosts=None, principals=
         return response,status
     @app.before_request
     def boundary():
+        g.style_nonce=secrets.token_urlsafe(24)
         if urlsplit('http://'+request.host).hostname not in hosts:return error('FORBIDDEN_HOST','Host is not allowed',403)
         if mode=='loopback':
             try:local=ipaddress.ip_address(request.remote_addr or '').is_loopback
@@ -61,7 +63,7 @@ def create_app(service=None, *, mode='loopback', allowed_hosts=None, principals=
             if not expected or not hmac.compare_digest(supplied,expected):return error('CSRF','Refresh this page before submitting',403)
     @app.after_request
     def headers(response):
-        response.headers.update({'Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Cache-Control':'no-store'})
+        response.headers.update({'Content-Security-Policy':f"default-src 'self'; script-src 'self'; style-src 'self' 'nonce-{g.style_nonce}'; connect-src 'self'; img-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Cache-Control':'no-store'})
         return response
     @app.errorhandler(HTTPException)
     def http_error(exc):return error('BODY_TOO_LARGE' if exc.code==413 else 'INVALID_REQUEST',exc.description,exc.code)
@@ -77,7 +79,7 @@ def create_app(service=None, *, mode='loopback', allowed_hosts=None, principals=
             if len(local_calls)>=quota_limit:return False
             local_calls.append(now);return True
     @app.get('/')
-    def index():return render_template('index.html')
+    def index():return render_template('index.html',style_nonce=g.style_nonce)
     @app.get('/health')
     def health():return jsonify({'status':'ok'})
     @app.get('/api/capabilities')
@@ -103,24 +105,27 @@ def create_app(service=None, *, mode='loopback', allowed_hosts=None, principals=
         rid=data.get('request_id')
         if not isinstance(rid,str):return error('VALIDATION','Invalid request ID',422)
         with lock:
-            entry=requests.get((request.principal['id'],rid))
+            entry=active_requests.get((request.principal['id'],rid))
             if entry:entry.set()
         return jsonify({'request_id':rid,'status':'cancelled'})
+    @app.post('/api/ai-stream')
     @app.post('/api/ai-assist')
     def assist():
         rid=None;event=None;principal=request.principal['id']
         try:
             data=body()
-            allowed={'request_id','action','provider','model','language','code','context','specification','query'}
+            allowed={'request_id','action','provider','model','language','code','context','specification','query','selection_start','selection_end'}
             if set(data)-allowed:raise AIError('VALIDATION','Unknown request fields')
             for field in allowed:
-                if field in data and not isinstance(data[field],str):raise AIError('VALIDATION',field+' must be a string')
+                if field not in ('selection_start','selection_end') and field in data and not isinstance(data[field],str):raise AIError('VALIDATION',field+' must be a string')
             rid=data.get('request_id','')
             if not rid or len(rid)>128 or not all(c.isalnum() or c in '-_' for c in rid):raise AIError('VALIDATION','Invalid request ID')
             action=data.get('action');p=data.get('provider');m=data.get('model');code=data.get('code','');context=data.get('context','')
             if action not in ('explain','improve','generate','query','analyze'):raise AIError('VALIDATION','Invalid action')
             for field in ('code','context','specification','query'):
                 if len(data.get(field,'').encode())>(50*1024 if field in ('code','context') else 8*1024):return error('BODY_TOO_LARGE',field+' exceeds byte limit',413,rid)
+            start=data.get('selection_start',len(code) if action=='generate' else 0);end=data.get('selection_end',len(code))
+            if type(start) is not int or type(end) is not int or not 0<=start<=end<=len(code):raise AIError('VALIDATION','Invalid selection')
             instruction=data.get('specification' if action=='generate' else 'query','')
             if (action in ('generate','query') and not instruction.strip()) or (action not in ('generate','query') and not code.strip()):raise AIError('VALIDATION','Required action input is empty')
             if p not in request.principal['providers']:return error('FORBIDDEN_PROVIDER','Provider access denied',403,rid)
@@ -129,23 +134,62 @@ def create_app(service=None, *, mode='loopback', allowed_hosts=None, principals=
             if not limited(principal):return error('RATE_LIMITED','Request quota reached',429,rid,True)
             event=threading.Event()
             with lock:
-                if (principal,rid) in requests:return error('DUPLICATE_REQUEST','Request ID is already running',409,rid)
-                requests[(principal,rid)]=event
-            result=service.request(action,code,context,instruction,provider=p,model=m,request_id=rid,cancel=event)
-            response={'request_id':rid,'provider':result.provider,'model':result.model}
-            if action in ('improve','generate'):
-                ranges=((len(code),len(code)),) if action=='generate' else ((0,len(code)),)
-                job=AIJob('browser',0,code,action,p,m,ranges,context,instruction,time.monotonic()+service.settings.ai.timeout,request_id=rid)
-                proposal=parse_proposal(job,result)
-                response.update({'type':'proposal','proposal':{'base_content':code,'content':proposal.content(),'diff':'\n'.join(proposal.diff()),'explanation':proposal.explanation}})
-            else:response.update({'type':'text','result':result.text})
-            return jsonify(response)
+                if (principal,rid) in active_requests:return error('DUPLICATE_REQUEST','Request ID is already running',409,rid)
+                active_requests[(principal,rid)]=event
+            request_event=event
+            def execute(on_delta=None):
+                source='' if action=='generate' else code[start:end]
+                kwargs={'provider':p,'model':m,'request_id':rid,'cancel':request_event}
+                if on_delta is not None:kwargs['on_delta']=on_delta
+                output_instruction=instruction
+                if action=='generate' and data.get('language'):output_instruction='Requested output language: '+data['language']+'\n'+instruction
+                result=service.request(action,source,context,output_instruction,**kwargs)
+                response={'request_id':rid,'provider':result.provider,'model':result.model}
+                if action in ('improve','generate'):
+                    job=AIJob('browser',0,code,action,p,m,((start,end),),context,instruction,time.monotonic()+service.settings.ai.timeout,request_id=rid)
+                    proposal=parse_proposal(job,result)
+                    response.update({'type':'proposal','proposal':{'base_content':code,'content':proposal.content(),'replacement':proposal.edits[0].text,'start':start,'end':end,'diff':'\n'.join(proposal.diff()),'explanation':proposal.explanation}})
+                else:response.update({'type':'text','result':result.text})
+                return response
+            if request.path=='/api/ai-stream':
+                messages=queue.Queue(maxsize=256)
+                stream_event=event
+                def publish(kind,value):
+                    while not stream_event.is_set():
+                        try:messages.put((kind,value),timeout=.05);return
+                        except queue.Full:continue
+                    raise AIError('CANCELLED','Request cancelled')
+                def work():
+                    try:publish('done',execute(lambda delta:publish('delta',delta)))
+                    except AIError as exc:
+                        try:publish('error',{'code':exc.code,'message':str(exc)})
+                        except AIError:pass
+                    except Exception:
+                        try:publish('error',{'code':'UPSTREAM','message':'AI request failed'})
+                        except AIError:pass
+                def stream():
+                    try:
+                        yield json.dumps({'type':'start','request_id':rid})+'\n'
+                        while not stream_event.is_set():
+                            try:kind,value=messages.get(timeout=.2)
+                            except queue.Empty:
+                                yield '\n';continue
+                            yield json.dumps({'type':kind,'data':value},ensure_ascii=False)+'\n'
+                            if kind in ('done','error'):break
+                    finally:
+                        stream_event.set()
+                        with lock:active_requests.pop((principal,rid),None)
+                threading.Thread(target=work,daemon=True,name='aivim-web-stream').start()
+                # The response generator owns cancellation and request cleanup now.
+                event=None
+                return Response(stream(),mimetype='application/x-ndjson',headers={'X-Accel-Buffering':'no'})
+            return jsonify(execute())
         except AIError as exc:
             status={'CONTENT_TYPE':415,'VALIDATION':422,'INVALID_MODEL':422,'NOT_CONFIGURED':503,'TIMEOUT':504,'RATE_LIMITED':429,'CANCELLED':409,'BUSY':429}.get(exc.code,502)
             return error(exc.code,str(exc),status,rid,exc.retryable)
         finally:
             if event:
-                with lock:requests.pop((principal,rid),None)
+                with lock:active_requests.pop((principal,rid),None)
     return app
 
 

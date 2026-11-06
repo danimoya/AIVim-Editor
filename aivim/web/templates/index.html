@@ -1,12 +1,207 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>AIVim companion</title><link rel="stylesheet" href="/static/app.css"><script src="/static/app.js" defer></script></head>
-<body><main><h1>AIVim companion</h1><p>Review AI changes before applying them. Your source is sent only to the provider you select.</p>
-<div class="controls"><label>Provider<select id="provider"></select></label><label>Model<select id="model"></select></label><label>Action<select id="action"><option value="explain">Explain</option><option value="improve">Improve</option><option value="generate">Generate</option><option value="analyze">Analyze</option><option value="query">Query</option></select></label><label>Language<input id="language" value="python" maxlength="64"></label></div>
-<label for="upload">Open a local text file</label><input type="file" id="upload"><label for="code">Document</label><textarea id="code" spellcheck="false" wrap="off" aria-describedby="privacy"></textarea>
-<p id="privacy">Context is optional. Generation can start with an empty document.</p>
-<label for="instruction">Generation specification or question</label><textarea id="instruction" rows="3"></textarea>
-<details><summary>Additional context that will be transmitted</summary><label for="context">Context</label><textarea id="context" rows="4"></textarea></details>
-<div class="controls"><button id="submit">Ask AI</button><button id="cancel" disabled>Cancel request</button><button id="copy">Copy document</button><button id="download">Download document</button></div>
-<p id="status" role="status" aria-live="polite">Loading provider capabilities…</p>
-<section aria-labelledby="result-title"><h2 id="result-title">Response and proposal</h2><pre id="result" tabindex="0"></pre><div class="controls"><button id="apply" disabled>Apply proposal</button><button id="reject" disabled>Reject proposal</button><button id="undo" disabled>Undo applied proposal</button><button id="copy-result">Copy response</button></div></section>
-</main></body></html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csp-nonce" content="{{ style_nonce }}" />
+    <title>AIVim — Create with context</title>
+    <link rel="stylesheet" href="/static/app.css" />
+    <script src="/static/app.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="AIVim home"
+        ><span class="brand-mark">Ai</span> AIVim <small>WORKSPACE</small></a
+      >
+      <div class="top-actions">
+        <span class="local-badge">● Local workspace</span
+        ><button id="new-ai" class="primary">＋ New with AI</button>
+      </div>
+    </header>
+    <nav class="workspace-nav" aria-label="Workspace">
+      <button data-tab="editor" class="active" aria-selected="true">
+        Editor</button
+      ><button data-tab="sources" aria-selected="false">
+        Sources <span id="source-count">0</span></button
+      ><button data-tab="history" aria-selected="false">History</button>
+    </nav>
+    <main>
+      <section id="editor-tab" class="workspace-panel">
+        <div class="workbench">
+          <section class="document-pane" aria-label="Document editor">
+            <div class="document-tabs">
+              <div id="documents" aria-label="Open documents"></div>
+              <button id="new-document" aria-label="New document">＋</button
+              ><label class="button" for="upload"
+                >Open file<input type="file" id="upload" hidden
+              /></label>
+            </div>
+            <div class="editor-tools">
+              <label
+                >Language
+                <select id="language">
+                  <option value="python">Python</option>
+                  <option value="javascript">JavaScript</option>
+                  <option value="markdown">Markdown</option>
+                  <option value="text">Plain text</option>
+                </select></label
+              ><label class="toggle"
+                ><input type="checkbox" id="vim" /> Vim keys</label
+              ><span id="mode">STANDARD</span
+              ><button id="undo" title="Undo (Ctrl/Cmd Z)">Undo</button
+              ><button id="redo">Redo</button>
+            </div>
+            <div class="selection-tools" aria-label="Selection actions">
+              <span id="selection-label">Select text to work with AI</span
+              ><button data-action="query">Ask AI</button
+              ><button data-action="improve">Rewrite</button
+              ><button data-action="explain">Explain</button
+              ><button data-action="analyze">Analyze</button>
+            </div>
+            <div id="editor" aria-label="Document"></div>
+            <div class="editor-footer">
+              <span id="position">Ln 1, Col 1</span
+              ><span id="document-name">untitled.py</span
+              ><button id="copy">Copy</button
+              ><button id="download">Download</button>
+            </div>
+            <div class="live-controls">
+              <label
+                ><input type="checkbox" id="live" /> Live natural language →
+                code</label
+              ><label
+                ><input type="checkbox" id="auto-apply" /> Replace completed
+                blocks automatically</label
+              >
+              <p>
+                Write an instruction, then press Enter twice. A blank line
+                submits the block; keep typing the next one. Output streams into
+                the AI panel. Each completed replacement is undoable.
+              </p>
+            </div>
+          </section>
+          <aside class="ai-pane" aria-label="AI assistant">
+            <div class="pane-heading">
+              <span class="eyebrow">YOUR AI PARTNER</span>
+              <h1>Create with context</h1>
+              <p>Shape a selection, ask a question, or start something new.</p>
+            </div>
+            <div class="provider-controls">
+              <label>Provider<select id="provider"></select></label
+              ><label>Model<select id="model"></select></label>
+            </div>
+            <label
+              >Action<select id="action">
+                <option value="improve">Rewrite selection</option>
+                <option value="generate">Generate at cursor</option>
+                <option value="explain">Explain selection</option>
+                <option value="analyze">Analyze selection</option>
+                <option value="query">Ask a question</option>
+              </select></label
+            >
+            <label for="instruction"
+              >What would you like to create or change?</label
+            ><textarea
+              id="instruction"
+              rows="4"
+              placeholder="Make this clearer, implement a function, or ask a question…"
+            ></textarea>
+            <div class="context-summary">
+              <div>
+                <strong>Context sources</strong
+                ><button id="manage-sources">Manage →</button>
+              </div>
+              <div id="context-chips">No sources selected</div>
+              <label class="toggle"
+                ><input type="checkbox" id="surrounding" checked /> Include
+                nearby document text</label
+              >
+              <details>
+                <summary>Preview context sent to AI</summary>
+                <pre id="context-preview"></pre>
+              </details>
+            </div>
+            <div class="request-buttons">
+              <button id="submit" class="primary" disabled>
+                Ask AI <kbd>Ctrl ↵</kbd></button
+              ><button id="cancel" disabled>Cancel</button>
+            </div>
+            <p id="status" role="status" aria-live="polite">
+              Loading provider capabilities…
+            </p>
+            <section class="result-section">
+              <div class="result-heading">
+                <h2>Response & changes</h2>
+                <button id="copy-result">Copy</button>
+              </div>
+              <pre id="result" tabindex="0">Your next idea starts here.</pre>
+              <div class="request-buttons">
+                <button id="apply" class="primary" disabled>
+                  Accept change</button
+                ><button id="reject" disabled>Reject</button>
+              </div>
+            </section>
+            <p class="privacy-note">
+              Only the selected provider receives your request and the context
+              shown above. Sources and history stay in this page until you close
+              or reload it.
+            </p>
+          </aside>
+        </div>
+      </section>
+      <section id="sources-tab" class="workspace-panel library" hidden>
+        <div class="section-heading">
+          <span class="eyebrow">GIVE YOUR IDEAS A FOUNDATION</span>
+          <h1>Sources</h1>
+          <p>
+            Choose the files and notes your next request can use. Unchecked
+            sources are never included.
+          </p>
+        </div>
+        <div class="source-layout">
+          <div>
+            <div class="source-actions">
+              <label class="button primary" for="source-upload"
+                >＋ Add text files<input
+                  type="file"
+                  id="source-upload"
+                  multiple
+                  hidden /></label
+              ><button id="add-document-source">Add current document</button>
+            </div>
+            <div id="source-list"></div>
+          </div>
+          <form id="source-form" class="note-form">
+            <h2>Add a note</h2>
+            <label
+              >Name<input
+                id="source-name"
+                required
+                maxlength="100"
+                placeholder="Project conventions" /></label
+            ><label
+              >Content<textarea
+                id="source-content"
+                required
+                rows="10"
+                placeholder="Paste reference material or instructions for style…"
+              ></textarea></label
+            ><button class="primary">Add source</button>
+            <p>
+              Text files, Markdown, code and pasted notes are supported in this
+              first version.
+            </p>
+          </form>
+        </div>
+      </section>
+      <section id="history-tab" class="workspace-panel library" hidden>
+        <div class="section-heading">
+          <span class="eyebrow">YOUR CREATIVE TRAIL</span>
+          <h1>History</h1>
+          <p>Prompts, source snapshots and results from this session.</p>
+        </div>
+        <div id="history-list"><p>No requests yet.</p></div>
+      </section>
+    </main>
+  </body>
+</html>

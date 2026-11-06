@@ -12,6 +12,7 @@ import sys
 from typing import Optional
 
 from aivim.editor import Editor
+from aivim._version import __version__
 
 
 def parse_arguments():
@@ -19,18 +20,21 @@ def parse_arguments():
     parser = argparse.ArgumentParser(
         description="AIVim - AI-enhanced Vim editor"
     )
+    parser.add_argument("--version", action="version", version=f"AIVim {__version__}")
     parser.add_argument(
         "filename", nargs="?", default=None,
         help="File to edit (if not specified, opens an empty buffer)"
     )
     parser.add_argument(
-        "--model", choices=["openai", "claude", "local"], default=None,
+        "--model", choices=["openai", "claude", "local", "olares", "compatible"], default=None,
         help="Select AI model provider (default: use environment configuration)"
     )
     parser.add_argument(
         "--config", default=None,
         help="Path to custom configuration file"
     )
+    parser.add_argument('--classic', action='store_true', help='Use the original curses editor instead of the terminal workspace')
+    parser.add_argument("--connect", action="store_true", help="Open the HTTPS model connection setup")
     return parser.parse_args()
 
 
@@ -74,6 +78,14 @@ def main():
     args = parse_arguments()
 
     
+    if not args.classic:
+        from aivim.tui import TerminalWorkspace
+        from aivim.settings import Settings
+        settings = Settings(args.config)
+        if args.model:
+            settings.ai.default_model = args.model
+        TerminalWorkspace(args.filename, settings=settings, connect_on_start=args.connect).run()
+        return
     print(f"Starting AIVim with file: {args.filename}")
     if args.model:
         print(f"Using AI model provider: {args.model}")

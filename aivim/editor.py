@@ -1549,7 +1549,7 @@ class Editor:
             model_name: Name of the model ('openai', 'claude', 'local')
         """
         model_name = model_name.lower()
-        if model_name in ["openai", "claude", "local"]:
+        if model_name in ["openai", "claude", "local", "olares", "compatible"]:
             # Update the AI service to use the selected model
             if self.ai_service.set_model(model_name):
                 self.current_ai_model = model_name
@@ -1557,7 +1557,7 @@ class Editor:
             else:
                 self.set_status_message(f"Failed to set AI model to {model_name}. Check logs for details.")
         else:
-            self.set_status_message(f"Unknown model: {model_name}. Valid options: openai, claude, local")
+            self.set_status_message(f"Unknown model: {model_name}. Valid options: openai, claude, local, olares, compatible")
             
     def show_model_selector(self) -> None:
         """

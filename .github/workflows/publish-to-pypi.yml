@@ -40,8 +40,10 @@ jobs:
         run: |
           python - <<'PY'
           import os
-          from aivim._version import __version__
-          assert os.environ['RELEASE_TAG'] == 'v' + __version__, 'Tag/version mismatch'
+          import sys
+          sys.path.insert(0, 'scripts')
+          from bump_version import tag_for, version
+          assert os.environ['RELEASE_TAG'] == tag_for(version()), 'Tag/version mismatch'
           PY
       - run: python -m pytest -o addopts= -p no:cacheprovider verification
       - run: python -m unittest tests.test_buffer tests.test_history tests.test_utils
@@ -72,6 +74,7 @@ jobs:
   publish:
     name: Publish verified distributions
     needs: build
+    if: github.event_name == 'workflow_dispatch' || !github.event.release.prerelease
     runs-on: ubuntu-latest
     environment:
       name: ${{ github.event_name == 'release' && 'pypi' || inputs.environment }}
@@ -98,8 +101,8 @@ jobs:
           attestations: false
 
   release-assets:
-    needs: publish
-    if: github.event_name == 'release'
+    needs: [build, publish]
+    if: always() && github.event_name == 'release' && needs.build.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -115,4 +118,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
           GH_REPO: ${{ github.repository }}
-        run: gh release upload "$RELEASE_TAG" dist/* SHA256SUMS
+        run: gh release upload "$RELEASE_TAG" dist/* SHA256SUMS --clobber

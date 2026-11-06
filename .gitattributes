@@ -1,0 +1,4 @@
+# Rebuilt from frontend/ and scripts/build_frontend.mjs.
+aivim/web/static/app.js linguist-generated=true
+# Actual app captures and reproducible demo recordings.
+docs/assets/* linguist-generated=true

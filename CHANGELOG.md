@@ -1,3 +1,11 @@
+# 1.0 Alpha 1 — 2026-11-07
+
+Minimal terminal workspace, floating AI controls, source context, live blocks with
+review/automatic replacement, HTTPS/OpenShift setup, LAN/Tailscale model routing,
+and a modern browser companion. Fixed sequential live-block offsets after newline
+normalization. Added a real Bash demo GIF, workspace carousel and refreshed docs.
+Python version `1.0.0a1`; Git tag `v1.0.0-alpha.1`.
+
 # 0.6.0 — 2026-11-03
 
 Document-safe saves and dirty-tab guards; lossless Unicode and bracketed paste; undo transactions; cancellable snapshot AI jobs and strict reviewed proposals; explicit NLP context; packaged browser security and ergonomics; unified settings, locks and qualification gates. Live provider entitlement and native-model qualification remain operator responsibilities; native Windows console and macOS terminal behavior require manual qualification.
