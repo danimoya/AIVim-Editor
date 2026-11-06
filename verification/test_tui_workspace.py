@@ -104,6 +104,7 @@ def test_terminal_live_block_queue_stale_and_cancel(settings):
     async def journey(stub):
         stub.text = json.dumps({"code": "print(2)", "explanation": "Generated"})
         stub.chunk_delay = 0.03
+        stub.stream_gate.clear()
         app = TerminalWorkspace(settings=settings, service=service(settings, stub))
         async with app.run_test(size=(132, 46)) as pilot:
             await pilot.press("f4")
@@ -116,6 +117,8 @@ def test_terminal_live_block_queue_stale_and_cancel(settings):
             await pilot.press(*"on the console", "enter", "enter")
             await settle(pilot, lambda: app.active is not None)
             await pilot.press(*"print two again", "enter", "enter")
+            assert app.active is not None and len(app.pending) == 1
+            stub.stream_gate.set()
             await settle(
                 pilot,
                 lambda: len(app.records) == 2 and all(r.state == "Accepted" for r in app.records),
@@ -127,19 +130,23 @@ def test_terminal_live_block_queue_stale_and_cancel(settings):
             assert "print two again" in app.editor.text
             await app.new_document()
             app.editor.focus()
+            stub.stream_gate.clear()
             await pilot.press(*"print two", "enter", "enter")
             await settle(pilot, lambda: app.active is not None)
             app.editor.move_cursor((0, 0))
             await pilot.press(*"changed ")
+            stub.stream_gate.set()
             await settle(pilot, lambda: app.active is None)
             assert app.records[0].state == "Stale" and app.editor.text.startswith(
                 "changed print two"
             )
             await app.new_document()
             app.editor.focus()
+            stub.stream_gate.clear()
             await pilot.press(*"print two", "enter", "enter")
             await settle(pilot, lambda: app.active is not None)
             app.cancel_ai()
+            stub.stream_gate.set()
             await pilot.pause(0.4)
             assert app.records[0].state == "Cancelled" and "print two" in app.editor.text
 

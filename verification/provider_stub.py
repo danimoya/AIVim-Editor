@@ -9,6 +9,7 @@ class ProviderStub:
     def __init__(self,ssl_context=None):
         self.models=['fixture-model'];self.required_token=None
         self.text='plain response';self.finish='stop';self.status=200;self.delay=0;self.calls=[]
+        self.stream_gate=threading.Event();self.stream_gate.set()
         outer=self
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self):
@@ -29,6 +30,7 @@ class ProviderStub:
                 else:
                     data={'id':'fixture','object':'chat.completion','created':0,'model':body['model'],'choices':[{'index':0,'message':{'role':'assistant','content':outer.text},'finish_reason':outer.finish}],'usage':{'prompt_tokens':1,'completion_tokens':1,'total_tokens':2}}
                 if body.get('stream') and outer.status==200:
+                    if not outer.stream_gate.wait(15):return
                     self.send_response(200);self.send_header('Content-Type','text/event-stream');self.end_headers()
                     def emit(event):
                         prefix=('event: '+event['type']+'\n') if self.path.endswith('/messages') else ''
@@ -59,4 +61,4 @@ class ProviderStub:
         self.url=f'{"https" if ssl_context else "http"}://127.0.0.1:{self.server.server_port}'
     def __enter__(self):
         self.thread=threading.Thread(target=self.server.serve_forever,daemon=True);self.thread.start();return self
-    def __exit__(self,*args):self.server.shutdown();self.server.server_close();self.thread.join()
+    def __exit__(self,*args):self.stream_gate.set();self.server.shutdown();self.server.server_close();self.thread.join()

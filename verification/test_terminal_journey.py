@@ -67,10 +67,13 @@ def test_textual_terminal_entrypoint_mouse_resize_save_and_exit(tmp_path):
         # F2 opens a real terminal menu. Escape closes it without leaving the editor.
         os.write(master,b'\x1bOQ');pump(.25)
         assert b'Ask about selection' in transcript
-        os.write(master,b'\x1b');pump(.1)
-        text='ABCé界xyz'*60;os.write(master,('i'+text).encode());pump(1)
+        # Escape must expire before the next key, otherwise macOS interprets
+        # Escape+i as Alt+i. Also let Insert mode settle before the burst.
+        os.write(master,b'\x1b');pump(.35)
+        os.write(master,b'i');pump(.15)
+        text='ABCé界xyz'*60;os.write(master,text.encode());pump(1)
         fcntl.ioctl(master,termios.TIOCSWINSZ,struct.pack('HHHH',40,85,0,0));pump(.3)
-        os.write(master,b'\x1b');pump(.1);os.write(master,b'\x13');pump(.3);os.write(master,b'\x11');pump(.8)
+        os.write(master,b'\x1b');pump(.35);os.write(master,b'\x13');pump(.3);os.write(master,b'\x11');pump(.8)
         proc.wait(timeout=5)
         assert proc.returncode==0,transcript.decode(errors='replace')
         assert path.read_text()==text
