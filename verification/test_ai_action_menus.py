@@ -69,13 +69,14 @@ def test_workspace_ai_actions_menu_exposes_and_routes_every_action(settings, siz
                     region = button.region
                     assert app.get_widget_at(region.x + 2, region.y)[0] is button
                 assert await pilot.click("#choice-" + action, offset=(2, 0))
-                await pilot.pause()
-                assert app.editor.selection == selection
                 if action in ("explain", "analyze"):
+                    await settle(pilot, lambda: bool(submitted) and submitted[-1] == action)
                     assert submitted[-1] == action
                 else:
+                    await settle(pilot, lambda: app.focused is not None and app.focused.id == "instruction")
                     assert app.query_one("#ai-action", Select).value == action
                     assert app.focused.id == "instruction"
+                assert app.editor.selection == selection
                 app.collapse_ai()
                 await pilot.pause()
 
