@@ -61,7 +61,7 @@ jobs:
           mkdir "$RUNNER_TEMP/aivim-sdist"
           tar -xzf dist/*.tar.gz -C "$RUNNER_TEMP/aivim-sdist"
           python -m build --wheel --outdir "$RUNNER_TEMP/sdist-wheel" "$RUNNER_TEMP"/aivim-sdist/aivim-*
-      - run: sha256sum dist/* > SHA256SUMS
+      - run: (cd dist && sha256sum *) > SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
           name: python-package-distributions
