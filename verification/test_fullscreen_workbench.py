@@ -118,10 +118,11 @@ def test_fullscreen_action_dropdown_and_context_controls_are_reachable(settings)
             await pilot.click(overlay, offset=(3, 5))
             assert selector.value == 'query'
             app.query_one('#ai-details').collapsed = False
+            await pilot.wait_for_scheduled_animations()
             button = app.query_one('#context', Button)
             button.scroll_visible(animate=False)
             await pilot.pause()
-            await pilot.click(button)
+            assert await pilot.click(button, offset=(2, 0))
             await settle(pilot, lambda: isinstance(app.screen, TextDialog))
             assert 'Explicit source content' in app.screen.query_one('#dialog-text', TextArea).text
             await pilot.press('escape')
