@@ -231,16 +231,17 @@ preserves the buffer. Existing files are never overwritten implicitly on Save As
 `:w!` is the explicit overwrite action after a conflict. Closing a dirty buffer or
 quitting with unsaved changes offers saving, discarding, or keeping the editor open.
 
-Sources and the latest 50 history entries live in memory for this session. History
+Private recovery snapshots preserve buffers, cursors, source choices and preferences.
+The latest 50 AI history entries persist only when explicitly enabled. History
 includes target/context snapshots, prompts, responses and decisions. Sources are not
 rewritten when an AI proposal is accepted. Documents are saved only when requested.
 Editing accepts up to 20 MiB files and 20 open buffers. AI requests accept up to
-50 KiB each of document and context, and 8 KiB instructions. Each source is limited
+50 KiB each of selection and context, and 8 KiB instructions. Each source is limited
 to 50 KiB, with at most 30 sources. Oversized inputs fail visibly; they are not
 silently truncated. The provider must be configured before an AI request is sent.
 
-This first terminal release does not include complete Vim compatibility, persistent
-sessions/history, PDF/URL ingestion, a language server, or per-hunk acceptance.
+This stable release does not include complete Vim compatibility, PDF/URL ingestion,
+a language server, or per-hunk acceptance. Project tooling follows in 2.0.
 
 ## Development and verification
 
