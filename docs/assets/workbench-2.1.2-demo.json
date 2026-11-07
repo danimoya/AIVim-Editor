@@ -1,0 +1,24 @@
+{
+  "release": "2.1.2",
+  "scene": "workbench",
+  "provider": "olares",
+  "model": "bonsai-2-27b",
+  "model_requests": 1,
+  "real_terminal_frames": true,
+  "screen": [
+    100,
+    30
+  ],
+  "playback_edited_for_pace": true,
+  "idle_inference_waits_shortened": true,
+  "typing_playback_accelerated": true,
+  "commands_executed": false,
+  "captures": [
+    "selection",
+    "contextual actions",
+    "real model streaming",
+    "full-screen sidebar",
+    "hide/show controls",
+    "Esc restore"
+  ]
+}

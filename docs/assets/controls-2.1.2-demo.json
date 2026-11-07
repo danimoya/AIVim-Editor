@@ -1,0 +1,23 @@
+{
+  "release": "2.1.2",
+  "scene": "controls",
+  "provider": "olares",
+  "model": "bonsai-2-27b",
+  "model_requests": 0,
+  "real_terminal_frames": true,
+  "screen": [
+    100,
+    30
+  ],
+  "playback_edited_for_pace": true,
+  "idle_inference_waits_shortened": false,
+  "typing_playback_accelerated": true,
+  "commands_executed": false,
+  "captures": [
+    "Matrix startup",
+    "minimal editor",
+    "rotating live modes",
+    "user settings",
+    "typing/instant/Matrix effect choice"
+  ]
+}

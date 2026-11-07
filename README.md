@@ -2,244 +2,211 @@
 
 # AIVim
 
-### 2.1 · a little more effortless
+### Write what you want. Keep typing. Let the code catch up.
 
-Write what you want. Keep typing. Let the code catch up.
+A terminal editor with Vim keys, mouse controls, and AI that works with your context.
 
-[![Release](https://img.shields.io/badge/release-2.1%20Stable-d6ac66)](https://github.com/danimoya/AIVim-Editor/releases/tag/v2.1.2)
+[![PyPI](https://img.shields.io/pypi/v/aivim?color=d6ac66&label=PyPI)](https://pypi.org/project/aivim/)
+[![Release](https://img.shields.io/badge/release-2.1.2-84dca0)](https://github.com/danimoya/AIVim-Editor/releases/tag/v2.1.2)
 [![Qualification](https://github.com/danimoya/AIVim-Editor/actions/workflows/qualification.yml/badge.svg?branch=main)](https://github.com/danimoya/AIVim-Editor/actions/workflows/qualification.yml)
 [![Python](https://img.shields.io/badge/Python-3.9%2B-84dca0)](pyproject.toml)
-[![License](https://img.shields.io/badge/license-GPL--3.0--only-84dca0)](LICENSE)
+[![License](https://img.shields.io/badge/GPL--3.0--only-d6ac66)](LICENSE)
+
+[Get started](#get-started) · [Watch the workbench](#room-to-think) · [Project context](#one-thought-several-files) · [Models](#bring-your-own-model) · [Docs](#go-further)
 
 </div>
 
-AIVim combines Vim-style keys, familiar typing, mouse selection and contextual AI
-in a minimal terminal workspace. The editor keeps the screen; menus and AI controls
-appear when you ask for them.
+## Write in blocks. Watch them become Bash.
 
-## A little more effortless
+[![Three natural-language prompts become Bash through live replacement in AIVim](https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.1.2/docs/assets/live-bash-2.0.gif)](docs/assets/live-bash-2.0.gif)
 
-[![AIVim 2.1 quality-of-life tour with a real Olares1 response](https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.1.2/docs/assets/interface-2.1.gif)](https://github.com/danimoya/AIVim-Editor/blob/v2.1.2/docs/assets/interface-2.1.gif)
+**Three prompts. Three live replacements. Keep writing while AI works.**
 
-Click filenames to change buffers. Click the top-bar mode to rotate **Edit → Live
-review → Live auto-replace**. AI activity animates beside the mode.
+A blank line submits an instruction. The next block can begin while the previous
+one is generating. Review the result, or enable **Auto replace** to replace completed
+blocks as they arrive. Each accepted block is one undoable edit.
 
-The project prompt is a wide, five-line editor: Enter adds a line, extra text scrolls,
-and `@` completes open and recent files. Tab or a click inserts a file reference;
-Ctrl+Enter or **Generate** submits the prompt. Files are included only when mentioned
-or checked in Sources.
+This is the original three-block recording, using a real local model. Inference
+pauses are shortened. Generated Bash is syntax-checked and never executed.
 
-**⛶ Full screen** beside Pin and Collapse opens interaction controls on the left
-and streaming results on the right. **Hide/Show controls** or **Alt+B** toggles the left pane. Generate,
-review, accept and start another request in the same view; **Esc** restores the
-previous panel layout.
-
-**Settings & view → Settings** configures input mode, line numbers, indentation,
-AI activity, a Matrix-style AIVIM startup, typing/instant/Matrix live replacement,
-reduced motion and optional history persistence. Preferences are saved privately.
-[Recording provenance](https://github.com/danimoya/AIVim-Editor/blob/v2.1.2/docs/assets/interface-2.1-demo.json).
-
-## One thought, several files
-
-[![Real Olares1 multi-file generation and review](https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.1.2/docs/assets/project-2.0.gif)](docs/assets/project-2.0.gif)
-
-A real local model proposes changes to Python and its README. The files change only
-when checked hunks are accepted. Idle inference waits are shortened. The generated
-Python is parsed, not executed. [Recording provenance](https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.1.2/docs/assets/project-2.0-demo.json).
-
-Open a project with `aivim --project ./my-project`. Ctrl+P opens project search,
-reviewed multi-file generation, checkpoints, instruction blocks, command/test output,
-and opt-in language-server tools. [Project workflow guide](https://github.com/danimoya/AIVim-Editor/blob/v2.1.2/docs/PROJECTS.md).
-
-## See live blocks become Bash
-
-[![Three natural-language Bash instructions replaced live in AIVim](https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.1.2/docs/assets/live-bash-2.0.gif)](docs/assets/live-bash-2.0.gif)
-
-This recording uses a real local model. Three instructions become Bash while the
-editor stays responsive. Idle inference pauses are shortened; typing and live
-replacements are real. Generated commands are syntax-checked and **never executed**.
-[Recording provenance](https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.1.2/docs/assets/live-bash-2.0-demo.json) · [Reproduce the demo](#record-your-own-demo)
-
-<details>
-<summary><strong>Workspace carousel — editor, floating AI, menus and HTTPS setup</strong></summary>
-
-![AIVim workspace carousel](https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.1.2/docs/assets/workspace-tour.gif)
-
-<table>
-<tr>
-<td align="center"><a href="https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.1.2/docs/assets/terminal-workspace.png"><img src="https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.1.2/docs/assets/terminal-workspace.png" width="230" alt="Minimal terminal editor" /></a><br />Editor</td>
-<td align="center"><a href="https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.1.2/docs/assets/terminal-ai.png"><img src="https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.1.2/docs/assets/terminal-ai.png" width="230" alt="Floating AI workbench" /></a><br />Floating AI</td>
-<td align="center"><a href="https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.1.2/docs/assets/terminal-actions.png"><img src="https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.1.2/docs/assets/terminal-actions.png" width="230" alt="Right-click context menu" /></a><br />Context menu</td>
-<td align="center"><a href="https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.1.2/docs/assets/terminal-connect.png"><img src="https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.1.2/docs/assets/terminal-connect.png" width="230" alt="OpenShift HTTPS model setup" /></a><br />Connect a model</td>
-</tr>
-</table>
-
-Click a thumbnail for its full-size capture. The carousel is an animated image,
-so it works directly in GitHub without JavaScript.
-
-</details>
-
-## Start in a minute
-
-Python **3.9+**, Git, and a terminal with Unicode support are required.
-
-```sh
-git clone --branch v2.1.2 https://github.com/danimoya/AIVim-Editor.git
-cd AIVim-Editor
-python -m venv .venv
-source .venv/bin/activate                 # Windows: .venv\Scripts\Activate.ps1
-python -m pip install '.[terminal-syntax]'
-aivim demo.sh
-```
-
-Install the stable release from PyPI:
+## Get started
 
 ```sh
 pipx install 'aivim[terminal-syntax]==2.1.2'
+aivim demo.sh
 ```
 
-The base package works without native syntax parsers; `terminal-syntax` adds
-highlighting. No model weights are bundled. Connect a provider before using AI:
+Python **3.9+** and a terminal with Unicode support. The `terminal-syntax` extra
+adds highlighting; the base package also supports the workspace and AI actions.
+Model weights are served separately.
+
+Connect an OpenAI-compatible or OpenShift endpoint with `aivim --connect`, or
+[configure your local server or cloud provider](#bring-your-own-model).
+
+## Room to think
+
+[![AIVim 2.1.2: selection context, a real streaming answer, full-screen controls, and a collapsible sidebar](https://raw.githubusercontent.com/danimoya/AIVim-Editor/main/docs/assets/workbench-2.1.2.gif)](docs/assets/workbench-2.1.2.gif)
+
+**Select → ask → read. Make room whenever you need it.**
+
+Mouse selection or Vim Visual mode gives AI a precise target. **F2 / right-click**
+opens Rewrite, Generate, Explain, Analyze, and Ask. Checked sources add context.
+
+**⛶ Full screen** puts the prompt, actions, and model/context controls on the left,
+with the streaming response on the right. **Hide/Show controls** or **Alt+B** expands
+the reading space without losing the prompt. **Esc / Restore** returns to the
+previous floating or pinned view. Accept/Reject stay with the response, and Cancel
+remains available during generation when the controls are hidden.
+
+## One thought, several files
+
+[![AIVim 2.1.2: checked sources, open and recent file mentions, multiline project instructions, multi-file review, and explicit acceptance](https://raw.githubusercontent.com/danimoya/AIVim-Editor/main/docs/assets/project-2.1.2.gif)](docs/assets/project-2.1.2.gif)
+
+**Bring the context. Review the changes. Keep the final say.**
+
+Click filenames to change buffers. In **Describe the project change**, type **@**
+to complete open and recent filenames. The five-line prompt scrolls as it grows;
+Enter adds a line and **Ctrl+Enter** submits.
+
+AI proposes a set of file changes. Inspect the diffs and choose which hunks to
+apply. A private checkpoint supports rollback. Project search, explicit command/test
+execution, instruction refinement, and optional language-server tools are available
+through **Ctrl+P**.
 
 ```sh
-aivim --connect
+aivim --project ./my-project
 ```
 
-## An editor that leaves room to edit
+[Explore the project workflow →](docs/PROJECTS.md)
 
-Only **two rows** are permanent: a compact title/menu bar and a status line. An
-80×24 terminal leaves **80×22 cells** for the editor.
+## Make it yours
 
-- Click **≡** for files, buffers, sources, history, live options and view settings.
-- Select with the mouse or Vim Visual mode; **right-click / F2** opens contextual actions.
-- **Alt+A** opens floating AI controls without shrinking the editor. **Pin** docks
-  them beside your document; **Collapse** returns the space.
-- **Ctrl+P** searches commands. Line numbers and the shortcut bar are optional.
-- **F4** switches between Vim-style modal keys and standard typing.
+[![AIVim 2.1.2: Matrix startup, compact editor, rotating live modes, and configurable editing and animation effects](https://raw.githubusercontent.com/danimoya/AIVim-Editor/main/docs/assets/controls-2.1.2.gif)](docs/assets/controls-2.1.2.gif)
 
-The retro green-and-amber palette follows your terminal's font. `NO_COLOR` is
-respected. Files are saved with Ctrl+S; changing buffers does not redirect a
-pending AI result into another document.
+**Retro character. Modern controls. Your pace.**
 
-## Live blocks: intent → code
+Only two rows are permanent: the title/menu bar and the status line. An 80×24
+terminal leaves **80×22 cells** for the editor. Floating controls appear on demand;
+**Pin** docks the Workbench, and **Collapse** returns the space to your document.
 
-1. Connect a model and open a file, such as `demo.sh`.
-2. Press **F4** for standard typing, or `i` to use Vim Insert mode.
-3. Press **F9** to enable Live blocks. Enable **Auto replace** from the **≡** menu
-   if you want completed proposals applied automatically.
-4. Write an instruction. A single Enter continues it; a **blank line submits it**.
-5. Continue writing the next instruction while AI works.
+Click the top-bar mode to rotate **Edit → Live review → Live auto-replace**.
+Open **Settings & view → Settings** for:
 
-```text
-Print Hello.
+| Editing | Motion and appearance |
+| --- | --- |
+| Vim or standard typing | Spinner, pulse, Matrix, or static AI activity |
+| Line numbers and indentation | Matrix-style AIVIM startup or no startup effect |
+| Tabs or spaces | Typing, instant, or Matrix live-code previews |
+| Optional AI history persistence | Reduced motion |
 
-Show the current directory disk usage in human-readable form.
+The palette respects `NO_COLOR`; the font comes from your terminal. Decorative
+streaming effects stay separate from accepted document edits.
 
-Count regular files in the current directory, without recursion.
+<details>
+<summary><strong>About these recordings</strong></summary>
 
-```
+All clips capture the actual terminal app. The original three-block Bash demo is
+preserved above. The new Workbench and project clips use real Olares1 model replies;
+the settings clip records UI interactions without a model request. Playback is
+edited for pace, including shortened inference waits. Generated commands are not
+executed. Demo files, recovery data, and preferences use temporary directories.
 
-Output streams into the AI preview. Review is the default; **F8** accepts a proposal.
-With Auto replace enabled, validated output replaces its original instruction as
-one undoable edit. Partial tokens stay in the preview. Editing a pending instruction
-makes its result stale and preserves your newer text.
+Recording details: [Live Bash](docs/assets/live-bash-2.0-demo.json) ·
+[Workbench](docs/assets/workbench-2.1.2-demo.json) ·
+[Project](docs/assets/project-2.1.2-demo.json) ·
+[Controls](docs/assets/controls-2.1.2-demo.json).
 
-Blocks queue in order, and normalized line endings keep later block positions
-correct. **Undo restores an instruction.** Paste, undo and redo do not submit by
-themselves. Turn Live off before editing ordinary code.
-
-## AI that works on the text you choose
-
-Select a function, paragraph or data snippet, then ask AI to **rewrite, explain,
-analyze, answer a question or generate something new**. Add your own instruction
-and inspect the proposed diff before accepting it.
-
-Open **Sources** with **F3**. Add text files, Markdown, code, multiline notes, or a
-snapshot of the current buffer. Check exactly which sources the next request can
-read. Context preview shows those snapshots and optional nearby document text.
-Unchecked sources are excluded.
-
-**History** keeps the session's prompts, target/context snapshots, results and
-acceptance decisions. Buffers, cursors, source snapshots and interface preferences recover locally.
-Live mode stays off after restoration. AI history is persisted only when you enable
-**Remember AI history** in Ctrl+P; **Clear AI history** deletes the saved history.
+</details>
 
 ## Bring your own model
 
 | Provider | Connection |
 | --- | --- |
-| **HTTPS / OpenShift** | `aivim --connect`: paste the route, discover or enter a model ID, and supply an optional bearer token/private CA. |
-| **Local server / Olares** | OpenAI-compatible Chat Completions with ordered LAN and Tailscale routes. Model ID and URLs are configurable. |
-| **OpenAI** | Set `OPENAI_API_KEY`; choose the configured model with `--model openai`. |
-| **Anthropic** | Set `ANTHROPIC_API_KEY`; select `--model claude`. |
-| **Local GGUF** | Optional isolated native inference worker; see the [terminal guide](https://github.com/danimoya/AIVim-Editor/blob/v2.1.2/docs/TERMINAL.md). |
+| **HTTPS / OpenShift** | `aivim --connect`: paste an API route, discover or enter a model ID, and provide an optional bearer token/private CA. |
+| **Local server / Olares / Ollama** | Configure the OpenAI-compatible API URL and model ID. The Olares provider supports ordered LAN and Tailscale routes. |
+| **OpenAI** | Set `OPENAI_API_KEY`; start with `--model openai`. |
+| **Anthropic** | Set `ANTHROPIC_API_KEY`; start with `--model claude`. |
+| **Local GGUF** | Optional isolated native inference worker; see the [terminal guide](docs/TERMINAL.md). |
 
-The HTTPS setup verifies certificates, supports private cluster CAs, and provides
-model discovery. Tokens stay in memory unless **Remember token** is selected; a
-remembered token is stored in a separate user-private file, outside the repository
-and JSON settings. `AIVIM_COMPATIBLE_API_KEY` is also supported.
+HTTPS certificates are verified, including private CAs when configured. Tokens stay
+in memory unless you choose **Remember token**, which uses a separate private file.
+The local-server provider falls back on connection failure without silently
+switching to a paid cloud provider or replaying a partial response.
 
-The local-server provider tries its preferred route on every request and falls
-back on connection failure. It never silently switches to a paid cloud provider
-or replays a partial stream. It can connect to a compatible local llama-server or
-Ollama API when configured with that server's URL and model ID.
+[Connection setup, HTTPS, LAN/Tailscale, and configuration →](docs/TERMINAL.md)
 
-[HTTPS, LAN/Tailscale and configuration details →](https://github.com/danimoya/AIVim-Editor/blob/v2.1.2/docs/TERMINAL.md)
+## A few keys to get moving
 
-## Small set of keys, full mouse access
-
-| Key | Action |
+| Control | Action |
 | --- | --- |
-| **F1** | Field manual |
-| **F2 / right-click** | Selection actions |
-| **F3** | Sources |
-| **F4** | Vim / standard typing |
+| **F4** | Switch Vim / standard typing |
+| **F2 / right-click** | Selection actions and context |
 | **F5 / F6 / F7** | Generate / explain / rewrite |
-| **F8 / F9** | Accept proposal / toggle Live |
-| **Alt+A** | Floating AI controls |
-| **Ctrl+P** | Command palette |
-| **Ctrl+S / Ctrl+O / Ctrl+N** | Save / open / new |
-| **Alt+1 / Alt+2 / Alt+3** | Editor / Sources / History |
+| **F8** | Accept the completed proposal |
+| **F9** | Toggle Live blocks |
+| **F3 / Alt+2** | Sources |
+| **Alt+A** | Open/collapse AI Workbench |
+| **Alt+B** | Show/hide full-screen AI controls |
+| **Ctrl+P** | Search commands |
+| **Ctrl+S / Ctrl+O / Ctrl+N** | Save / open / new buffer |
 | **Ctrl+Q / F10** | Quit with unsaved-buffer handling |
 
-Vim-style input supports familiar movement, insertion, visual selection, basic
-counts, line copy/delete, paste and undo. `:w`, `:wq`, `:q`, `:e`, `:new` and tab
-navigation are available. F2 is the fallback when your terminal reserves right-click;
-Shift+mouse typically uses the terminal's native copy/selection behavior.
+<details>
+<summary><strong>Vim keys, live blocks, and recovery</strong></summary>
 
-## What 2.1 includes
+Vim-style input includes `h/j/k/l`, `w/b/e`, `0/^/$`, `gg/G`, Insert mode,
+Visual selection, counts, line copy/delete, paste, and undo. Commands include
+`:w`, `:wq`, `:q`, `:e`, `:new`, `:tabnext`, and `:tabprev`. Full Vim runtime/plugin
+compatibility remains outside this release. **F4** gives you standard typing.
 
-This is **2.1**, with useful Vim vocabulary rather than complete Vim
-runtime/plugin compatibility. Find/replace, `/` search, `n`/`N`, go-to-line, a floating
-file picker, indentation settings, model profiles and local recovery support daily use.
-Ctrl+P exposes block retry/cancel, source freshness/refresh, syntax checking, proposal
-editing, connection diagnostics and an optional writing effect. Large files can use AI
-on selections within the 50 KiB selection/context budget.
+For Live blocks, enter an instruction and finish with a blank line. A single Enter
+continues the same block. The queue stays ordered while you type. Review is the
+default; Auto replace is an explicit choice. Editing a pending instruction keeps
+your newer text and makes the old result stale. Paste, undo, and redo do not submit
+requests. Turn Live off for ordinary code editing.
 
-Project search, reviewed multi-file changes, per-hunk selection and rollback checkpoints
-are available in 2.0. Generated blocks retain their instructions through recovery and
-can be refined with review after manual edits. Optional stdio language servers provide
-diagnostics, plain-text completion, definitions and reviewed text-only rename. Commands
-run only after explicit entry and confirmation; captured output can become context.
+Sources can contain text files, Markdown, code, notes, or buffer snapshots. Check
+what a request may use; Context shows the selected snapshots and optional nearby
+text. Language defaults use the prompt, file extension/content, and open project
+files. Requests have a 50 KiB selection/context budget and an 8 KiB instruction limit.
 
-Semantic retrieval, PDF/URL ingestion, arbitrary language-server resource operations
-and full Vim/plugin compatibility remain outside this release. Neovim RPC embedding
-is an evaluated prototype; it does not replace the Textual editing engine.
+Local recovery keeps buffers, cursors, and source snapshots; Live starts off after
+restoration. AI history persistence is opt-in. Transactional saves preserve loaded
+encoding, newline conventions, permissions, and symlinks, and check external changes.
 
-Saving uses transactional writes, preserves loaded encoding/newline conventions,
-permissions and symlinks, and checks for external changes. AI output is validated
-before application and generated code is never executed automatically. These
-checks protect editing operations; they do not establish generated-code quality.
+**Ctrl+Enter** submits AI instructions when your terminal reports that key.
+**Shift+mouse** usually uses the terminal's native selection/copy behavior.
+**F1** opens the complete field manual.
 
-The original editor remains available with `aivim --classic file.py`. An optional
-CodeMirror browser workspace ships with `aivim-web --port 5000`; the terminal app
-runs independently of it. See the [browser guide](https://github.com/danimoya/AIVim-Editor/blob/v2.1.2/docs/WORKSPACE.md).
+</details>
 
-## Develop and verify
+## Go further
+
+| Guide | What you will find |
+| --- | --- |
+| [Terminal workspace](docs/TERMINAL.md) | Setup, providers, mouse/keyboard controls, effects, and recovery |
+| [Projects](docs/PROJECTS.md) | Context search, multi-file review, checkpoints, commands, and language servers |
+| [Browser companion](docs/WORKSPACE.md) | The optional CodeMirror workspace: `aivim-web --port 5000` |
+| [Release notes](https://github.com/danimoya/AIVim-Editor/releases/tag/v2.1.2) | What's new in 2.1.2 |
+| [Contributing](CONTRIBUTING.md) | Development and contribution guidance |
+| [Release and rollback](docs/RELEASE.md) | Packaging and qualification |
+
+The original editor is available with `aivim --classic file.py`. Neovim embedding
+remains an evaluated prototype; the terminal workspace uses Textual.
+
+<details>
+<summary><strong>Install from source, develop, or record a demo</strong></summary>
 
 ```sh
-python -m pip install -e '.[test,build,terminal-syntax]'
+git clone https://github.com/danimoya/AIVim-Editor.git
+cd AIVim-Editor
+python -m venv .venv
+source .venv/bin/activate                 # Windows: .venv\Scripts\Activate.ps1
+python -m pip install -e '.[test,build,demo,terminal-syntax]'
 python -m playwright install chromium
+```
+
+```sh
 python -m pytest verification
 python -m unittest tests.test_buffer tests.test_history tests.test_utils
 python scripts/check_source.py
@@ -247,37 +214,24 @@ python scripts/bump_version.py --validate
 python -m build
 ```
 
-To change the optional browser frontend:
+For frontend changes: `npm ci`, `npm test`, and `npm run build`.
+
+Record the three-block live workflow with `python scripts/record_live_demo.py`.
+Record the current capability tours with:
 
 ```sh
-npm ci
-npm test
-npm run build
+python scripts/record_readme_demos.py --provider olares
+# Or choose one: --scene workbench / project / controls
 ```
 
-Verification covers real Textual event loops, POSIX terminal sessions, Chromium
-journeys, real SDK calls to loopback HTTP/HTTPS fixtures, certificate/token checks,
-source exclusion, live queues, stale results, Unicode, saving and undo. Installed-wheel
-checks verify packaged assets and terminal entrypoints. The
-[Qualification workflow](https://github.com/danimoya/AIVim-Editor/actions/workflows/qualification.yml)
-checks supported OS/Python combinations. Local live-model checks are separate from
-isolated regression tests; hardware, entitlements and generation quality vary.
+The recorders use your configured model and export GIFs, posters, and sanitized
+recording details to `docs/assets/`. Bash is checked with `bash -n`; generated code
+is not executed. Interface state is isolated from your normal workspace.
+See [the script guide](scripts/README.md) for the other recorders.
 
-### Record your own demo
+</details>
 
-```sh
-python -m pip install -e '.[demo,terminal-syntax]'
-python -m playwright install chromium
-python scripts/record_live_demo.py
-```
+---
 
-The recorder uses your configured model, captures actual UI frames, validates the
-three replacements and runs `bash -n` without executing the result. It exports a
-looping GIF, a poster and sanitized provenance to `docs/assets/`. Idle inference
-pauses are shortened for readability. No server addresses or credentials are
-included in the provenance.
-
-[Terminal guide](https://github.com/danimoya/AIVim-Editor/blob/v2.1.2/docs/TERMINAL.md) · [Alpha release notes](https://github.com/danimoya/AIVim-Editor/blob/v2.1.2/docs/RELEASE_NOTES_1.0_ALPHA.md) · [Release and rollback](https://github.com/danimoya/AIVim-Editor/blob/v2.1.2/docs/RELEASE.md) · [Contributing](https://github.com/danimoya/AIVim-Editor/blob/v2.1.2/CONTRIBUTING.md)
-
-**License:** [GPL-3.0-only](https://github.com/danimoya/AIVim-Editor/blob/v2.1.2/LICENSE). Bundled frontend dependency notices are
-included in [THIRD_PARTY_LICENSES.txt](https://github.com/danimoya/AIVim-Editor/blob/v2.1.2/aivim/web/static/THIRD_PARTY_LICENSES.txt).
+**[GPL-3.0-only](LICENSE)** · Bundled frontend dependency notices:
+[THIRD_PARTY_LICENSES.txt](aivim/web/static/THIRD_PARTY_LICENSES.txt).

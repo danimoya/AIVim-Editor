@@ -17,3 +17,11 @@ multi-file proposal, review and explicit acceptance. Install the `demo` extra fi
 `python scripts/record_interface_demo.py` records the 2.1 prompt, file mentions,
 mode rotation, settings, Matrix startup and a real model response in full-screen.
 Capture scripts isolate recovery snapshots and recent-file preferences.
+
+`python scripts/record_readme_demos.py --provider olares` records the current
+Workbench, project, and customization tours. Use `--scene workbench`, `project`,
+or `controls` to record one clip. The AI clips use the configured live model;
+the controls clip records real interface interactions without making a model request.
+Each clip exports a GIF, poster, and sanitized JSON recording details. Playback
+is edited for pace. All demo files and preference/recovery writes are temporary;
+generated code is not executed. The existing three-block Bash hero is kept intact.
