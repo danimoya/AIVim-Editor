@@ -86,7 +86,8 @@ def test_ai_fullscreen_restores_pin_and_esc_does_not_consume_editor_escape(setti
             await pilot.click('#fullscreen-ai');await pilot.pause()
             assert app.ai_fullscreen and app.query_one('#ai-panel').region.width==110
             assert result.region.height>=28 and result.read_only
-            assert not app.query_one('#instruction').display
+            assert app.query_one('#ai-controls').display
+            assert app.query_one('#instruction').region.right <= result.region.x
             result.scroll_to(y=30,animate=False);await pilot.pause()
             before_scroll=result.scroll_y
             app.update_ai_response(result.text+'\nMore streamed text')

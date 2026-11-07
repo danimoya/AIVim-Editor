@@ -72,6 +72,7 @@ class InterfaceTools:
     def check_action(self, action, parameters):
         if self.is_running and isinstance(self.screen, MatrixLoading): return False
         if action == 'leave_ai_fullscreen': return self.ai_fullscreen and len(self.screen_stack) == 1
+        if action == 'toggle_ai_controls': return self.ai_fullscreen and len(self.screen_stack) == 1
         if action == 'submit' and len(self.screen_stack) > 1: return False
         return super().check_action(action, parameters)
 
@@ -91,6 +92,16 @@ class InterfaceTools:
         self.update_sidebar()
         if not self.sidebar_visible: self.editor.focus()
         else: self.query_one('#fullscreen-ai', Button).focus()
+
+    def action_toggle_ai_controls(self):
+        if not self.ai_fullscreen: return
+        self.ai_controls_collapsed = not self.ai_controls_collapsed
+        result = self.query_one('#result', TextArea)
+        position = result.scroll_offset
+        self.update_sidebar()
+        self.call_after_refresh(result.scroll_to, position.x, position.y, animate=False)
+        target = result if self.ai_controls_collapsed else self.query_one('#instruction', TextArea)
+        self.call_after_refresh(target.focus)
 
     def settings_values(self):
         return {'vim': self.vim_enabled, 'numbers': self.line_numbers,
@@ -138,8 +149,15 @@ class InterfaceTools:
             area.scroll_to(scroll.x, scroll.y, animate=False)
 
     def refresh_fullscreen_controls(self):
-        self.query_one("#ai-request-controls").display = not self.ai_fullscreen or bool(self.active)
-        self.query_one("#ai-review-controls").display = not self.ai_fullscreen or bool(self.proposal)
+        hidden = self.ai_fullscreen and self.ai_controls_collapsed
+        self.query_one('#ai-controls').display = not hidden
+        toggle = self.query_one('#toggle-ai-controls', Button)
+        toggle.display = self.ai_fullscreen
+        toggle.label = 'Show controls' if hidden else 'Hide controls'
+        cancel = self.query_one('#cancel-result', Button)
+        cancel.display = hidden and bool(self.active)
+        cancel.disabled = not bool(self.active)
+        self.query_one('#ai-review-controls').display = not self.ai_fullscreen or bool(self.proposal) or cancel.display
 
     def update_ai_response(self, text):
         result = self.query_one('#result', TextArea)

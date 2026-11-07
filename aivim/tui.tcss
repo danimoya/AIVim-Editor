@@ -26,6 +26,10 @@ Screen.show-shortcuts Footer { display: block; }
 #workbench.pinned #ai-panel { overlay: none; position: relative; width: 43; max-width: 60%; border: solid #4d7c55; }
 #ai-panel-tools { height: 1; }
 #ai-panel-tools Button { width: 1fr; min-width: 6; min-height: 1; height: 1; padding: 0; border: none; }
+#ai-panel-body { height: 1fr; layout: vertical; }
+#ai-controls { height: auto; max-height: 65%; width: 1fr; }
+#ai-result-pane { height: 1fr; min-height: 5; width: 1fr; }
+#toggle-ai-controls, #cancel-result { display: none; }
 #ai-action, #provider { height: 3; margin: 0; }
 #instruction { height: 4; min-height: 3; border: solid #706a42; }
 .button-row { height: 1; }
@@ -93,7 +97,9 @@ ContextPicker, ChangeReview { align: center middle; background: #000000 35%; }
 #title-bar #live-mode.auto-on { color: #f2d18d; background: #493f25; }
 #ai-activity { width: 3; height: 1; color: #91edab; content-align: center middle; }
 #workbench.fullscreen-ai #ai-panel { width: 100%; max-width: 100%; position: absolute; layer: ai; padding: 0 1; }
-#workbench.fullscreen-ai #ai-action, #workbench.fullscreen-ai #instruction, #workbench.fullscreen-ai #ai-details, #workbench.fullscreen-ai #submit { display: none; }
+#workbench.fullscreen-ai #ai-panel-body { layout: horizontal; }
+#workbench.fullscreen-ai #ai-controls { width: 34; max-width: 40%; height: 1fr; max-height: 100%; padding-right: 1; border-right: solid #364d3e; }
+#workbench.fullscreen-ai #instruction { height: 8; min-height: 5; }
 #workbench.fullscreen-ai #result { height: 1fr; margin: 0; }
 #project-prompt-dialog { width: 90%; max-width: 110; height: auto; max-height: 95%; padding: 1 2; border: round #91a16b; background: #15241b; }
 #project-prompt-title { height: 1; margin-bottom: 1; color: #dbc68a; text-style: bold; }

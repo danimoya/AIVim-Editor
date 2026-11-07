@@ -302,10 +302,17 @@ uses instant complete replacement. Typing and Matrix previews remain decorative:
 partial output never enters the editable document or undo history. Keyboard input
 skips startup before normal routing so the initial keystrokes remain ordered.
 
-The AI panel's ⛶ button expands responses over the editing area. The title/status
-rows remain visible. Esc or Restore returns to the prior pinned/floating view;
-Collapse closes it. While full-screen output streams, scrolling away from the end
-preserves your reading position.
+The AI panel's ⛶ button opens a full-screen workspace with interaction controls
+on the left and streaming results on the right. Choose an action, write a prompt,
+and use the model/source controls without leaving full screen. **Hide controls**
+or **Alt+B** expands the results across the workspace; **Show controls** or Alt+B
+restores the left pane with your prompt intact. Each pane scrolls independently.
+Accept/Reject stay beside the results, and Cancel remains available while controls
+are hidden during generation. F5 reveals the prompt for another request.
+
+The title/status rows remain visible. Esc or Restore returns to the prior
+pinned/floating view; Collapse closes the Workbench. While full-screen output
+streams, scrolling away from the end preserves your reading position.
 
 Generation language defaults are inferred per request. Explicit output language
 wins; otherwise shebang, meaningful filename extension, content and other open

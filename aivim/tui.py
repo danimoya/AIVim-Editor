@@ -91,6 +91,8 @@ The AI button / Alt+A opens the floating Workbench. Pin keeps it open while
 you edit; Collapse restores the editor width. Connect HTTPS model configures
 an OpenShift/OpenAI-compatible URL, model, masked token and optional CA file.
 Shift+mouse usually uses the terminal's native selection/copy behavior.
+Full screen places interaction controls on the left and results on the right.
+Hide/Show controls or Alt+B toggles the left pane; Esc restores the prior view.
 
 VIM KEYS (F4 toggles standard editing)
 i/a/A/I/o/O enter Insert mode; Esc returns to Normal.
@@ -156,6 +158,7 @@ class TerminalWorkspace(InterfaceTools, LanguageTools, ProjectTools, WorkspaceTo
         Binding("ctrl+enter", "submit", "Ask AI", show=False, priority=True),
         Binding("ctrl+r", "redo", "Redo", show=False, priority=True),
         Binding("alt+a", "toggle_ai", "AI panel", show=False, priority=True),
+        Binding("alt+b", "toggle_ai_controls", "AI controls", show=False, priority=True),
         Binding("alt+1", "editor", "Editor", show=False, priority=True),
         Binding("alt+2", "sources", "Sources", show=False, priority=True),
         Binding("alt+3", "history", "History", show=False, priority=True),
@@ -172,6 +175,7 @@ class TerminalWorkspace(InterfaceTools, LanguageTools, ProjectTools, WorkspaceTo
         self.reduce_motion = user_preferences.get("reduce_motion", False)
         self.show_startup = show_startup
         self.ai_fullscreen = False
+        self.ai_controls_collapsed = False
         self._ai_before_fullscreen = None
         self._buffer_buttons = {}
         self._activity_value = ""
@@ -303,9 +307,10 @@ class TerminalWorkspace(InterfaceTools, LanguageTools, ProjectTools, WorkspaceTo
                             id="live-hint",
                             markup=False,
                         )
-                    with VerticalScroll(id="ai-panel"):
+                    with Vertical(id="ai-panel"):
                         with Horizontal(id="ai-panel-tools"):
                             yield Button("⛶ Full screen", id="fullscreen-ai", tooltip="Full-screen AI response · Esc restores the previous view")
+                            yield Button("Hide controls", id="toggle-ai-controls", tooltip="Show/hide full-screen interaction controls · Alt+B")
                             yield Button(
                                 "Pin", id="pin-ai", tooltip="Keep the sidebar open while editing"
                             )
@@ -314,78 +319,82 @@ class TerminalWorkspace(InterfaceTools, LanguageTools, ProjectTools, WorkspaceTo
                                 id="hide-ai",
                                 tooltip="Collapse the AI Workbench · Alt+A",
                             )
-                        yield Select(
-                            [
-                                ("Rewrite selection", "improve"),
-                                ("Generate at cursor", "generate"),
-                                ("Explain selection", "explain"),
-                                ("Analyze selection", "analyze"),
-                                ("Ask a question", "query"),
-                            ],
-                            value="improve",
-                            allow_blank=False,
-                            id="ai-action",
-                        )
-                        yield TextArea(
-                            placeholder="Describe what to create or change…",
-                            id="instruction",
-                            soft_wrap=True,
-                        )
-                        with Horizontal(classes="button-row", id="ai-request-controls"):
-                            yield Button(
-                                "Ask AI",
-                                id="submit",
-                                variant="primary",
-                                tooltip="Submit · Ctrl+Enter (if your terminal supports it)",
-                            )
-                            yield Button(
-                                "Cancel",
-                                id="cancel",
-                                disabled=True,
-                                tooltip="Cancel active generation and clear queued blocks",
-                            )
-                        yield TextArea(
-                            "Select text or describe something new.\n\nResponses stream here; your document stays editable.",
-                            read_only=True,
-                            soft_wrap=True,
-                            id="result",
-                            show_cursor=False,
-                        )
-                        with Horizontal(classes="button-row", id="ai-review-controls"):
-                            yield Button(
-                                "Accept [F8]", id="accept", variant="primary", disabled=True
-                            )
-                            yield Button("Reject", id="reject", disabled=True)
-                        with Collapsible(title="Model & sources", collapsed=True, id="ai-details"):
-                            yield Button(
-                                "Connect HTTPS model…",
-                                id="connect-model",
-                                tooltip="Set up an OpenShift or OpenAI-compatible endpoint",
-                            )
-                            yield Select(
-                                [
-                                    ("HTTPS / OpenShift" if p == "compatible" else p, p)
-                                    for p in self.service.models()
-                                ],
-                                value=self.service.current_model,
-                                allow_blank=False,
-                                id="provider",
-                                tooltip="Provider and model from your AIVim configuration",
-                            )
-                            yield Static("", id="model-name", markup=False)
-                            with Horizontal(id="context-bar"):
-                                yield Static("0 sources", id="context-count", markup=False)
-                                yield Button(
-                                    "Context",
-                                    id="context",
-                                    tooltip="Inspect the context transmitted to AI",
+                        with Container(id="ai-panel-body"):
+                            with VerticalScroll(id="ai-controls"):
+                                yield Select(
+                                    [
+                                        ("Rewrite selection", "improve"),
+                                        ("Generate at cursor", "generate"),
+                                        ("Explain selection", "explain"),
+                                        ("Analyze selection", "analyze"),
+                                        ("Ask a question", "query"),
+                                    ],
+                                    value="improve",
+                                    allow_blank=False,
+                                    id="ai-action",
                                 )
-                            yield Checkbox(
-                                "Nearby text",
-                                value=True,
-                                id="nearby",
-                                tooltip="Include up to 2,000 characters before and after the target",
-                            )
+                                yield TextArea(
+                                    placeholder="Describe what to create or change…",
+                                    id="instruction",
+                                    soft_wrap=True,
+                                )
+                                with Horizontal(classes="button-row", id="ai-request-controls"):
+                                    yield Button(
+                                        "Ask AI",
+                                        id="submit",
+                                        variant="primary",
+                                        tooltip="Submit · Ctrl+Enter (if your terminal supports it)",
+                                    )
+                                    yield Button(
+                                        "Cancel",
+                                        id="cancel",
+                                        disabled=True,
+                                        tooltip="Cancel active generation and clear queued blocks",
+                                    )
+                                with Collapsible(title="Model & sources", collapsed=True, id="ai-details"):
+                                    yield Button(
+                                        "Connect HTTPS model…",
+                                        id="connect-model",
+                                        tooltip="Set up an OpenShift or OpenAI-compatible endpoint",
+                                    )
+                                    yield Select(
+                                        [
+                                            ("HTTPS / OpenShift" if p == "compatible" else p, p)
+                                            for p in self.service.models()
+                                        ],
+                                        value=self.service.current_model,
+                                        allow_blank=False,
+                                        id="provider",
+                                        tooltip="Provider and model from your AIVim configuration",
+                                    )
+                                    yield Static("", id="model-name", markup=False)
+                                    with Horizontal(id="context-bar"):
+                                        yield Static("0 sources", id="context-count", markup=False)
+                                        yield Button(
+                                            "Context",
+                                            id="context",
+                                            tooltip="Inspect the context transmitted to AI",
+                                        )
+                                    yield Checkbox(
+                                        "Nearby text",
+                                        value=True,
+                                        id="nearby",
+                                        tooltip="Include up to 2,000 characters before and after the target",
+                                    )
+                            with Vertical(id="ai-result-pane"):
+                                yield TextArea(
+                                    "Select text or describe something new.\n\nResponses stream here; your document stays editable.",
+                                    read_only=True,
+                                    soft_wrap=True,
+                                    id="result",
+                                    show_cursor=False,
+                                )
+                                with Horizontal(classes="button-row", id="ai-review-controls"):
+                                    yield Button("Cancel", id="cancel-result", disabled=True, tooltip="Cancel generation while the controls are hidden")
+                                    yield Button(
+                                        "Accept [F8]", id="accept", variant="primary", disabled=True
+                                    )
+                                    yield Button("Reject", id="reject", disabled=True)
             with TabPane("02 SOURCES", id="sources-tab"):
                 yield Static(
                     " CONTEXT LIBRARY // Check sources for the next request. Unchecked sources stay local.",
@@ -774,6 +783,7 @@ class TerminalWorkspace(InterfaceTools, LanguageTools, ProjectTools, WorkspaceTo
             ("Files and buffers", "Open, save and switch documents", self.file_menu),
             ("Auto replace", "Toggle automatic completed live-block replacement", self.toggle_auto),
             ("View controls", "Pin, collapse and minimal view options", self.view_menu),
+            ("AI interaction controls", "Show or hide the left pane in full-screen AI · Alt+B", self.action_toggle_ai_controls),
             ("New buffer", "Create an empty document", self.action_new),
             ("New with AI", "Generate a new document from natural language", self.action_new_ai),
             (
@@ -810,7 +820,8 @@ class TerminalWorkspace(InterfaceTools, LanguageTools, ProjectTools, WorkspaceTo
         )
 
     def focus_ai_prompt(self):
-        if self.ai_fullscreen: self.action_leave_ai_fullscreen()
+        if self.ai_fullscreen:
+            self.ai_controls_collapsed = False
         self._ai_focus_requested = True
         self.query_one("#workspace-tabs", TabbedContent).active = "editor-tab"
         self.reveal_ai()
@@ -1479,7 +1490,9 @@ class TerminalWorkspace(InterfaceTools, LanguageTools, ProjectTools, WorkspaceTo
         if request.action == "generate": self.refresh_language(doc)
         self.render_history()
         self.say("Accepted. Undo restores the original instruction or selection.")
-        if not request.live and not self.sidebar_pinned:
+        if not request.live and self.ai_fullscreen:
+            self.call_after_refresh(self.query_one('#result', TextArea).focus)
+        elif not request.live and not self.sidebar_pinned:
             self.auto_hide_sidebar()
             self.editor.focus()
         self.pump()
@@ -1743,6 +1756,8 @@ class TerminalWorkspace(InterfaceTools, LanguageTools, ProjectTools, WorkspaceTo
         actions = {
             "live-mode": self.action_cycle_live_mode,
             "fullscreen-ai": self.action_fullscreen_ai,
+            "toggle-ai-controls": self.action_toggle_ai_controls,
+            "cancel-result": self.cancel_ai,
             "main-menu": self.action_workspace_menu,
             "save": self.action_save,
             "open": self.action_open,

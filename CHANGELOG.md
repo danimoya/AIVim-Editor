@@ -116,3 +116,9 @@ See GitHub releases for earlier versions.
 
 - Fixed floating AI Workbench dropdowns being covered by the instruction area and buttons. Every AI action is visible and clickable without pinning the panel.
 - Stopped initial focus from scrolling compact menus under the mouse while they open; verified every AI action through the workspace menu with the editor selection preserved.
+
+## 2.1.2 — 2026-11-07
+
+- Full-screen AI Workbench now places the action, prompt, model and context controls in a scrollable left pane, with streaming results and review controls on the right.
+- Hide/Show controls or Alt+B expands results on demand while retaining the prompt and reading position. Cancel stays reachable during generation with the controls hidden.
+- Submitting, accepting and starting another AI request retain the full-screen workspace; Esc/Restore still returns to the previous pinned/floating view.
