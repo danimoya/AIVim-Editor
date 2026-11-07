@@ -545,13 +545,13 @@ class TerminalWorkspace(WorkspaceTools, App):
 
     @on(TextArea.Changed)
     def text_changed(self, message: TextArea.Changed):
-        if isinstance(message.text_area, EditorArea):
+        if not self._workspace_closing and isinstance(message.text_area, EditorArea):
             self._sync_document(message.text_area)
             self.update_selection()
 
     @on(TextArea.SelectionChanged)
     def selection_changed(self, message: TextArea.SelectionChanged):
-        if isinstance(message.text_area, EditorArea) and self.current_id:
+        if not self._workspace_closing and isinstance(message.text_area, EditorArea) and self.current_id:
             self.update_selection()
 
     @on(EditorArea.ModeChanged)
@@ -559,7 +559,7 @@ class TerminalWorkspace(WorkspaceTools, App):
         self.update_selection()
 
     def update_selection(self):
-        if not self.current_id:
+        if self._workspace_closing or not self.query("#mode") or not self.current_id:
             return
         area = self.editor
         self.query_one("#mode", Static).update(area.mode if area.vim_enabled else "STANDARD")
@@ -1559,6 +1559,13 @@ class TerminalWorkspace(WorkspaceTools, App):
         if self.active:
             self.active.cancel.set()
         self.exit()
+
+    async def _shutdown(self):
+        # Stop timers and late text notifications before Textual removes widgets.
+        if not self._workspace_closing: self.snapshot_session()
+        self._workspace_closing = True
+        if self.active: self.active.cancel.set()
+        await super()._shutdown()
 
     def on_unmount(self):
         self.snapshot_session()
