@@ -111,3 +111,8 @@ See GitHub releases for earlier versions.
 - Animated AI activity; full-screen response view with Esc/Restore, prior pin-state restoration and reading-position preservation.
 - Private user settings for editing defaults, spinner/pulse/Matrix activity, AIVIM Matrix startup, typing/instant/Matrix live ink, reduced motion and history persistence.
 - Startup input routing preserves the first keystrokes; decorative previews remain separate from document edits.
+
+## 2.1.1 — 2026-11-07
+
+- Fixed floating AI Workbench dropdowns being covered by the instruction area and buttons. Every AI action is visible and clickable without pinning the panel.
+- Verified every AI action through the workspace menu at compact terminal sizes, preserving the editor selection.

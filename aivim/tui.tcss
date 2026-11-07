@@ -19,7 +19,9 @@ Footer { display: none; height: 1; background: #18291d; color: #a5e8ac; }
 Screen.show-shortcuts Footer { display: block; }
 
 /* A temporary overlay consumes no editor rows or columns. Only Pin changes layout. */
-#ai-panel { display: none; layer: ai; overlay: screen; position: absolute; width: 46; max-width: 95%; border: round #658d68; padding: 0 1; background: #111e18; }
+/* Absolute positioning floats the panel. A screen overlay here would paint its
+   children over nested Select dropdowns, hiding the available AI actions. */
+#ai-panel { display: none; layer: ai; position: absolute; width: 46; max-width: 95%; border: round #658d68; padding: 0 1; background: #111e18; }
 #workbench.show-ai #ai-panel { display: block; }
 #workbench.pinned #ai-panel { overlay: none; position: relative; width: 43; max-width: 60%; border: solid #4d7c55; }
 #ai-panel-tools { height: 1; }
@@ -90,7 +92,7 @@ ContextPicker, ChangeReview { align: center middle; background: #000000 35%; }
 #title-bar #live-mode.live-on { color: #b0edba; background: #254331; }
 #title-bar #live-mode.auto-on { color: #f2d18d; background: #493f25; }
 #ai-activity { width: 3; height: 1; color: #91edab; content-align: center middle; }
-#workbench.fullscreen-ai #ai-panel { width: 100%; max-width: 100%; overlay: screen; position: absolute; layer: ai; padding: 0 1; }
+#workbench.fullscreen-ai #ai-panel { width: 100%; max-width: 100%; position: absolute; layer: ai; padding: 0 1; }
 #workbench.fullscreen-ai #ai-action, #workbench.fullscreen-ai #instruction, #workbench.fullscreen-ai #ai-details, #workbench.fullscreen-ai #submit { display: none; }
 #workbench.fullscreen-ai #result { height: 1fr; margin: 0; }
 #project-prompt-dialog { width: 90%; max-width: 110; height: auto; max-height: 95%; padding: 1 2; border: round #91a16b; background: #15241b; }
