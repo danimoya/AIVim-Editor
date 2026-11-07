@@ -2,11 +2,11 @@
 
 # AIVim
 
-### 1.0 · write code in a rhythm
+### 2.0 · one thought, several files
 
 Write what you want. Keep typing. Let the code catch up.
 
-[![Release](https://img.shields.io/badge/release-1.0%20Stable-d6ac66)](https://github.com/danimoya/AIVim-Editor/releases/tag/v1.0.0)
+[![Release](https://img.shields.io/badge/release-2.0%20Stable-d6ac66)](https://github.com/danimoya/AIVim-Editor/releases/tag/v2.0.0)
 [![Qualification](https://github.com/danimoya/AIVim-Editor/actions/workflows/qualification.yml/badge.svg?branch=main)](https://github.com/danimoya/AIVim-Editor/actions/workflows/qualification.yml)
 [![Python](https://img.shields.io/badge/Python-3.9%2B-84dca0)](pyproject.toml)
 [![License](https://img.shields.io/badge/license-GPL--3.0--only-84dca0)](LICENSE)
@@ -17,26 +17,38 @@ AIVim combines Vim-style keys, familiar typing, mouse selection and contextual A
 in a minimal terminal workspace. The editor keeps the screen; menus and AI controls
 appear when you ask for them.
 
+## One thought, several files
+
+[![Real Olares1 multi-file generation and review](https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.0.0/docs/assets/project-2.0.gif)](docs/assets/project-2.0.gif)
+
+A real local model proposes changes to Python and its README. The files change only
+when checked hunks are accepted. Idle inference waits are shortened. The generated
+Python is parsed, not executed. [Recording provenance](https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.0.0/docs/assets/project-2.0-demo.json).
+
+Open a project with `aivim --project ./my-project`. Ctrl+P opens project search,
+reviewed multi-file generation, checkpoints, instruction blocks, command/test output,
+and opt-in language-server tools. [Project workflow guide](https://github.com/danimoya/AIVim-Editor/blob/v2.0.0/docs/PROJECTS.md).
+
 ## See live blocks become Bash
 
-[![Three natural-language Bash instructions replaced live in AIVim](docs/assets/live-bash-1.0.gif)](docs/assets/live-bash-1.0.gif)
+[![Three natural-language Bash instructions replaced live in AIVim](https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.0.0/docs/assets/live-bash-1.0.gif)](docs/assets/live-bash-1.0.gif)
 
 This recording uses a real local model. Three instructions become Bash while the
 editor stays responsive. Idle inference pauses are shortened; typing and live
 replacements are real. Generated commands are syntax-checked and **never executed**.
-[Recording provenance](docs/assets/live-bash-1.0-demo.json) · [Reproduce the demo](#record-your-own-demo)
+[Recording provenance](https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.0.0/docs/assets/live-bash-1.0-demo.json) · [Reproduce the demo](#record-your-own-demo)
 
 <details>
 <summary><strong>Workspace carousel — editor, floating AI, menus and HTTPS setup</strong></summary>
 
-![AIVim workspace carousel](docs/assets/workspace-tour.gif)
+![AIVim workspace carousel](https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.0.0/docs/assets/workspace-tour.gif)
 
 <table>
 <tr>
-<td align="center"><a href="docs/assets/terminal-workspace.png"><img src="docs/assets/terminal-workspace.png" width="230" alt="Minimal terminal editor" /></a><br />Editor</td>
-<td align="center"><a href="docs/assets/terminal-ai.png"><img src="docs/assets/terminal-ai.png" width="230" alt="Floating AI workbench" /></a><br />Floating AI</td>
-<td align="center"><a href="docs/assets/terminal-actions.png"><img src="docs/assets/terminal-actions.png" width="230" alt="Right-click context menu" /></a><br />Context menu</td>
-<td align="center"><a href="docs/assets/terminal-connect.png"><img src="docs/assets/terminal-connect.png" width="230" alt="OpenShift HTTPS model setup" /></a><br />Connect a model</td>
+<td align="center"><a href="https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.0.0/docs/assets/terminal-workspace.png"><img src="https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.0.0/docs/assets/terminal-workspace.png" width="230" alt="Minimal terminal editor" /></a><br />Editor</td>
+<td align="center"><a href="https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.0.0/docs/assets/terminal-ai.png"><img src="https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.0.0/docs/assets/terminal-ai.png" width="230" alt="Floating AI workbench" /></a><br />Floating AI</td>
+<td align="center"><a href="https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.0.0/docs/assets/terminal-actions.png"><img src="https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.0.0/docs/assets/terminal-actions.png" width="230" alt="Right-click context menu" /></a><br />Context menu</td>
+<td align="center"><a href="https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.0.0/docs/assets/terminal-connect.png"><img src="https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.0.0/docs/assets/terminal-connect.png" width="230" alt="OpenShift HTTPS model setup" /></a><br />Connect a model</td>
 </tr>
 </table>
 
@@ -50,7 +62,7 @@ so it works directly in GitHub without JavaScript.
 Python **3.9+**, Git, and a terminal with Unicode support are required.
 
 ```sh
-git clone --branch v1.0.0 https://github.com/danimoya/AIVim-Editor.git
+git clone --branch v2.0.0 https://github.com/danimoya/AIVim-Editor.git
 cd AIVim-Editor
 python -m venv .venv
 source .venv/bin/activate                 # Windows: .venv\Scripts\Activate.ps1
@@ -61,7 +73,7 @@ aivim demo.sh
 Install the stable release from PyPI:
 
 ```sh
-pipx install 'aivim[terminal-syntax]==1.0.0'
+pipx install 'aivim[terminal-syntax]==2.0.0'
 ```
 
 The base package works without native syntax parsers; `terminal-syntax` adds
@@ -138,7 +150,7 @@ Live mode stays off after restoration. AI history is persisted only when you ena
 | **Local server / Olares** | OpenAI-compatible Chat Completions with ordered LAN and Tailscale routes. Model ID and URLs are configurable. |
 | **OpenAI** | Set `OPENAI_API_KEY`; choose the configured model with `--model openai`. |
 | **Anthropic** | Set `ANTHROPIC_API_KEY`; select `--model claude`. |
-| **Local GGUF** | Optional isolated native inference worker; see the [terminal guide](docs/TERMINAL.md). |
+| **Local GGUF** | Optional isolated native inference worker; see the [terminal guide](https://github.com/danimoya/AIVim-Editor/blob/v2.0.0/docs/TERMINAL.md). |
 
 The HTTPS setup verifies certificates, supports private cluster CAs, and provides
 model discovery. Tokens stay in memory unless **Remember token** is selected; a
@@ -150,7 +162,7 @@ back on connection failure. It never silently switches to a paid cloud provider
 or replays a partial stream. It can connect to a compatible local llama-server or
 Ollama API when configured with that server's URL and model ID.
 
-[HTTPS, LAN/Tailscale and configuration details →](docs/TERMINAL.md)
+[HTTPS, LAN/Tailscale and configuration details →](https://github.com/danimoya/AIVim-Editor/blob/v2.0.0/docs/TERMINAL.md)
 
 ## Small set of keys, full mouse access
 
@@ -173,17 +185,24 @@ counts, line copy/delete, paste and undo. `:w`, `:wq`, `:q`, `:e`, `:new` and ta
 navigation are available. F2 is the fallback when your terminal reserves right-click;
 Shift+mouse typically uses the terminal's native copy/selection behavior.
 
-## What 1.0 includes
+## What 2.0 includes
 
-This is **1.0 stable**, with useful Vim vocabulary rather than complete Vim
+This is **2.0**, with useful Vim vocabulary rather than complete Vim
 runtime/plugin compatibility. Find/replace, `/` search, `n`/`N`, go-to-line, a floating
 file picker, indentation settings, model profiles and local recovery support daily use.
 Ctrl+P exposes block retry/cancel, source freshness/refresh, syntax checking, proposal
 editing, connection diagnostics and an optional writing effect. Large files can use AI
 on selections within the 50 KiB selection/context budget.
 
-Language servers, project-wide changes and persistent instruction blocks are planned
-for 2.0. PDF/URL ingestion is outside this release.
+Project search, reviewed multi-file changes, per-hunk selection and rollback checkpoints
+are available in 2.0. Generated blocks retain their instructions through recovery and
+can be refined with review after manual edits. Optional stdio language servers provide
+diagnostics, plain-text completion, definitions and reviewed text-only rename. Commands
+run only after explicit entry and confirmation; captured output can become context.
+
+Semantic retrieval, PDF/URL ingestion, arbitrary language-server resource operations
+and full Vim/plugin compatibility remain outside this release. Neovim RPC embedding
+is an evaluated prototype; it does not replace the Textual editing engine.
 
 Saving uses transactional writes, preserves loaded encoding/newline conventions,
 permissions and symlinks, and checks for external changes. AI output is validated
@@ -192,7 +211,7 @@ checks protect editing operations; they do not establish generated-code quality.
 
 The original editor remains available with `aivim --classic file.py`. An optional
 CodeMirror browser workspace ships with `aivim-web --port 5000`; the terminal app
-runs independently of it. See the [browser guide](docs/WORKSPACE.md).
+runs independently of it. See the [browser guide](https://github.com/danimoya/AIVim-Editor/blob/v2.0.0/docs/WORKSPACE.md).
 
 ## Develop and verify
 
@@ -236,7 +255,7 @@ looping GIF, a poster and sanitized provenance to `docs/assets/`. Idle inference
 pauses are shortened for readability. No server addresses or credentials are
 included in the provenance.
 
-[Terminal guide](docs/TERMINAL.md) · [Alpha release notes](docs/RELEASE_NOTES_1.0_ALPHA.md) · [Release and rollback](docs/RELEASE.md) · [Contributing](CONTRIBUTING.md)
+[Terminal guide](https://github.com/danimoya/AIVim-Editor/blob/v2.0.0/docs/TERMINAL.md) · [Alpha release notes](https://github.com/danimoya/AIVim-Editor/blob/v2.0.0/docs/RELEASE_NOTES_1.0_ALPHA.md) · [Release and rollback](https://github.com/danimoya/AIVim-Editor/blob/v2.0.0/docs/RELEASE.md) · [Contributing](https://github.com/danimoya/AIVim-Editor/blob/v2.0.0/CONTRIBUTING.md)
 
-**License:** [GPL-3.0-only](LICENSE). Bundled frontend dependency notices are
-included in [THIRD_PARTY_LICENSES.txt](aivim/web/static/THIRD_PARTY_LICENSES.txt).
+**License:** [GPL-3.0-only](https://github.com/danimoya/AIVim-Editor/blob/v2.0.0/LICENSE). Bundled frontend dependency notices are
+included in [THIRD_PARTY_LICENSES.txt](https://github.com/danimoya/AIVim-Editor/blob/v2.0.0/aivim/web/static/THIRD_PARTY_LICENSES.txt).

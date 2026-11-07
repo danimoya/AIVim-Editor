@@ -19,6 +19,7 @@ class Document:
     identity: FileIdentity | None = None
     id: str = field(default_factory=lambda: uuid.uuid4().hex)
     live_from: int | None = None
+    intents: list = field(default_factory=list)
 
     @property
     def dirty(self):
@@ -30,6 +31,8 @@ class Source:
     name: str
     content: str
     path: str = ""
+    digest: str = ""
+    chunk: tuple | None = None
     id: str = field(default_factory=lambda: uuid.uuid4().hex)
 
 
@@ -50,6 +53,7 @@ class Request:
     id: str = field(default_factory=lambda: uuid.uuid4().hex)
     cancel: threading.Event = field(default_factory=threading.Event)
     job: object = None
+    intent_id: str | None = None
     replacement: str | None = None
     state: str = "Queued"
     result: str = ""

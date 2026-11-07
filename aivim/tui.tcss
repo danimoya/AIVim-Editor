@@ -77,3 +77,7 @@ EditorArea { border: none; }
 #file-picker, #proposal-editor { width: 85%; height: 85%; align: center middle; border: round #658d68; background: #111e18; padding: 1; }
 #file-tree, #proposal-text { height: 1fr; }
 FilePicker, EditProposal { align: center middle; background: #000000 35%; }
+#project-dialog { width: 90%; height: 90%; border: round #658d68; background: #111e18; padding: 1; }
+ContextPicker, ChangeReview { align: center middle; background: #000000 35%; }
+#context-candidates, #change-hunks { height: 30%; min-height: 5; }
+#candidate-preview, #change-preview { height: 1fr; }

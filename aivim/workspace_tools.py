@@ -21,13 +21,15 @@ class WorkspaceTools:
         data = {
             'documents': [{'name': d.name, 'content': d.content, 'saved': d.saved,
                 'identity': asdict(d.identity) if d.identity else None,
-                'cursor': self.areas[d.id].cursor_location} for d in self.documents.values()],
+                'cursor': self.areas[d.id].cursor_location, 'intents': d.intents} for d in self.documents.values()],
             'active': list(self.documents).index(self.current_id),
             'sources': [{'name': s.name, 'content': s.content, 'path': s.path,
-                         'checked': s.id in selected} for s in self.sources],
+                         'checked': s.id in selected, 'digest': s.digest, 'chunk': s.chunk} for s in self.sources],
             'preferences': {'vim': self.vim_enabled, 'numbers': self.line_numbers,
                             'pinned': self.sidebar_pinned, 'motion': self.writing_effect,
                             'history': self.remember_history, 'model_profile': self.settings.ai.to_dict()},
+            'project': str(self.project.root) if self.project else None,
+            'checkpoint': self.last_checkpoint,
             'history': [{'instruction': r.instruction, 'context': r.context, 'original': r.original,
                          'result': r.result, 'state': r.state, 'provider': r.provider,
                          'model': r.model, 'action': r.action} for r in self.records[:50]] if self.remember_history else [],
@@ -44,16 +46,24 @@ class WorkspaceTools:
             doc = await self.new_document(d['name'], d['content'], identity)
             if doc:
                 doc.saved = d.get('saved', '')
+                doc.intents = d.get('intents', [])
                 self.areas[doc.id].move_cursor(tuple(d.get('cursor', (0, 0))))
         if not self.documents: return False
         self.switch_document(list(self.documents)[min(data.get('active', 0), len(self.documents)-1)])
         for s in data.get('sources', [])[:30]:
             self.add_source(s['name'], s['content'])
             self.sources[-1].path = s.get('path', '')
+            self.sources[-1].digest = s.get('digest', '')
+            self.sources[-1].chunk = s.get('chunk')
             if not s.get('checked', True): self.query_one('#source-list', SelectionList).deselect(self.sources[-1].id)
         for r in data.get('history', [])[:50]:
             record = Request(self.current_id, 0, 0, r['original'], r['action'], r['instruction'], r['context'], r['provider'], r['model'])
             record.state, record.result = r['state'], r['result']; self.records.append(record)
+        if data.get('project') and not self.project:
+            from .project import Project
+            try: self.project = Project(data['project'])
+            except (ValueError,OSError): pass
+        self.last_checkpoint = data.get('checkpoint')
         self.render_history(); self.refresh_documents()
         self.say('Workspace recovered. Live submission is off; no AI request was resumed.')
         return True
@@ -126,7 +136,7 @@ class WorkspaceTools:
 
     def action_file_picker(self):
         from .workspace_widgets import FilePicker
-        self.push_screen(FilePicker(Path.cwd()), lambda p: self.run_worker(self.open_document(p)) if p else None)
+        self.push_screen(FilePicker(self.project.root if self.project else Path.cwd()), lambda p: self.run_worker(self.open_document(p)) if p else None)
 
     def action_validate(self):
         ok, message = syntax_check(self.editor.text, self.editor.language)
@@ -171,14 +181,22 @@ class WorkspaceTools:
         for source in self.sources:
             if source.path:
                 loaded = self.store.load(source.path)
-                if loaded and len(loaded.content.encode()) <= 50*1024: source.content = loaded.content
+                if loaded:
+                    import hashlib
+                    source.digest = hashlib.sha256(Path(source.path).read_bytes()).hexdigest()
+                    content = loaded.content
+                    if source.chunk:
+                        a,b=source.chunk;content='\n'.join(content.splitlines()[a-1:b])
+                    if len(content.encode()) <= 50*1024: source.content = content
         self.say('File sources refreshed. Existing requests retain their original context.')
 
     def action_source_status(self):
         rows = []
         for s in self.sources:
             loaded = self.store.load(s.path) if s.path else None
-            state = ('current' if loaded and loaded.content == s.content else 'changed or unavailable') if s.path else 'note'
+            import hashlib
+            same = loaded and (hashlib.sha256(Path(s.path).read_bytes()).hexdigest() == s.digest if s.digest else loaded.content == s.content)
+            state = ('current' if same else 'changed or unavailable') if s.path else 'note'
             rows.append(f'{s.name}: {state}')
         self.push_screen(TextDialog('SOURCE FRESHNESS', '\n'.join(rows) or 'No sources.'))
 

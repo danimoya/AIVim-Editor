@@ -8,3 +8,8 @@ Build and check wheel/sdist archives, then run `scripts/installed_smoke.py` in a
 
 `python scripts/record_live_demo.py` captures a real local-model Bash workflow and
 exports a GIF with shortened idle inference waits. Install the `demo` extra first.
+
+Project demo: `python scripts/record_project_demo.py` records a real local-model
+multi-file proposal, review and explicit acceptance. Install the `demo` extra first.
+`python scripts/probe_neovim.py` evaluates an isolated Neovim child with the optional
+`neovim-probe` extra and a separately installed Neovim executable.

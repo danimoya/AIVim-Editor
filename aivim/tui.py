@@ -38,6 +38,9 @@ from .proposals import parse_proposal
 from .settings import Settings
 from .session import SessionStore
 from .workspace_tools import WorkspaceTools
+from .project_tools import ProjectTools
+from .language_tools import LanguageTools
+from .project import Project, digest
 from .tui_model import (
     Document,
     Request,
@@ -60,6 +63,14 @@ from .tui_widgets import (
 )
 
 HELP = """AIVIM // TERMINAL WORKBENCH
+
+PROJECTS (2.0)
+Ctrl+P: Open project, Search project, Generate project change, Project checkpoints,
+Instruction blocks, Run command / tests, Use command output, Start language server,
+Language diagnostics, Complete symbol, Go to definition, Rename symbol.
+Project writes require hunk review. Commands require explicit confirmation.
+Language servers are opt-in; processes and requests never resume on recovery.
+
 
 F1 Help     F2 Context menu     F3 Sources     F4 Vim / standard keys
 F5 Generate F6 Explain          F7 Rewrite     F8 Accept change
@@ -114,7 +125,7 @@ Ctrl+P also exposes Blocks, source freshness, model profiles and syntax checks.
 """
 
 
-class TerminalWorkspace(WorkspaceTools, App):
+class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
     TITLE = f"AIVim {__version__} // Terminal Workbench"
     CSS_PATH = "tui.tcss"
     ENABLE_COMMAND_PALETTE = True
@@ -145,9 +156,19 @@ class TerminalWorkspace(WorkspaceTools, App):
         Binding("alt+3", "history", "History", show=False, priority=True),
     ]
 
-    def __init__(self, filename=None, *, settings=None, service=None, connect_on_start=False, restore_session=False):
+    def __init__(self, filename=None, *, settings=None, service=None, connect_on_start=False, restore_session=False, project=None):
         super().__init__()
         self.settings = settings or Settings()
+        self.project = Project(project) if project else None
+        self.project_busy = False
+        self.project_cancel = None
+        self.change_set = None
+        self.last_checkpoint = None
+        self.command_run = None
+        self.last_command_output = ""
+        self.language_client = None
+        self.language_documents = {}
+        self.language_diagnostics = {}
         self.filename = filename
         self.connect_on_start = connect_on_start
         self.restore_session = restore_session
@@ -527,9 +548,16 @@ class TerminalWorkspace(WorkspaceTools, App):
             if target and target.id not in seen and target.document_id == document_id:
                 seen.add(target.id)
                 map_request(target, start, end, inserted)
+        for block in doc.intents:
+            touched = (block['start'] <= start < block['end']) if start == end else start < block['end'] and end > block['start']
+            if touched: block['edited'] = True
+            block['start'] = map_position(block['start'], start, end, inserted, False)
+            block['end'] = map_position(block['end'], start, end, inserted, touched)
         if doc.live_from is not None:
             doc.live_from = map_position(doc.live_from, start, end, inserted)
         doc.content = area.text
+        for block in doc.intents:
+            if doc.content[block['start']:block['end']] == block['generated']: block['edited'] = False
         if self.proposal and self.proposal.invalid:
             self.proposal.state = "Stale"
             self.clear_proposal()
@@ -680,6 +708,22 @@ class TerminalWorkspace(WorkspaceTools, App):
     def get_system_commands(self, screen):
         yield from super().get_system_commands(screen)
         for title, help_text, callback in [
+            ("Project checkpoints", "Review or recover interrupted project writes", self.action_project_checkpoints),
+            ('Open project', 'Select project root', self.action_project_open),
+            ('Search project', 'Find files, symbols and text; choose context', self.action_project_search),
+            ('Generate project change', 'Review an AI multi-file change set', self.action_project_generate),
+            ('Roll back checkpoint', 'Restore the last project change', self.action_project_rollback),
+            ('Instruction blocks', 'Refine or regenerate a preserved instruction', self.action_intent_blocks),
+            ('Run command / tests', 'Preview and run an explicit command', self.action_run_command),
+            ('Use command output', 'Add captured output as context', self.action_command_context),
+            ('Fix from test output', 'Use output for a reviewed project proposal', self.action_fix_from_output),
+            ('Stop command', 'Cancel the running subprocess', self.action_stop_command),
+            ('Start language server', 'Opt in to a stdio language server', self.action_language_start),
+            ('Language diagnostics', 'Inspect server diagnostics', self.action_diagnostics),
+            ('Complete symbol', 'Choose a completion', self.action_completion),
+            ('Go to definition', 'Navigate to a language-server definition', self.action_definition),
+            ('Rename symbol', 'Review rename edits before writing', self.action_rename_symbol),
+
             ("Save model profile", "Name the current connection", self.action_save_profile),
             ("Model profiles", "Choose a saved model connection", self.action_model_profiles),
             ('Find', 'Search in document', self.action_find),
@@ -835,7 +879,9 @@ class TerminalWorkspace(WorkspaceTools, App):
             ("ai", "AI actions…  [F2]"),
             ("sources", "Sources  [F3]"),
             ("history", "History  [Alt+3]"),
+            ("project", "Project tools…"),
             ("blocks", "Blocks · retry / cancel…"),
+            ("intents", "Instruction blocks…"),
             ("find", "Find / search…  [Ctrl+F]"),
             ("validate", "Check syntax…"),
             (
@@ -861,6 +907,8 @@ class TerminalWorkspace(WorkspaceTools, App):
                 "ai": self.action_context_menu,
                 "sources": self.action_sources,
                 "history": self.action_history,
+                "project": self.action_project_menu,
+                "intents": self.action_intent_blocks,
                 "blocks": self.action_blocks,
                 "find": self.action_find,
                 "validate": self.action_validate,
@@ -1235,6 +1283,8 @@ class TerminalWorkspace(WorkspaceTools, App):
                 if request.action == "generate":
                     language = self.areas[doc.id].language or "plain text"
                     instruction = "Requested output language: " + language + "\n" + instruction
+                if request.intent_id:
+                    instruction += "\nReturn the complete replacement for current_block. Preserve its manual edits while fulfilling the instruction."
                 result = self.service.request(
                     request.action,
                     code,
@@ -1259,6 +1309,7 @@ class TerminalWorkspace(WorkspaceTools, App):
     def drain_ai(self):
         if self._workspace_closing:
             return
+        self.drain_language()
         for area in self.areas.values():
             if area.ink_request: area.refresh()
         if self.proposal and self.proposal.live and self.proposal.auto and self._ink_ready_at and time.monotonic() >= self._ink_ready_at:
@@ -1370,6 +1421,13 @@ class TerminalWorkspace(WorkspaceTools, App):
         area.history.checkpoint()
         self._sync_document(area)
         request.state = "Accepted"
+        if request.action == 'generate':
+            import uuid
+            doc.intents = [b for b in doc.intents if b['id'] != request.intent_id]
+            generated = request.replacement.replace('\r\n', '\n').replace('\r', '\n')
+            doc.intents.append({'id':request.intent_id or uuid.uuid4().hex,'start':request.start,
+                'end':request.start+len(generated),'instruction':request.instruction,'generated':generated,
+                'edited':False,'provider':request.provider,'model':request.model})
         self.render_history()
         self.say("Accepted. Undo restores the original instruction or selection.")
         if not request.live and not self.sidebar_pinned:
@@ -1379,6 +1437,7 @@ class TerminalWorkspace(WorkspaceTools, App):
         self.update_live_hint()
 
     def cancel_ai(self):
+        if self.project_cancel: self.project_cancel.set()
         self.pending.clear()
         for area in self.areas.values(): area.ink_request = None; area.refresh()
         if self.active:
@@ -1566,6 +1625,9 @@ class TerminalWorkspace(WorkspaceTools, App):
         if not self._workspace_closing: self.snapshot_session()
         self._workspace_closing = True
         if self.active: self.active.cancel.set()
+        if self.project_cancel: self.project_cancel.set()
+        if self.language_client: self.language_client.close()
+        if self.command_run: self.command_run.cancel()
         await super()._shutdown()
 
     def on_unmount(self):

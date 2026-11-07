@@ -97,7 +97,7 @@ class AIService:
         p=provider or self.current_model;m=model or self.models().get(p);rid=request_id or uuid.uuid4().hex
         if not isinstance(rid,str) or not rid or len(rid)>128 or not all(c.isalnum() or c in '-_' for c in rid):raise AIError('INVALID_REQUEST','Invalid request ID')
         if p not in self.models() or m != self.models()[p]: raise AIError('INVALID_MODEL','Provider/model is not in the configured allowlist')
-        if action not in ('explain','improve','generate','analyze','query','nlp'): raise AIError('INVALID_ACTION','Unknown action')
+        if action not in ('explain','improve','generate','analyze','query','nlp','project'): raise AIError('INVALID_ACTION','Unknown action')
         if not self._slots.acquire(blocking=False): raise AIError('BUSY','Provider concurrency limit reached',True)
         started=time.monotonic();deadline=started+self.settings.ai.timeout;outcome="FAILED"
         try:
@@ -107,6 +107,8 @@ class AIService:
                 system+=' Return exactly a JSON object with string fields "code" and "explanation". No Markdown fences. Preserve indentation. An empty code string is permitted.'
                 if action=='improve':system+=' Rewrite exactly the supplied selection; the code field replaces only that selection. Preserve leading indentation.'
                 else:system+=' Generate only new code for the requested insertion location; do not return a rewritten copy of the source document.'
+            elif action=='project':
+                system+=' Return exactly a JSON object with one files array. Each entry must have only path (relative project path) and content (complete file text) strings. Change only supplied existing files, or create new files. No Markdown fences.'
             elif action=='nlp':
                 system+=' Return exactly {"edits":[{"start":0,"end":0,"text":""}]}. Coordinates are zero-based character offsets in the immutable full source. Edits must stay inside the supplied allowed ranges, be non-overlapping, and preserve unrelated text. No Markdown.'
             else: system+=' Return plain text.'

@@ -52,6 +52,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+python-lsp = ["python-lsp-server[pyflakes]>=1.13,<2"]
+neovim-probe = ["pynvim>=0.6,<1"]
 demo = [
     "playwright>=1.49,<2",
     "pillow>=11,<13",

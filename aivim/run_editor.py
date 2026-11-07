@@ -34,6 +34,7 @@ def parse_arguments():
         help="Path to custom configuration file"
     )
     parser.add_argument('--classic', action='store_true', help='Use the original curses editor instead of the terminal workspace')
+    parser.add_argument('--project', help='Open a project folder for context and reviewed changes')
     parser.add_argument("--connect", action="store_true", help="Open the HTTPS model connection setup")
     return parser.parse_args()
 
@@ -84,7 +85,11 @@ def main():
         settings = Settings(args.config)
         if args.model:
             settings.ai.default_model = args.model
-        TerminalWorkspace(args.filename, settings=settings, connect_on_start=args.connect, restore_session=True).run()
+        from pathlib import Path
+        filename = args.filename
+        if args.project and filename and not Path(filename).is_absolute():
+            filename = str(Path(args.project).expanduser() / filename)
+        TerminalWorkspace(filename, settings=settings, connect_on_start=args.connect, restore_session=True, project=args.project).run()
         return
     print(f"Starting AIVim with file: {args.filename}")
     if args.model:

@@ -93,3 +93,12 @@ See GitHub releases for earlier versions.
 - Individual block retry/cancel, inline streaming ink with reduced-motion toggle, source freshness and explicit refresh.
 - Named model profiles, live connection diagnostics and selection-based context limits for large documents.
 - Non-executing Bash/Python/JSON syntax checks and reproducible live-model capture.
+
+## 2.0.0 — 2026-11-07
+
+- Explicit project folder, bounded local file/symbol/text context search, selectable source chunks and freshness.
+- Reviewed multi-file AI changes, per-hunk acceptance, preflight conflict checks, private checkpoints, compensating rollback and interrupted-write recovery.
+- Persistent generated-block instructions, mapped anchors, manual-edit detection and reviewed refinement/regeneration.
+- Opt-in stdio language servers: UTF-16 text sync, diagnostics, plain-text completion, definition navigation and reviewed multi-file text rename.
+- Explicit command/test execution with confirmation, deadlines, bounded output, cancellation and output-as-context for proposed fixes.
+- Actual Olares1 multi-file recording and a separately evaluated clean Neovim RPC/grid/motion/undo prototype.

@@ -1,0 +1,12 @@
+{
+  "model": "bonsai-2-27b",
+  "provider": "olares",
+  "files": [
+    "greet.py",
+    "README.md"
+  ],
+  "review_required": true,
+  "commands_executed": false,
+  "idle_inference_waits_shortened": true,
+  "release": "2.0.0"
+}
