@@ -124,7 +124,7 @@ def test_individual_block_cancel_keeps_editor_ready(settings):
             request = app.active
             app.action_blocks(); await pilot.pause()
             app.screen.dismiss(request.id); await pilot.pause()
-            app.screen.dismiss('cancel'); await pilot.pause()
+            app.screen.dismiss('stop'); await pilot.pause()
             assert app.active is None and request.state == 'Cancelled'
             assert not app.query_one('#submit', Button).disabled
             assert 'print two' in app.editor.text

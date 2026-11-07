@@ -149,7 +149,7 @@ class WorkspaceTools:
             r = next((r for r in records if r.id == key), None)
             if not r: return
             def action(value):
-                if value == 'cancel':
+                if value == 'stop':
                     r.cancel.set(); r.state = 'Cancelled'
                     self.pending = [p for p in self.pending if p.id != r.id]
                     if self.active is r:
@@ -164,7 +164,7 @@ class WorkspaceTools:
                         self.say('Block changed. Select the revised instruction and generate again.'); return
                     new = self.make_request(doc, r.start, r.end, r.action, r.instruction, live=r.live)
                     if new: self.pending.append(new); self.pump()
-            self.push_screen(ChoiceDialog(r.state.upper(), [('cancel', 'Cancel this block'), ('retry', 'Retry this block')]), action)
+            self.push_screen(ChoiceDialog(r.state.upper(), [('stop', 'Cancel this block'), ('retry', 'Retry this block')]), action)
         self.push_screen(ChoiceDialog('BLOCKS', [(r.id, f'{r.state} · {r.instruction[:55]}') for r in records]), chosen)
 
     def action_refresh_sources(self):
