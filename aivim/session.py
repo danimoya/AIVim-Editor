@@ -10,9 +10,9 @@ from .private_files import restrict
 
 
 class SessionStore:
-    def __init__(self, config_path, *, unique=False):
+    def __init__(self, config_path, *, unique=False, project=None):
         key = hashlib.sha256(str(Path(config_path).resolve()).encode()).hexdigest()[:16]
-        self.key, self.unique = key, unique
+        self.key, self.unique, self.project = key, unique, project
         name = key + ('-' + uuid.uuid4().hex if unique else '') + '.json'
         self.path = Path('~/.local/state/aivim/sessions').expanduser() / name
 
@@ -21,7 +21,7 @@ class SessionStore:
             candidates = sorted(self.path.parent.glob(self.key + '*.json'), key=lambda p:p.stat().st_mtime, reverse=True)
             for path in candidates:
                 result = self._load(path)
-                if result: return result
+                if result and (self.project is None or result.get("project") == self.project): return result
             return None
         return self._load(self.path)
 

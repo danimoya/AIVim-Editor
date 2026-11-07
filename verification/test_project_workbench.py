@@ -137,3 +137,45 @@ def test_project_cli_resolves_relative_filename_inside_root(settings,tmp_path,mo
     monkeypatch.setattr(sys,'argv',['aivim','--project',str(tmp_path),'sample.py','--config',str(settings.config_path)])
     run_editor.main()
     assert captured['filename']==str(tmp_path/'sample.py') and captured['ran']
+
+
+def test_live_ink_keeps_partial_text_out_of_document_and_undo(settings):
+    from textual.widgets import Checkbox
+    async def journey(stub):
+        code='# '+('gentle words '*30)+'\nprint("hello")'
+        stub.text=json.dumps({'code':code,'explanation':'Generated'});stub.chunk_delay=.005
+        app=TerminalWorkspace(settings=settings,service=service(settings,stub))
+        async with app.run_test() as pilot:
+            await pilot.press('f4')
+            app.query_one('#live',Checkbox).value=True
+            app.query_one('#auto',Checkbox).value=True
+            await pilot.pause()
+            app.editor.insert('Print hello gently')
+            await pilot.press('enter','enter')
+            import time
+            deadline=time.monotonic()+8;saw_ink=False
+            while time.monotonic()<deadline:
+                await pilot.pause(.02)
+                if app.records and app.records[0].state=='Accepted':break
+                assert 'Print hello gently' in app.editor.text
+                saw_ink |= bool(app.editor.ink_painted and app.editor.ink_painted!=app.editor.ink_text)
+            assert app.records[0].state=='Accepted' and saw_ink
+            assert 'print("hello")' in app.editor.text
+            app.editor.undo();await pilot.pause()
+            assert 'Print hello gently' in app.editor.text
+    with ProviderStub() as stub:asyncio.run(journey(stub))
+
+
+def test_project_recovery_does_not_mix_workspaces(settings,tmp_path):
+    async def journey():
+        a=tmp_path/'a';b=tmp_path/'b';a.mkdir();b.mkdir()
+        app=TerminalWorkspace(settings=settings,project=a)
+        async with app.run_test() as pilot:
+            app.editor.insert('alpha');await pilot.pause();app.snapshot_session()
+        other=TerminalWorkspace(settings=settings,project=b,restore_session=True)
+        async with other.run_test() as pilot:
+            assert other.editor.text==''
+            other.editor.insert('beta');await pilot.pause();other.snapshot_session()
+        original=TerminalWorkspace(settings=settings,project=a,restore_session=True)
+        async with original.run_test():assert original.editor.text=='alpha'
+    asyncio.run(journey())

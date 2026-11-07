@@ -13,6 +13,7 @@ from textual.widgets import Checkbox
 
 async def stress(settings, stub):
     app = TerminalWorkspace(settings=settings, service=service(settings, stub))
+    app.session_store.path=Path(settings.config_path).parent/"stress-session.json"
     async with app.run_test(size=(100,28)) as pilot:
         await pilot.press('f4')
         app.query_one('#live', Checkbox).value = True

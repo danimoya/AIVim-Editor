@@ -34,6 +34,8 @@ PROMPTS = [
 
 async def capture(settings, directory):
     app = TerminalWorkspace(settings=settings)
+    app.session_store.path = directory / "capture-session.json"
+    app.writing_effect = True
     app.title = "AIVim " + __version__ + " · write in a rhythm"
     frames = []
     last = None

@@ -15,6 +15,7 @@ class ProjectTools:
             if not value:return
             try:self.project=Project(value)
             except (ValueError,OSError) as exc:self.say(str(exc));return
+            self.session_store.project=str(self.project.root)
             self.say('Project: '+str(self.project.root)+'. Context is selected explicitly.');self.snapshot_session()
         self.push_screen(PromptDialog('Open project folder',value=str(self.project.root) if self.project else str(Path.cwd())),chosen)
 

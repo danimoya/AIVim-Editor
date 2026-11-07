@@ -2,7 +2,8 @@
 
 Run `aivim --project ./project` or use **Open project** in Ctrl+P. Relative filename
 arguments are interpreted inside the selected project. Project tools also appear
-in the floating ≡ menu. No project configuration executes automatically.
+in the floating ≡ menu. No project configuration executes automatically. Recovery chooses snapshots for the
+explicit project root, so opening another project does not restore unrelated buffers.
 
 ## Choose context
 

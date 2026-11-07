@@ -15,6 +15,7 @@ async def capture(settings,root,frames_dir):
     path=root/'greet.py';path.write_text('def greet(name):\n    return f"Hello, {name}!"\n')
     (root/'README.md').write_text('# Greeting\n\nCall greet with a name.\n')
     app=TerminalWorkspace(filename=str(path),settings=settings,project=root)
+    app.session_store.path=frames_dir/"capture-session.json"
     app.title='AIVim 2.0 · one thought, several files'
     frames=[];previous=None
     def snap(duration=120):

@@ -172,7 +172,7 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
         self.filename = filename
         self.connect_on_start = connect_on_start
         self.restore_session = restore_session
-        self.session_store = SessionStore(self.settings.config_path, unique=True)
+        self.session_store = SessionStore(self.settings.config_path, unique=True, project=str(Path(project).expanduser().resolve()) if project else None)
         preferences = (self.session_store.load() or {}).get("preferences", {})
         if restore_session and preferences.get("model_profile"):
             from .settings import AISettings
@@ -1247,7 +1247,7 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
         self.active = request
         if request.live and self.writing_effect:
             area = self.areas[request.document_id]
-            area.ink_request, area.ink_text = request, "Composing…"
+            area.ink_request, area.ink_text, area.ink_painted = request, "Composing…", "Composing…"
             area.refresh()
         self.records.insert(0, request)
         self.records = self.records[:50]
@@ -1311,10 +1311,12 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
             return
         self.drain_language()
         for area in self.areas.values():
-            if area.ink_request: area.refresh()
+            if area.ink_request: area.advance_ink()
         if self.proposal and self.proposal.live and self.proposal.auto and self._ink_ready_at and time.monotonic() >= self._ink_ready_at:
-            self._ink_ready_at = 0
-            if self.query_one("#live", Checkbox).value and self.query_one("#auto", Checkbox).value: self.action_accept()
+            area = self.areas[self.proposal.document_id]
+            if not self.writing_effect or area.ink_painted == area.ink_text:
+                self._ink_ready_at = 0
+                if self.query_one("#live", Checkbox).value and self.query_one("#auto", Checkbox).value: self.action_accept()
         for _ in range(128):
             try:
                 request_id, kind, value = self.mailbox.get_nowait()
@@ -1342,6 +1344,7 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
             self.query_one("#cancel", Button).disabled = True
             if kind == "error":
                 request.state = "Failed"
+                self.areas[request.document_id].ink_request = None
                 request.result = value
                 self.say(value)
             elif request.action in ("improve", "generate"):

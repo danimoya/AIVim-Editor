@@ -31,12 +31,12 @@ and opt-in language-server tools. [Project workflow guide](https://github.com/da
 
 ## See live blocks become Bash
 
-[![Three natural-language Bash instructions replaced live in AIVim](https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.0.0/docs/assets/live-bash-1.0.gif)](docs/assets/live-bash-1.0.gif)
+[![Three natural-language Bash instructions replaced live in AIVim](https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.0.0/docs/assets/live-bash-2.0.gif)](docs/assets/live-bash-2.0.gif)
 
 This recording uses a real local model. Three instructions become Bash while the
 editor stays responsive. Idle inference pauses are shortened; typing and live
 replacements are real. Generated commands are syntax-checked and **never executed**.
-[Recording provenance](https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.0.0/docs/assets/live-bash-1.0-demo.json) · [Reproduce the demo](#record-your-own-demo)
+[Recording provenance](https://raw.githubusercontent.com/danimoya/AIVim-Editor/v2.0.0/docs/assets/live-bash-2.0-demo.json) · [Reproduce the demo](#record-your-own-demo)
 
 <details>
 <summary><strong>Workspace carousel — editor, floating AI, menus and HTTPS setup</strong></summary>

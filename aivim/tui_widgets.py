@@ -69,6 +69,19 @@ class EditorArea(TextArea):
         self.visual_line = False
         self.ink_request = None
         self.ink_text = ""
+        self.ink_painted = ""
+
+    def advance_ink(self):
+        target = self.ink_text
+        if target == "Composing…":
+            self.ink_painted = target
+        else:
+            current = self.ink_painted if target.startswith(self.ink_painted) else ""
+            remaining = len(target) - len(current)
+            # Catch up quickly even if the model sends a large burst. This never
+            # adds a long artificial wait and never edits the document itself.
+            self.ink_painted = target[:len(current) + max(4, remaining // 5)]
+        self.refresh()
 
     def render_line(self, y):
         # Decorative ink never enters the editable document or its undo history.
@@ -82,7 +95,7 @@ class EditorArea(TextArea):
             end_row = location(self.text, request.end)[0]
             row = self.scroll_offset.y + y
             if start_row <= row <= end_row:
-                lines = self.ink_text.splitlines() or ["Composing…"]
+                lines = self.ink_painted.splitlines() or ["Composing…"]
                 index = row - start_row
                 text = lines[index] if index < len(lines) else ""
                 # A soft moving pen at the original block; hide under normal edits.
