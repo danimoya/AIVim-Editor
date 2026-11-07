@@ -156,7 +156,7 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
         Binding("alt+3", "history", "History", show=False, priority=True),
     ]
 
-    def __init__(self, filename=None, *, settings=None, service=None, connect_on_start=False, restore_session=False, project=None):
+    def __init__(self, filename=None, *, settings=None, service=None, connect_on_start=False, restore_session=False, project=None, provider_override=None):
         super().__init__()
         self.settings = settings or Settings()
         self.project = Project(project) if project else None
@@ -174,9 +174,10 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
         self.restore_session = restore_session
         self.session_store = SessionStore(self.settings.config_path, unique=True, project=str(Path(project).expanduser().resolve()) if project else None)
         preferences = (self.session_store.load() or {}).get("preferences", {})
-        if restore_session and preferences.get("model_profile"):
+        if restore_session and preferences.get("model_profile") and preferences.get("configuration_digest") == self.configuration_digest():
             from .settings import AISettings
             self.settings.ai = AISettings.from_dict(preferences["model_profile"])
+        if provider_override: self.settings.ai.default_model = provider_override
         self.service = service or AIService(settings=self.settings)
         self.search_text = ""
         self.writing_effect = preferences.get("motion", True)
@@ -658,6 +659,10 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
     @on(Select.Changed, "#provider")
     def provider_selected(self):
         if self.is_mounted:
+            provider = self.query_one("#provider", Select).value
+            if isinstance(provider, str):
+                self.settings.ai.default_model = provider
+                self.service.current_model = provider
             self.update_context()
 
     @on(SelectionList.SelectedChanged, "#source-list")

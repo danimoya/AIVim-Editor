@@ -179,3 +179,15 @@ def test_project_recovery_does_not_mix_workspaces(settings,tmp_path):
         original=TerminalWorkspace(settings=settings,project=a,restore_session=True)
         async with original.run_test():assert original.editor.text=='alpha'
     asyncio.run(journey())
+
+
+def test_explicit_provider_and_changed_config_win_over_recovery(settings):
+    from aivim.session import SessionStore
+    store=SessionStore(settings.config_path)
+    values=settings.ai.to_dict();values['default_model']='olares'
+    store.save({'documents':[], 'preferences':{'model_profile':values,'configuration_digest':None}})
+    app=TerminalWorkspace(settings=settings,restore_session=True,provider_override='openai')
+    assert app.service.current_model=='openai'
+    settings.config_path.write_text('{"schema_version":1}')
+    app=TerminalWorkspace(settings=settings,restore_session=True)
+    assert app.service.current_model=='openai'

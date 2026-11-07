@@ -15,6 +15,11 @@ from .checks import syntax_check
 
 
 class WorkspaceTools:
+    def configuration_digest(self):
+        import hashlib
+        try: return hashlib.sha256(self.settings.config_path.read_bytes()).hexdigest()
+        except OSError: return None
+
     def snapshot_session(self):
         if not self.current_id or not self.query("#source-list"): return
         selected = set(self.query_one('#source-list', SelectionList).selected)
@@ -27,7 +32,8 @@ class WorkspaceTools:
                          'checked': s.id in selected, 'digest': s.digest, 'chunk': s.chunk} for s in self.sources],
             'preferences': {'vim': self.vim_enabled, 'numbers': self.line_numbers,
                             'pinned': self.sidebar_pinned, 'motion': self.writing_effect,
-                            'history': self.remember_history, 'model_profile': self.settings.ai.to_dict()},
+                            'history': self.remember_history, 'model_profile': self.settings.ai.to_dict(),
+                            'configuration_digest': self.configuration_digest()},
             'project': str(self.project.root) if self.project else None,
             'checkpoint': self.last_checkpoint,
             'history': [{'instruction': r.instruction, 'context': r.context, 'original': r.original,
@@ -239,7 +245,7 @@ class WorkspaceTools:
         if not profiles: self.say('Use Save model profile in Ctrl+P first.'); return
         def chosen(name):
             if not name: return
-            if self.active or self.proposal or self.pending:
+            if self.active or self.proposal or self.pending or self.project_busy:
                 self.say('Finish or cancel pending AI work before switching profiles.'); return
             from .settings import AISettings
             from .ai_service import AIService
