@@ -115,4 +115,4 @@ See GitHub releases for earlier versions.
 ## 2.1.1 — 2026-11-07
 
 - Fixed floating AI Workbench dropdowns being covered by the instruction area and buttons. Every AI action is visible and clickable without pinning the panel.
-- Verified every AI action through the workspace menu at compact terminal sizes, preserving the editor selection.
+- Stopped initial focus from scrolling compact menus under the mouse while they open; verified every AI action through the workspace menu with the editor selection preserved.

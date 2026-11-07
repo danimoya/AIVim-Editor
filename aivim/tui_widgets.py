@@ -385,6 +385,9 @@ class PromptDialog(ModalScreen):
 
 
 class ChoiceDialog(ModalScreen):
+    # Focus after layout without an animated scroll: a tall menu in a small
+    # terminal must not move its mouse targets while the user is clicking.
+    AUTO_FOCUS = ""
     BINDINGS = [
         ("escape", "dismiss(None)", "Cancel"),
         ("down", "next_choice", "Next"),
@@ -424,7 +427,7 @@ class ChoiceDialog(ModalScreen):
                 0,
                 max(0, min(self.x, self.size.width - 42)),
             )
-        self.query_one(Button).focus()
+        self.query_one(Button).focus(scroll_visible=False)
 
     def on_button_pressed(self, event: Button.Pressed):
         value = event.button.id.removeprefix("choice-")

@@ -7,6 +7,7 @@ from textual.widgets.text_area import Selection
 
 from aivim.tui import TerminalWorkspace
 from aivim.tui_widgets import ChoiceDialog
+from test_tui_workspace import settle
 
 
 ACTIONS = ["improve", "generate", "explain", "analyze", "query"]
@@ -59,14 +60,15 @@ def test_workspace_ai_actions_menu_exposes_and_routes_every_action(settings, siz
             selection = Selection((0, 0), (0, 8))
             app.editor.selection = selection
             for action in ACTIONS:
-                await pilot.click("#main-menu")
-                await pilot.click("#choice-ai")
-                await pilot.pause()
+                assert await pilot.click("#main-menu", offset=(2, 0))
+                await settle(pilot, lambda: bool(app.screen.query("#choice-ai")))
+                assert await pilot.click("#choice-ai", offset=(2, 0))
+                await settle(pilot, lambda: bool(app.screen.query("#choice-query")))
                 assert isinstance(app.screen, ChoiceDialog)
                 for button in app.screen.query(Button):
                     region = button.region
                     assert app.get_widget_at(region.x + 2, region.y)[0] is button
-                await pilot.click("#choice-" + action)
+                assert await pilot.click("#choice-" + action, offset=(2, 0))
                 await pilot.pause()
                 assert app.editor.selection == selection
                 if action in ("explain", "analyze"):
