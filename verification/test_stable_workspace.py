@@ -104,3 +104,29 @@ asyncio.run(main())
     finally:
         proc.kill(); proc.wait(timeout=5)
     assert store.load()['documents'][0]['content'] == 'unsaved after a crash'
+
+
+def test_individual_block_cancel_keeps_editor_ready(settings):
+    from provider_stub import ProviderStub
+    from test_ai_jobs import service
+    from test_tui_workspace import settle
+    from textual.widgets import Button, Checkbox
+    async def journey(stub):
+        stub.stream_gate.clear()
+        app = TerminalWorkspace(settings=settings, service=service(settings, stub))
+        async with app.run_test() as pilot:
+            await pilot.press('f4')
+            app.query_one('#live', Checkbox).value = True
+            await pilot.pause()
+            app.editor.insert('print two')
+            await pilot.press('enter', 'enter')
+            await settle(pilot, lambda: app.active is not None)
+            request = app.active
+            app.action_blocks(); await pilot.pause()
+            app.screen.dismiss(request.id); await pilot.pause()
+            app.screen.dismiss('cancel'); await pilot.pause()
+            assert app.active is None and request.state == 'Cancelled'
+            assert not app.query_one('#submit', Button).disabled
+            assert 'print two' in app.editor.text
+            stub.stream_gate.set()
+    with ProviderStub() as stub: asyncio.run(journey(stub))

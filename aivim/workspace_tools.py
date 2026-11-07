@@ -6,7 +6,7 @@ from pathlib import Path
 import threading
 import time
 
-from textual.widgets import Checkbox, Input, SelectionList, TextArea
+from textual.widgets import Button, Checkbox, Input, SelectionList, TextArea
 from textual.widgets.text_area import Selection
 from .file_store import FileIdentity
 from .tui_model import location, offset, Request
@@ -152,7 +152,10 @@ class WorkspaceTools:
                 if value == 'cancel':
                     r.cancel.set(); r.state = 'Cancelled'
                     self.pending = [p for p in self.pending if p.id != r.id]
-                    if self.active is r: self.active = None
+                    if self.active is r:
+                        self.active = None
+                        self.query_one("#submit", Button).disabled = False
+                        self.query_one("#cancel", Button).disabled = True
                     if self.proposal is r: self.clear_proposal()
                     self.render_history(); self.pump(); self.update_live_hint()
                 elif value == 'retry':
@@ -190,7 +193,9 @@ class WorkspaceTools:
                 route = getattr(transport, 'last_endpoint', None)
                 message = f'{provider} / {result.model}\nConnected in {time.monotonic()-started:.2f}s\nRoute: {route or "configured HTTPS / API endpoint"}\n{result.text[:100]}'
             except Exception as exc: message = f'Connection test failed: {exc}'
-            self.call_from_thread(self.push_screen, TextDialog('MODEL CONNECTION', message))
+            if not self._workspace_closing:
+                try: self.call_from_thread(self.push_screen, TextDialog('MODEL CONNECTION', message))
+                except RuntimeError: pass
         threading.Thread(target=check, daemon=True).start(); self.say('Testing model connection… editor remains available.')
 
     def action_writing_effect(self):

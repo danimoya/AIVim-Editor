@@ -667,8 +667,9 @@ class TerminalWorkspace(WorkspaceTools, App):
             self.say("Cannot read source file.")
             return
         if result:
+            previous_count = len(self.sources)
             self.add_source(Path(path).name, result.content)
-            if self.sources: self.sources[-1].path = str(Path(path).expanduser().resolve())
+            if len(self.sources) > previous_count: self.sources[-1].path = str(Path(path).expanduser().resolve())
         else:
             self.say(result.message)
 
