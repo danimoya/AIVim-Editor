@@ -34,7 +34,7 @@ PROMPTS = [
 
 async def capture(settings, directory):
     app = TerminalWorkspace(settings=settings)
-    app.title = "AIVim 1.0 Alpha 1 · live Bash"
+    app.title = "AIVim " + __version__ + " · write in a rhythm"
     frames = []
     last = None
 
@@ -53,7 +53,7 @@ async def capture(settings, directory):
         app.document.name = "live-demo.sh"
         app.editor.language = "bash"
         app.editor.cursor_blink = False
-        await pilot.press("f4")
+        if app.editor.vim_enabled: await pilot.press("f4")
         app.query_one("#live", Checkbox).value = True
         app.query_one("#auto", Checkbox).value = True
         await pilot.pause()
@@ -72,7 +72,7 @@ async def capture(settings, directory):
         while time.monotonic() < deadline:
             await pilot.pause(0.04)
             snapshot(100)
-            if len(app.records) == len(PROMPTS) and not app.active and not app.pending:
+            if len(app.records) == len(PROMPTS) and not app.active and not app.pending and not app.proposal:
                 break
         records = list(reversed(app.records))
         if len(records) != len(PROMPTS) or any(record.state != "Accepted" for record in records):
@@ -128,8 +128,8 @@ async def render(frames, output, report):
         optimize=True,
         disposal=2,
     )
-    images[-1].convert("RGB").save(output.with_name("live-bash-poster.png"))
-    output.with_name("live-bash-demo.json").write_text(json.dumps(report, indent=2) + "\n")
+    images[-1].convert("RGB").save(output.with_name(output.stem + "-poster.png"))
+    output.with_name(output.stem + "-demo.json").write_text(json.dumps(report, indent=2) + "\n")
     with Image.open(output) as gif:
         count = gif.n_frames
         duration = sum(gif.seek(i) or gif.info.get("duration", 0) for i in range(count))

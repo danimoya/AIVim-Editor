@@ -67,6 +67,29 @@ class EditorArea(TextArea):
         self.visual_anchor = None
         self.visual_cursor = None
         self.visual_line = False
+        self.ink_request = None
+        self.ink_text = ""
+
+    def render_line(self, y):
+        # Decorative ink never enters the editable document or its undo history.
+        request = self.ink_request
+        if request and not request.invalid and request.state in ("Generating", "Awaiting review"):
+            from rich.segment import Segment
+            from rich.style import Style
+            from textual.strip import Strip
+            import time
+            start_row = location(self.text, request.start)[0]
+            end_row = location(self.text, request.end)[0]
+            row = self.scroll_offset.y + y
+            if start_row <= row <= end_row:
+                lines = self.ink_text.splitlines() or ["Composing…"]
+                index = row - start_row
+                text = lines[index] if index < len(lines) else ""
+                # A soft moving pen at the original block; hide under normal edits.
+                pen = " ▍" if index == min(len(lines)-1, end_row-start_row) and int(time.monotonic()*4)%2 else ""
+                value = ("  " + text + pen)[self.scroll_offset.x:]
+                return Strip([Segment(value, Style(color="#b0edba", bgcolor="#14271c"))]).adjust_cell_length(self.size.width, Style(bgcolor="#14271c"))
+        return super().render_line(y)
 
     def edit(self, edit):
         # Record exact spans before Textual queues its Changed message. This also
@@ -248,6 +271,10 @@ class EditorArea(TextArea):
         elif key in ("g", "d", "y") and self.mode != "VISUAL":
             self.prefix = key
             self.count = str(count)
+        elif key == "/":
+            self.app.action_find()
+        elif key in ("n", "N"):
+            self.app.find_text(self.app.search_text, key == "N")
         elif key == ":":
             self.app.action_command()
         elif key == "u":

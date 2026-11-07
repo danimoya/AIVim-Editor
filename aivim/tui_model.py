@@ -29,6 +29,7 @@ class Document:
 class Source:
     name: str
     content: str
+    path: str = ""
     id: str = field(default_factory=lambda: uuid.uuid4().hex)
 
 

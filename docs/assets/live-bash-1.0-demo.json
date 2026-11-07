@@ -1,0 +1,25 @@
+{
+  "release": "1.0.0",
+  "provider": "olares",
+  "model": "bonsai-2-27b",
+  "screen": [
+    100,
+    28
+  ],
+  "idle_inference_waits_shortened": true,
+  "commands_executed": false,
+  "blocks": [
+    {
+      "instruction": "Print Hello.",
+      "code": "echo \"Hello\"\n"
+    },
+    {
+      "instruction": "Show the current directory disk usage in human-readable form.",
+      "code": "du -sh .\n"
+    },
+    {
+      "instruction": "Count regular files in the current directory, without recursion.",
+      "code": "find . -maxdepth 1 -type f | wc -l\n"
+    }
+  ]
+}

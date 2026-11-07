@@ -36,6 +36,8 @@ from .ai_service import AIError, AIService
 from .file_store import FileStore
 from .proposals import parse_proposal
 from .settings import Settings
+from .session import SessionStore
+from .workspace_tools import WorkspaceTools
 from .tui_model import (
     Document,
     Request,
@@ -104,16 +106,22 @@ Turn Live off to edit ordinary code. At most ten blocks wait in the queue.
 FILES & SESSION
 Save writes through the transactional FileStore, preserving loaded encoding,
 newline convention, symlinks and permissions, and checking external changes.
-Sources/history are session-only. Source snapshots never change your files.
-AI requests are limited to 50 KiB of document/context and 8 KiB instructions.
+Buffers, cursors, sources and preferences recover locally. AI history is opt-in.
+Ctrl+P: Remember AI history / Clear AI history. Live is always off after recovery.
+AI requests are limited to 50 KiB of selection/context and 8 KiB instructions.
+Ctrl+F Find · Ctrl+H Replace · Ctrl+G Line · / n N search in Vim mode.
+Ctrl+P also exposes Blocks, source freshness, model profiles and syntax checks.
 """
 
 
-class TerminalWorkspace(App):
+class TerminalWorkspace(WorkspaceTools, App):
     TITLE = f"AIVim {__version__} // Terminal Workbench"
     CSS_PATH = "tui.tcss"
     ENABLE_COMMAND_PALETTE = True
     BINDINGS = [
+        Binding("ctrl+f", "find", "Find", priority=True),
+        Binding("ctrl+h", "replace", "Replace", priority=True),
+        Binding("ctrl+g", "goto", "Go to line", priority=True),
         Binding("f1", "help", "Help", priority=True),
         Binding("f2", "context_menu", "Actions", priority=True),
         Binding("f3", "sources", "Sources", priority=True),
@@ -137,12 +145,22 @@ class TerminalWorkspace(App):
         Binding("alt+3", "history", "History", show=False, priority=True),
     ]
 
-    def __init__(self, filename=None, *, settings=None, service=None, connect_on_start=False):
+    def __init__(self, filename=None, *, settings=None, service=None, connect_on_start=False, restore_session=False):
         super().__init__()
         self.settings = settings or Settings()
-        self.service = service or AIService(settings=self.settings)
         self.filename = filename
         self.connect_on_start = connect_on_start
+        self.restore_session = restore_session
+        self.session_store = SessionStore(self.settings.config_path, unique=True)
+        preferences = (self.session_store.load() or {}).get("preferences", {})
+        if restore_session and preferences.get("model_profile"):
+            from .settings import AISettings
+            self.settings.ai = AISettings.from_dict(preferences["model_profile"])
+        self.service = service or AIService(settings=self.settings)
+        self.search_text = ""
+        self.writing_effect = preferences.get("motion", True)
+        self.remember_history = preferences.get("history", False)
+        self._ink_ready_at = 0.0
         self.sidebar_pinned = False
         self.sidebar_visible = False
         self._ai_focus_requested = False
@@ -157,8 +175,8 @@ class TerminalWorkspace(App):
         self.proposal = None
         self.mailbox = queue.Queue(maxsize=256)
         self.raw_preview = ""
-        self.vim_enabled = True
-        self.line_numbers = self.settings.editor.number
+        self.vim_enabled = preferences.get("vim", True)
+        self.line_numbers = preferences.get("numbers", self.settings.editor.number)
         self._workspace_closing = False
         self.register_theme(
             Theme(
@@ -362,15 +380,21 @@ class TerminalWorkspace(App):
         yield Footer()
 
     async def on_mount(self):
-        if self.filename:
+        recovered = await self.restore_workspace() if self.restore_session and not self.filename and not self.connect_on_start else False
+        if recovered:
+            pass
+        elif self.filename:
             if not await self.open_document(self.filename):
                 await self.new_document()
         else:
             await self.new_document()
         self.set_interval(0.04, self.drain_ai)
+        self.set_interval(2, self.snapshot_session)
         self.update_context()
         self.resize_layout()
         self.editor.focus()
+        self.sidebar_pinned = bool((self.session_store.load() or {}).get("preferences", {}).get("pinned", False))
+        self.sidebar_visible = self.sidebar_pinned
         self.update_sidebar()
         if self.connect_on_start:
             self.call_after_refresh(self.action_connect_model)
@@ -424,6 +448,8 @@ class TerminalWorkspace(App):
             id="doc-" + doc.id,
             tooltip="Drag to select · Right-click / F2 for actions · F4 for standard typing",
         )
+        area.indent_width = self.settings.editor.tabstop
+        area.indent_type = "spaces" if self.settings.editor.expandtab else "tabs"
         area.vim_enabled = self.vim_enabled
         area.mode = "NORMAL" if self.vim_enabled else "STANDARD"
         area.border_title = name
@@ -582,7 +608,7 @@ class TerminalWorkspace(App):
         count = len(self.query_one("#source-list", SelectionList).selected)
         self.query_one("#ai-details", Collapsible).title = f"Model & {count} sources"
         self.query_one("#context-count", Static).update(
-            f"{count} source" + ("s" if count != 1 else "")
+            f"{count} sources · {len(self.context_for(self.document, *sorted(offset(self.editor.text, loc) for loc in self.editor.selection)).encode())}/51200 context bytes"
         )
         provider = self.query_one("#provider", Select).value
         if isinstance(provider, str):
@@ -642,6 +668,7 @@ class TerminalWorkspace(App):
             return
         if result:
             self.add_source(Path(path).name, result.content)
+            if self.sources: self.sources[-1].path = str(Path(path).expanduser().resolve())
         else:
             self.say(result.message)
 
@@ -652,6 +679,23 @@ class TerminalWorkspace(App):
     def get_system_commands(self, screen):
         yield from super().get_system_commands(screen)
         for title, help_text, callback in [
+            ("Save model profile", "Name the current connection", self.action_save_profile),
+            ("Model profiles", "Choose a saved model connection", self.action_model_profiles),
+            ('Find', 'Search in document', self.action_find),
+            ('Replace', 'Replace all literal occurrences', self.action_replace),
+            ('Go to line', 'Jump to a line', self.action_goto),
+            ('File picker', 'Browse project files', self.action_file_picker),
+            ('Indentation', 'Spaces or tabs', self.action_indent_settings),
+            ('Blocks', 'Inspect retry or cancel individual blocks', self.action_blocks),
+            ('Source freshness', 'Check changed source files', self.action_source_status),
+            ('Refresh sources', 'Reload source snapshots explicitly', self.action_refresh_sources),
+            ('Check syntax', 'Validate without executing code', self.action_validate),
+            ('Edit proposal', 'Adjust generated text before accepting', self.action_edit_proposal),
+            ('Test model connection', 'Test selected model and show active route', self.action_model_status),
+            ('Writing effect', 'Toggle live ink animation', self.action_writing_effect),
+            ('Remember AI history', 'Opt in or out of persistent prompts and context', self.action_remember_history),
+            ('Clear AI history', 'Delete saved prompts and responses', self.action_forget_history),
+
             ("Workspace menu", "Files, sources and live controls", self.action_workspace_menu),
             ("Files and buffers", "Open, save and switch documents", self.file_menu),
             ("Auto replace", "Toggle automatic completed live-block replacement", self.toggle_auto),
@@ -790,6 +834,9 @@ class TerminalWorkspace(App):
             ("ai", "AI actions…  [F2]"),
             ("sources", "Sources  [F3]"),
             ("history", "History  [Alt+3]"),
+            ("blocks", "Blocks · retry / cancel…"),
+            ("find", "Find / search…  [Ctrl+F]"),
+            ("validate", "Check syntax…"),
             (
                 "live",
                 "Live blocks: "
@@ -813,6 +860,9 @@ class TerminalWorkspace(App):
                 "ai": self.action_context_menu,
                 "sources": self.action_sources,
                 "history": self.action_history,
+                "blocks": self.action_blocks,
+                "find": self.action_find,
+                "validate": self.action_validate,
                 "live": self.action_toggle_live,
                 "auto": self.toggle_auto,
                 "connect": self.action_connect_model,
@@ -834,6 +884,7 @@ class TerminalWorkspace(App):
         choices = [
             ("new", "New  [Ctrl+N]"),
             ("ai", "New with AI"),
+            ("browse", "Browse files…"),
             ("open", "Open…  [Ctrl+O]"),
             ("save", "Save  [Ctrl+S]"),
             ("saveas", "Save as…"),
@@ -846,6 +897,8 @@ class TerminalWorkspace(App):
                 self.run_worker(self.action_new())
             elif value == "ai":
                 self.run_worker(self.action_new_ai())
+            elif value == "browse":
+                self.action_file_picker()
             elif value == "open":
                 self.action_open()
             elif value == "save":
@@ -1060,12 +1113,12 @@ class TerminalWorkspace(App):
             return None
         context = self.context_for(doc, start, end)
         if (
-            len(doc.content.encode()) > 50 * 1024
+            len(doc.content[start:end].encode()) > 50 * 1024
             or len(context.encode()) > 50 * 1024
             or len(instruction.encode()) > 8 * 1024
         ):
             self.say(
-                "AI limit: 50 KiB document/context, 8 KiB instruction. Reduce the selection sources or document."
+                "AI limit: 50 KiB selection/context, 8 KiB instruction. Reduce the selection or checked sources."
             )
             return None
         return Request(
@@ -1143,6 +1196,10 @@ class TerminalWorkspace(App):
         )
         request.state = "Generating"
         self.active = request
+        if request.live and self.writing_effect:
+            area = self.areas[request.document_id]
+            area.ink_request, area.ink_text = request, "Composing…"
+            area.refresh()
         self.records.insert(0, request)
         self.records = self.records[:50]
         self.raw_preview = ""
@@ -1201,6 +1258,11 @@ class TerminalWorkspace(App):
     def drain_ai(self):
         if self._workspace_closing:
             return
+        for area in self.areas.values():
+            if area.ink_request: area.refresh()
+        if self.proposal and self.proposal.live and self.proposal.auto and self._ink_ready_at and time.monotonic() >= self._ink_ready_at:
+            self._ink_ready_at = 0
+            if self.query_one("#live", Checkbox).value and self.query_one("#auto", Checkbox).value: self.action_accept()
         for _ in range(128):
             try:
                 request_id, kind, value = self.mailbox.get_nowait()
@@ -1217,6 +1279,10 @@ class TerminalWorkspace(App):
                     else self.raw_preview
                 )
                 self.query_one("#result", TextArea).load_text(preview)
+                area = self.areas.get(request.document_id)
+                if area and request.live and self.writing_effect and not request.invalid:
+                    area.ink_request, area.ink_text = request, preview
+                    area.refresh()
                 continue
             self._sync_document(self.areas[request.document_id])
             self.active = None
@@ -1251,7 +1317,9 @@ class TerminalWorkspace(App):
                             and self.query_one("#live", Checkbox).value
                             and self.query_one("#auto", Checkbox).value
                         ):
-                            self.action_accept()
+                            if self.writing_effect:
+                                self._ink_ready_at = time.monotonic() + 0.22
+                            else: self.action_accept()
                 except AIError as exc:
                     request.state = "Failed"
                     request.result = str(exc)
@@ -1267,6 +1335,8 @@ class TerminalWorkspace(App):
 
     def clear_proposal(self):
         self.proposal = None
+        self._ink_ready_at = 0
+        for area in self.areas.values(): area.ink_request = None; area.refresh()
         self.query_one("#accept", Button).disabled = True
         self.query_one("#reject", Button).disabled = True
 
@@ -1309,6 +1379,7 @@ class TerminalWorkspace(App):
 
     def cancel_ai(self):
         self.pending.clear()
+        for area in self.areas.values(): area.ink_request = None; area.refresh()
         if self.active:
             self.active.cancel.set()
             self.active.state = "Cancelled"
@@ -1404,7 +1475,9 @@ class TerminalWorkspace(App):
         if not value:
             return
         command, _, argument = value.lstrip(":").strip().partition(" ")
-        if command in ("w", "w!", "saveas"):
+        if command.isdigit():
+            self.goto_line(command)
+        elif command in ("w", "w!", "saveas"):
             if argument:
                 self.save_document(self.document, argument, force=command == "w!")
             elif self.document.identity:
@@ -1481,12 +1554,14 @@ class TerminalWorkspace(App):
             )
 
     def finish_exit(self):
+        self.snapshot_session()
         self._workspace_closing = True
         if self.active:
             self.active.cancel.set()
         self.exit()
 
     def on_unmount(self):
+        self.snapshot_session()
         self._workspace_closing = True
         if self.active:
             self.active.cancel.set()

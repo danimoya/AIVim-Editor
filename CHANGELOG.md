@@ -85,3 +85,11 @@ See GitHub releases for earlier versions.
 [0.5.3]: https://github.com/danimoya/AIVim-Editor/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/danimoya/AIVim-Editor/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/danimoya/AIVim-Editor/releases/tag/v0.5.1
+
+## 1.0.0 — 2026-11-07
+
+- Private atomic workspace recovery for unsaved buffers, cursor positions, sources and preferences; history persistence is opt-in. Live submission never resumes automatically.
+- Find/replace, Vim search, go-to-line, file picker, indentation controls and editable proposals.
+- Individual block retry/cancel, inline streaming ink with reduced-motion toggle, source freshness and explicit refresh.
+- Named model profiles, live connection diagnostics and selection-based context limits for large documents.
+- Non-executing Bash/Python/JSON syntax checks and reproducible live-model capture.

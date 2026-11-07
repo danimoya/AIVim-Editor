@@ -2,11 +2,11 @@
 
 # AIVim
 
-### 1.0 Alpha · a small terminal editor with AI on demand
+### 1.0 · write code in a rhythm
 
 Write what you want. Keep typing. Let the code catch up.
 
-[![Release](https://img.shields.io/badge/release-1.0%20Alpha%201-d6ac66)](https://github.com/danimoya/AIVim-Editor/releases/tag/v1.0.0-alpha.1)
+[![Release](https://img.shields.io/badge/release-1.0%20Stable-d6ac66)](https://github.com/danimoya/AIVim-Editor/releases/tag/v1.0.0)
 [![Qualification](https://github.com/danimoya/AIVim-Editor/actions/workflows/qualification.yml/badge.svg?branch=main)](https://github.com/danimoya/AIVim-Editor/actions/workflows/qualification.yml)
 [![Python](https://img.shields.io/badge/Python-3.9%2B-84dca0)](pyproject.toml)
 [![License](https://img.shields.io/badge/license-GPL--3.0--only-84dca0)](LICENSE)
@@ -19,12 +19,12 @@ appear when you ask for them.
 
 ## See live blocks become Bash
 
-[![Three natural-language Bash instructions replaced live in AIVim](docs/assets/live-bash.gif)](docs/assets/live-bash.gif)
+[![Three natural-language Bash instructions replaced live in AIVim](docs/assets/live-bash-1.0.gif)](docs/assets/live-bash-1.0.gif)
 
 This recording uses a real local model. Three instructions become Bash while the
 editor stays responsive. Idle inference pauses are shortened; typing and live
 replacements are real. Generated commands are syntax-checked and **never executed**.
-[Recording provenance](docs/assets/live-bash-demo.json) · [Reproduce the demo](#record-your-own-demo)
+[Recording provenance](docs/assets/live-bash-1.0-demo.json) · [Reproduce the demo](#record-your-own-demo)
 
 <details>
 <summary><strong>Workspace carousel — editor, floating AI, menus and HTTPS setup</strong></summary>
@@ -50,7 +50,7 @@ so it works directly in GitHub without JavaScript.
 Python **3.9+**, Git, and a terminal with Unicode support are required.
 
 ```sh
-git clone --branch v1.0.0-alpha.1 https://github.com/danimoya/AIVim-Editor.git
+git clone --branch v1.0.0 https://github.com/danimoya/AIVim-Editor.git
 cd AIVim-Editor
 python -m venv .venv
 source .venv/bin/activate                 # Windows: .venv\Scripts\Activate.ps1
@@ -58,10 +58,10 @@ python -m pip install '.[terminal-syntax]'
 aivim demo.sh
 ```
 
-Or install the alpha in an isolated command-line environment:
+Install the stable release from PyPI:
 
 ```sh
-pipx install 'aivim[terminal-syntax] @ git+https://github.com/danimoya/AIVim-Editor.git@v1.0.0-alpha.1'
+pipx install 'aivim[terminal-syntax]==1.0.0'
 ```
 
 The base package works without native syntax parsers; `terminal-syntax` adds
@@ -126,8 +126,9 @@ read. Context preview shows those snapshots and optional nearby document text.
 Unchecked sources are excluded.
 
 **History** keeps the session's prompts, target/context snapshots, results and
-acceptance decisions. Sources and history are held in memory and clear on exit;
-save the documents you want to keep.
+acceptance decisions. Buffers, cursors, source snapshots and interface preferences recover locally.
+Live mode stays off after restoration. AI history is persisted only when you enable
+**Remember AI history** in Ctrl+P; **Clear AI history** deletes the saved history.
 
 ## Bring your own model
 
@@ -172,12 +173,17 @@ counts, line copy/delete, paste and undo. `:w`, `:wq`, `:q`, `:e`, `:new` and ta
 navigation are available. F2 is the fallback when your terminal reserves right-click;
 Shift+mouse typically uses the terminal's native copy/selection behavior.
 
-## What 1.0 Alpha means
+## What 1.0 includes
 
-This is **1.0 Alpha 1**, packaged as `1.0.0a1` and tagged `v1.0.0-alpha.1`. It is a
-prerelease of the new interface, with useful Vim vocabulary rather than complete
-Vim runtime/plugin compatibility. Persistent workspaces/history, language-server
-features, PDF/URL ingestion and per-hunk acceptance are outside this alpha.
+This is **1.0 stable**, with useful Vim vocabulary rather than complete Vim
+runtime/plugin compatibility. Find/replace, `/` search, `n`/`N`, go-to-line, a floating
+file picker, indentation settings, model profiles and local recovery support daily use.
+Ctrl+P exposes block retry/cancel, source freshness/refresh, syntax checking, proposal
+editing, connection diagnostics and an optional writing effect. Large files can use AI
+on selections within the 50 KiB selection/context budget.
+
+Language servers, project-wide changes and persistent instruction blocks are planned
+for 2.0. PDF/URL ingestion is outside this release.
 
 Saving uses transactional writes, preserves loaded encoding/newline conventions,
 permissions and symlinks, and checks for external changes. AI output is validated

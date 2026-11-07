@@ -264,3 +264,24 @@ live queues, cancellation, external-file conflicts, dirty exit and compact layou
 POSIX PTY tests separately run both the classic and new CLI entrypoints, checking
 mouse reporting, menus, resizing, save and exit. Live-account entitlements and
 provider generation quality are not established by the stub tests.
+
+## Stable daily workflow
+
+Ctrl+F (or `/` in Vim mode) finds literal text; `n`/`N` repeat the search.
+Ctrl+H replaces all literal matches as one undo step. Ctrl+G or `:42` goes to a line.
+The command palette offers a floating File picker and Indentation controls.
+
+Every two seconds the workspace writes a private atomic recovery snapshot. On the
+next ordinary `aivim` launch, buffers, cursor positions, source choices and view
+preferences restore. Separate editor instances write separate snapshots. Live and
+Auto replace start off; model requests never resume themselves. Save documents
+explicitly as usual. AI history persistence is opt-in in Ctrl+P; Clear AI history
+also clears history in previous snapshots for this configuration.
+
+Ctrl+P exposes model profiles and Test model connection (including the selected
+LAN/Tailscale route), individual Blocks retry/cancel, Source freshness, explicit
+Refresh sources, Edit proposal and Check syntax. Syntax checks do not execute code.
+Writing effect paints streamed previews over the original instruction and can be
+disabled with Ctrl+P. The underlying document changes only after a complete proposal
+is accepted. AI accepts selections up to 50 KiB in otherwise larger documents;
+checked sources plus nearby context have a separate 50 KiB budget.

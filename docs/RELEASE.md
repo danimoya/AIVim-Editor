@@ -69,3 +69,23 @@ shared services. Avoid rewriting user files during rollback.
 Local GGUF inference remains unavailable on macOS when the required hard worker
 memory limit cannot be enforced. Linux/Windows workers must establish their OS
 resource limits. Terminal editing and remote model providers remain available.
+
+## Stable 1.0 gate and order
+
+Recovery and private snapshots → search/editing essentials → individual live-block
+controls and inline ink → actual selection/context budgets → model profiles and
+diagnostics → real local-model capture → package and cross-platform qualification.
+
+The 1.0 gate includes forced-process-exit recovery, 100 sequential SDK-streamed
+replacements with undo/redo, disconnected-provider preservation, stale selection
+protection, real terminal dispatch, and installed-wheel checks. Desktop terminal,
+SSH and tmux behavior should also be checked manually where available.
+
+## 2.0 delivery sequence
+
+1. Explicit project folder and file/symbol context search with a send preview.
+2. Reviewed multi-file change sets, per-file/per-hunk acceptance, checkpoints and rollback.
+3. Persistent instruction blocks with regeneration and manual-edit conflict detection.
+4. Opt-in language-server diagnostics, completion, definitions and rename.
+5. Explicit command/test execution, captured output as context, and reviewed fixes.
+6. Evaluate Neovim RPC embedding separately before promising full Vim compatibility.

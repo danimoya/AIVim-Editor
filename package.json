@@ -1,6 +1,6 @@
 {
   "name": "aivim-editor",
-  "version": "1.0.0-alpha.1",
+  "version": "1.0.0",
   "description": "Local AIVim workspace frontend",
   "directories": {
     "doc": "docs",

@@ -84,7 +84,7 @@ def main():
         settings = Settings(args.config)
         if args.model:
             settings.ai.default_model = args.model
-        TerminalWorkspace(args.filename, settings=settings, connect_on_start=args.connect).run()
+        TerminalWorkspace(args.filename, settings=settings, connect_on_start=args.connect, restore_session=True).run()
         return
     print(f"Starting AIVim with file: {args.filename}")
     if args.model:

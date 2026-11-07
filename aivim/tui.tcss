@@ -74,3 +74,6 @@ Tooltip { background: #cbb57d; color: #0c1411; padding: 0 1; }
 #workbench.pinned #ai-panel { layer: base; }
 /* Losing focus to an overlay must not add an editor frame or consume another row. */
 EditorArea { border: none; }
+#file-picker, #proposal-editor { width: 85%; height: 85%; align: center middle; border: round #658d68; background: #111e18; padding: 1; }
+#file-tree, #proposal-text { height: 1fr; }
+FilePicker, EditProposal { align: center middle; background: #000000 35%; }
