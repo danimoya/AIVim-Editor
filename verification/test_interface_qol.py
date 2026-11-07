@@ -153,7 +153,9 @@ def test_startup_ascii_effect_and_skip_keeps_first_key(settings):
     async def journey():
         app=TerminalWorkspace(settings=settings,show_startup=True)
         async with app.run_test(size=(80,24)) as pilot:
-            await settle(pilot,lambda:isinstance(app.screen,MatrixLoading))
+            await settle(pilot,lambda:isinstance(app.screen,MatrixLoading)
+                         and bool(app.screen.query('#startup-matrix'))
+                         and bool(app.screen.query_one('#startup-matrix').render()))
             assert app.screen.query_one('#startup-matrix').render()
             await pilot.press('i');await pilot.pause()
             assert not isinstance(app.screen,MatrixLoading) and app.editor.mode=='INSERT'
