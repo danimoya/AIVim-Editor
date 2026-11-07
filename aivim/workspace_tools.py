@@ -258,3 +258,13 @@ class WorkspaceTools:
             self.query_one('#provider').value = self.settings.ai.default_model
             self.update_context(); self.say('Model profile selected: ' + name)
         self.push_screen(ChoiceDialog('MODEL PROFILES', [(n,n) for n in profiles]), chosen)
+
+    def action_edit_tools_menu(self):
+        choices=[('find','Find / search  [Ctrl+F]'),('replace','Replace  [Ctrl+H]'),
+                 ('goto','Go to line  [Ctrl+G]'),('indent','Indentation…'),
+                 ('blocks','Live blocks · retry / stop…'),('intents','Instruction blocks…'),
+                 ('syntax','Check syntax'),('proposal','Edit proposal…')]
+        actions={'find':self.action_find,'replace':self.action_replace,'goto':self.action_goto,
+                 'indent':self.action_indent_settings,'blocks':self.action_blocks,
+                 'intents':self.action_intent_blocks,'syntax':self.action_validate,'proposal':self.action_edit_proposal}
+        self.push_screen(ChoiceDialog('EDITING & BLOCKS',choices),lambda key:actions[key]() if key in actions else None)

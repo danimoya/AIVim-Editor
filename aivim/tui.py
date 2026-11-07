@@ -885,10 +885,7 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
             ("sources", "Sources  [F3]"),
             ("history", "History  [Alt+3]"),
             ("project", "Project tools…"),
-            ("blocks", "Blocks · retry / cancel…"),
-            ("intents", "Instruction blocks…"),
-            ("find", "Find / search…  [Ctrl+F]"),
-            ("validate", "Check syntax…"),
+            ("tools", "Editing & blocks…"),
             (
                 "live",
                 "Live blocks: "
@@ -913,6 +910,7 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
                 "sources": self.action_sources,
                 "history": self.action_history,
                 "project": self.action_project_menu,
+                "tools": self.action_edit_tools_menu,
                 "intents": self.action_intent_blocks,
                 "blocks": self.action_blocks,
                 "find": self.action_find,

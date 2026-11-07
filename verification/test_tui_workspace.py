@@ -404,6 +404,8 @@ def test_minimal_editor_floating_panel_and_file_menu(settings):
             await pilot.pause()
             assert isinstance(app.screen, ChoiceDialog)
             await settle(pilot, lambda: bool(app.screen.query("#choice-files")) and app.screen.query_one("#choice-files").region.width > 0)
+            dialog = app.screen.query_one("#dialog")
+            assert dialog.virtual_size.height <= dialog.content_size.height
             assert await pilot.click("#choice-files")
             await settle(pilot, lambda: bool(app.screen.query("#choice-new")) and app.screen.query_one("#choice-new").region.width > 0)
             assert isinstance(app.screen, ChoiceDialog)
