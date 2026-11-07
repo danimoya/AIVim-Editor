@@ -139,12 +139,14 @@ def test_project_cli_resolves_relative_filename_inside_root(settings,tmp_path,mo
     assert captured['filename']==str(tmp_path/'sample.py') and captured['ran']
 
 
-def test_live_ink_keeps_partial_text_out_of_document_and_undo(settings):
+@pytest.mark.parametrize('effect', ['typing','matrix','instant'])
+def test_live_ink_keeps_partial_text_out_of_document_and_undo(settings,effect):
     from textual.widgets import Checkbox
     async def journey(stub):
         code='# '+('gentle words '*30)+'\nprint("hello")'
         stub.text=json.dumps({'code':code,'explanation':'Generated'});stub.chunk_delay=.005
         app=TerminalWorkspace(settings=settings,service=service(settings,stub))
+        app.streaming_effect=effect;app.writing_effect=effect!="instant"
         async with app.run_test() as pilot:
             await pilot.press('f4')
             app.query_one('#live',Checkbox).value=True
@@ -159,7 +161,7 @@ def test_live_ink_keeps_partial_text_out_of_document_and_undo(settings):
                 if app.records and app.records[0].state=='Accepted':break
                 assert 'Print hello gently' in app.editor.text
                 saw_ink |= bool(app.editor.ink_painted and app.editor.ink_painted!=app.editor.ink_text)
-            assert app.records[0].state=='Accepted' and saw_ink
+            assert app.records[0].state=='Accepted' and saw_ink==(effect!='instant')
             assert 'print("hello")' in app.editor.text
             app.editor.undo();await pilot.pause()
             assert 'Print hello gently' in app.editor.text

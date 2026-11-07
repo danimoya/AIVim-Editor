@@ -47,6 +47,7 @@ class Request:
     context: str
     provider: str
     model: str
+    language: str = "plain text"
     live: bool = False
     auto: bool = False
     invalid: bool = False

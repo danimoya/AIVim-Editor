@@ -16,6 +16,7 @@ async def capture(settings,root,frames_dir):
     (root/'README.md').write_text('# Greeting\n\nCall greet with a name.\n')
     app=TerminalWorkspace(filename=str(path),settings=settings,project=root)
     app.session_store.path=frames_dir/"capture-session.json"
+    app.user_preferences.store.path=frames_dir/"capture-preferences.json"
     app.title='AIVim 2.0 · one thought, several files'
     frames=[];previous=None
     def snap(duration=120):
@@ -30,7 +31,7 @@ async def capture(settings,root,frames_dir):
         instruction='Update both greet.py and README.md: greet defaults to World, has a short docstring, and the README shows greet() and greet("Ada") examples.'
         for start in range(0,len(instruction),4):
             await pilot.press(*instruction[start:start+4]);snap(60)
-        snap(450);await pilot.press('enter')
+        snap(450);await pilot.click('#project-prompt-submit')
         deadline=time.monotonic()+settings.ai.timeout+10
         while time.monotonic()<deadline:
             await pilot.pause(.05);snap(90)

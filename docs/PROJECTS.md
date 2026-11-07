@@ -1,4 +1,4 @@
-# AIVim 2.0 project workflows
+# AIVim 2.1 project workflows
 
 Run `aivim --project ./project` or use **Open project** in Ctrl+P. Relative filename
 arguments are interpreted inside the selected project. Project tools also appear
@@ -22,7 +22,18 @@ so it can propose complete replacement files with coherent diffs.
 
 ## Review a change set
 
-Choose **Generate project change**, describe the task and wait for a proposal.
+Choose **Generate project change**. The wider prompt shows five text lines and
+scrolls vertically for longer instructions. Enter inserts a line; Ctrl+Enter or the
+Generate button submits. Type `@` to complete open or recent files with arrows,
+Tab/Enter or a mouse click. Filenames with spaces are quoted automatically.
+
+Mentioned saved files inside the project are included as editable snapshots.
+Unsaved buffers and files outside the project are read-only references; save an
+unsaved target before requesting edits to that existing file. Unmentioned open or
+recent files are not sent. Missing or oversized references fail visibly. Recent
+paths and interface preferences stay in private local state.
+
+Describe the task and wait for a proposal.
 Existing files must have been included in checked context; new files must stay
 inside the project. Up to 20 files and 1 MiB of output are supported. No files are
 changed by receiving a proposal.
@@ -61,7 +72,7 @@ pipx install 'python-lsp-server[pyflakes]'
 Or include the optional dependency group when installing AIVim:
 
 ```sh
-pip install 'aivim[terminal-syntax,python-lsp]==2.0.0'
+pip install 'aivim[terminal-syntax,python-lsp]==2.1.0'
 ```
 
 Open a project and a saved file. Choose **Start language server**, then enter `pylsp`.

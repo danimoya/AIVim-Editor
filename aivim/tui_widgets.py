@@ -100,8 +100,13 @@ class EditorArea(TextArea):
                 text = lines[index] if index < len(lines) else ""
                 # A soft moving pen at the original block; hide under normal edits.
                 pen = " ▍" if index == min(len(lines)-1, end_row-start_row) and int(time.monotonic()*4)%2 else ""
+                if getattr(self.app, "streaming_effect", "typing") == "matrix" and text and index == min(len(lines)-1, end_row-start_row):
+                    import random
+                    generator = random.Random(int(time.monotonic()*12) + row)
+                    text = text[:-min(5,len(text))] + "".join(generator.choice("01:+*") for _ in range(min(5,len(text))))
                 value = ("  " + text + pen)[self.scroll_offset.x:]
-                return Strip([Segment(value, Style(color="#b0edba", bgcolor="#14271c"))]).adjust_cell_length(self.size.width, Style(bgcolor="#14271c"))
+                color = "#76ff9d" if getattr(self.app, "streaming_effect", "typing") == "matrix" else "#b0edba"
+                return Strip([Segment(value, Style(color=color, bgcolor="#14271c"))]).adjust_cell_length(self.size.width, Style(bgcolor="#14271c"))
         return super().render_line(y)
 
     def edit(self, edit):

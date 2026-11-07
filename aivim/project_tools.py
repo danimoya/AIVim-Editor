@@ -7,6 +7,7 @@ from textual.widgets import SelectionList
 from .project import Project, ChangeSet, digest
 from .project_widgets import ContextPicker, ChangeReview
 from .tui_widgets import ChoiceDialog, PromptDialog, TextDialog
+from .interface_widgets import ProjectPrompt, ProjectInstruction
 
 
 class ProjectTools:
@@ -50,6 +51,9 @@ class ProjectTools:
         if self.active or self.proposal or self.project_busy:self.say('Finish the current AI proposal first.');return
         def asked(instruction):
             if not instruction:return
+            references = instruction.references if isinstance(instruction, ProjectInstruction) else []
+            instruction = instruction.text if isinstance(instruction, ProjectInstruction) else instruction
+            if not instruction.strip(): return
             project=self.project;selected=set(self.query_one('#source-list',SelectionList).selected)
             names=[]
             for s in self.sources:
@@ -57,9 +61,37 @@ class ProjectTools:
                     try:name=str(Path(s.path).resolve().relative_to(project.root))
                     except ValueError:continue
                     if name not in names:names.append(name)
+            readonly_references=[]
+            for ref in references:
+                doc=self.documents.get(ref.document_id)
+                if doc:
+                    self._sync_document(self.areas[doc.id])
+                if ref.path and (not doc or not doc.dirty):
+                    try:
+                        name=str(Path(ref.path).resolve().relative_to(project.root))
+                        project.path(name)
+                    except ValueError:
+                        name=None
+                    if name is not None:
+                        if name not in names:names.append(name)
+                        continue
+                if doc:
+                    text=doc.content
+                    if ref.path:
+                        try: names.remove(str(Path(ref.path).resolve().relative_to(project.root)))
+                        except ValueError: pass
+                else:
+                    try:
+                        path=Path(ref.path)
+                        if not path.is_file() or path.stat().st_size>50*1024:raise ValueError('Mentioned file is missing or exceeds 50 KiB.')
+                        loaded=self.store.load(path)
+                        if not loaded:raise ValueError(loaded.message)
+                        text=loaded.content
+                    except (OSError,ValueError) as exc:self.say(str(exc));return
+                readonly_references.append({'name':ref.label,'content':text,'read_only':True,'unsaved':bool(doc and doc.dirty)})
             try:snapshots=project.snapshots(names)
             except (ValueError,OSError) as exc:self.say(str(exc));return
-            context=json.dumps({'files':[{'path':n,'content':v.content} for n,v in snapshots.items()],
+            context=json.dumps({'references':readonly_references,'files':[{'path':n,'content':v.content} for n,v in snapshots.items()],
                                 'notes':[{'name':s.name,'content':s.content} for s in self.sources if s.id in selected and not s.path]})
             if len(context.encode())>50*1024:self.say('Project context exceeds 50 KiB. Choose fewer/smaller files.');return
             provider=self.query_one('#provider').value
@@ -73,7 +105,7 @@ class ProjectTools:
                 except Exception as exc:self._project_deliver(self.say,'Project proposal failed; files unchanged: '+str(exc))
                 finally:self.project_busy=False
             threading.Thread(target=worker,daemon=True).start();self.say('Preparing project proposal… files stay unchanged until review.')
-        self.push_screen(PromptDialog('Describe the project change'),asked)
+        self.push_screen(ProjectPrompt(self.mention_candidates()),asked)
 
     def review_project(self, plan):
         def chosen(selected):

@@ -13,3 +13,7 @@ Project demo: `python scripts/record_project_demo.py` records a real local-model
 multi-file proposal, review and explicit acceptance. Install the `demo` extra first.
 `python scripts/probe_neovim.py` evaluates an isolated Neovim child with the optional
 `neovim-probe` extra and a separately installed Neovim executable.
+
+`python scripts/record_interface_demo.py` records the 2.1 prompt, file mentions,
+mode rotation, settings, Matrix startup and a real model response in full-screen.
+Capture scripts isolate recovery snapshots and recent-file preferences.

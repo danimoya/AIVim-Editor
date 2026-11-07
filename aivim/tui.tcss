@@ -81,3 +81,28 @@ FilePicker, EditProposal { align: center middle; background: #000000 35%; }
 ContextPicker, ChangeReview { align: center middle; background: #000000 35%; }
 #context-candidates, #change-hunks { height: 30%; min-height: 5; }
 #candidate-preview, #change-preview { height: 1fr; }
+/* One header row: clickable buffers, rotating live mode and AI activity. */
+#buffer-tabs { width: 1fr; min-width: 12; height: 1; overflow-x: auto; overflow-y: hidden; scrollbar-size-horizontal: 0; }
+#title-bar .buffer-tab { width: auto; max-width: 32; min-width: 5; height: 1; margin: 0 1 0 0; padding: 0 1; background: #15241b; color: #91aa94; }
+#title-bar .buffer-tab.active-buffer { background: #355640; color: #e0d19c; text-style: bold; }
+#masthead { width: auto; min-width: 8; max-width: 30%; padding: 0 1; }
+#title-bar #live-mode { width: 15; color: #91aa94; }
+#title-bar #live-mode.live-on { color: #b0edba; background: #254331; }
+#title-bar #live-mode.auto-on { color: #f2d18d; background: #493f25; }
+#ai-activity { width: 3; height: 1; color: #91edab; content-align: center middle; }
+#workbench.fullscreen-ai #ai-panel { width: 100%; max-width: 100%; overlay: screen; position: absolute; layer: ai; padding: 0 1; }
+#workbench.fullscreen-ai #ai-action, #workbench.fullscreen-ai #instruction, #workbench.fullscreen-ai #ai-details, #workbench.fullscreen-ai #submit { display: none; }
+#workbench.fullscreen-ai #result { height: 1fr; margin: 0; }
+#project-prompt-dialog { width: 90%; max-width: 110; height: auto; max-height: 95%; padding: 1 2; border: round #91a16b; background: #15241b; }
+#project-prompt-title { height: 1; margin-bottom: 1; color: #dbc68a; text-style: bold; }
+#project-instruction { height: 7; min-height: 7; width: 1fr; border: solid #706a42; overflow-y: auto; }
+#file-completions { height: auto; max-height: 6; border: none; background: #203c2a; }
+#project-prompt-hint { height: auto; margin: 1 0; color: #99b199; }
+#settings-dialog { width: 76; max-width: 95%; height: 90%; border: round #91a16b; background: #15241b; padding: 1 2; }
+#settings-dialog Label { height: auto; margin-top: 0; color: #dbc68a; }
+#settings-dialog Checkbox { height: 1; min-height: 1; padding: 0; border: none; }
+#settings-dialog Select { height: 3; }
+#settings-preview { height: 1; min-height: 1; border: none; width: 1fr; }
+#settings-dialog .button-row { margin-top: 1; }
+MatrixLoading { background: #0c1411; }
+#startup-matrix { width: 100%; height: 100%; background: #0c1411; }

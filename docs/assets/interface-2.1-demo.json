@@ -1,0 +1,15 @@
+{
+  "release": "2.1.0",
+  "provider": "olares",
+  "model": "bonsai-2-27b",
+  "commands_executed": false,
+  "idle_inference_waits_shortened": true,
+  "captures": [
+    "live-mode rotation",
+    "open/recent file mentions",
+    "five-line prompt",
+    "settings",
+    "matrix startup",
+    "full-screen real response"
+  ]
+}

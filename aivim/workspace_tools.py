@@ -28,6 +28,7 @@ class WorkspaceTools:
                 'identity': asdict(d.identity) if d.identity else None,
                 'cursor': self.areas[d.id].cursor_location, 'intents': d.intents} for d in self.documents.values()],
             'active': list(self.documents).index(self.current_id),
+            'recent_files': self.recent_files,
             'sources': [{'name': s.name, 'content': s.content, 'path': s.path,
                          'checked': s.id in selected, 'digest': s.digest, 'chunk': s.chunk} for s in self.sources],
             'preferences': {'vim': self.vim_enabled, 'numbers': self.line_numbers,
@@ -76,6 +77,7 @@ class WorkspaceTools:
 
     def action_forget_history(self):
         self.records.clear(); self.remember_history = False
+        self.user_preferences.update({"history": False})
         # Remove persisted history from older snapshots of this configuration too.
         for path in self.session_store.path.parent.glob(self.session_store.key + '*.json'):
             data = self.session_store._load(path)
@@ -88,7 +90,9 @@ class WorkspaceTools:
         self.render_history(); self.snapshot_session(); self.say('AI history cleared; history persistence disabled.')
 
     def action_remember_history(self):
-        self.remember_history = not self.remember_history; self.snapshot_session()
+        self.remember_history = not self.remember_history
+        self.user_preferences.update({"history": self.remember_history})
+        self.snapshot_session()
         self.say('Remember AI history: ' + str(self.remember_history))
 
     def action_find(self):
@@ -223,7 +227,12 @@ class WorkspaceTools:
         threading.Thread(target=check, daemon=True).start(); self.say('Testing model connection… editor remains available.')
 
     def action_writing_effect(self):
-        self.writing_effect = not self.writing_effect; self.snapshot_session()
+        if self.reduce_motion:
+            self.say("Disable Reduce motion in Settings to enable writing effects."); return
+        self.writing_effect = not self.writing_effect
+        self.streaming_effect = "typing" if self.writing_effect else "instant"
+        self.user_preferences.update({"streaming_effect": self.streaming_effect})
+        self.snapshot_session()
         self.say('Writing effect ' + ('on' if self.writing_effect else 'off'))
 
     def _profiles_store(self):

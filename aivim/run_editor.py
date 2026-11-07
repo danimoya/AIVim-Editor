@@ -89,7 +89,7 @@ def main():
         filename = args.filename
         if args.project and filename and not Path(filename).is_absolute():
             filename = str(Path(args.project).expanduser() / filename)
-        TerminalWorkspace(filename, settings=settings, connect_on_start=args.connect, restore_session=True, project=args.project, provider_override=args.model).run()
+        TerminalWorkspace(filename, settings=settings, connect_on_start=args.connect, restore_session=True, project=args.project, provider_override=args.model, show_startup=True).run()
         return
     print(f"Starting AIVim with file: {args.filename}")
     if args.model:

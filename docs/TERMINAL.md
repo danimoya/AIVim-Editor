@@ -286,3 +286,28 @@ Writing effect paints streamed previews over the original instruction and can be
 disabled with Ctrl+P. The underlying document changes only after a complete proposal
 is accepted. AI accepts selections up to 50 KiB in otherwise larger documents;
 checked sources plus nearby context have a separate 50 KiB budget.
+
+
+## 2.1 interface and effects
+
+Filename buttons in the existing title row switch between open buffers. The rotating
+mode button cycles Edit, Live review and Live auto-replace; it does not add a row.
+Live submission always starts off after recovery. A small AI activity indicator
+covers both ordinary and project generation.
+
+Settings (Ctrl+P or Settings & view → Settings) persists input mode, line numbers,
+tabs/spaces and indentation width, optional history, AI activity style, startup
+style and live replacement style. Reduce motion disables startup/AI animation and
+uses instant complete replacement. Typing and Matrix previews remain decorative:
+partial output never enters the editable document or undo history. Keyboard input
+skips startup before normal routing so the initial keystrokes remain ordered.
+
+The AI panel's ⛶ button expands responses over the editing area. The title/status
+rows remain visible. Esc or Restore returns to the prior pinned/floating view;
+Collapse closes it. While full-screen output streams, scrolling away from the end
+preserves your reading position.
+
+Generation language defaults are inferred per request. Explicit output language
+wins; otherwise shebang, meaningful filename extension, content and other open
+project files provide context. The generated language is kept separate from optional
+syntax-parser availability. Placeholder untitled Python filenames do not force Python.

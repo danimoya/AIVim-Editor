@@ -11,7 +11,7 @@ import time
 from textual import on, events
 from textual.app import App, ComposeResult, SystemCommand
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical, VerticalScroll, Container
+from textual.containers import Horizontal, HorizontalScroll, Vertical, VerticalScroll, Container
 from textual.theme import Theme
 from textual.widgets import (
     Button,
@@ -38,6 +38,10 @@ from .proposals import parse_proposal
 from .settings import Settings
 from .session import SessionStore
 from .workspace_tools import WorkspaceTools
+from .interface_tools import InterfaceTools
+from .interface_preferences import InterfacePreferences
+from .interface_widgets import MatrixLoading, ModeButton
+from .languages import infer_language, highlight_language
 from .project_tools import ProjectTools
 from .language_tools import LanguageTools
 from .project import Project, digest
@@ -125,7 +129,7 @@ Ctrl+P also exposes Blocks, source freshness, model profiles and syntax checks.
 """
 
 
-class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
+class TerminalWorkspace(InterfaceTools, LanguageTools, ProjectTools, WorkspaceTools, App):
     TITLE = f"AIVim {__version__} // Terminal Workbench"
     CSS_PATH = "tui.tcss"
     ENABLE_COMMAND_PALETTE = True
@@ -133,6 +137,7 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
         Binding("ctrl+f", "find", "Find", priority=True),
         Binding("ctrl+h", "replace", "Replace", priority=True),
         Binding("ctrl+g", "goto", "Go to line", priority=True),
+        Binding("escape", "leave_ai_fullscreen", "Restore AI view", show=False, priority=True),
         Binding("f1", "help", "Help", priority=True),
         Binding("f2", "context_menu", "Actions", priority=True),
         Binding("f3", "sources", "Sources", priority=True),
@@ -156,9 +161,20 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
         Binding("alt+3", "history", "History", show=False, priority=True),
     ]
 
-    def __init__(self, filename=None, *, settings=None, service=None, connect_on_start=False, restore_session=False, project=None, provider_override=None):
+    def __init__(self, filename=None, *, settings=None, service=None, connect_on_start=False, restore_session=False, project=None, provider_override=None, show_startup=False):
         super().__init__()
         self.settings = settings or Settings()
+        self.user_preferences = InterfacePreferences(self.settings.config_path)
+        user_preferences = self.user_preferences.load()
+        self.recent_files = user_preferences.get("recent_files", [])[:50]
+        self.ai_animation = user_preferences.get("ai_animation", "spinner")
+        self.startup_effect = user_preferences.get("startup_effect", "matrix")
+        self.reduce_motion = user_preferences.get("reduce_motion", False)
+        self.show_startup = show_startup
+        self.ai_fullscreen = False
+        self._ai_before_fullscreen = None
+        self._buffer_buttons = {}
+        self._activity_value = ""
         self.project = Project(project) if project else None
         self.project_busy = False
         self.project_cancel = None
@@ -180,8 +196,9 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
         if provider_override: self.settings.ai.default_model = provider_override
         self.service = service or AIService(settings=self.settings)
         self.search_text = ""
-        self.writing_effect = preferences.get("motion", True)
-        self.remember_history = preferences.get("history", False)
+        self.streaming_effect = user_preferences.get("streaming_effect", "typing" if preferences.get("motion", True) else "instant")
+        self.writing_effect = self.streaming_effect != "instant" and not self.reduce_motion
+        self.remember_history = user_preferences.get("history", preferences.get("history", False))
         self._ink_ready_at = 0.0
         self.sidebar_pinned = False
         self.sidebar_visible = False
@@ -197,8 +214,10 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
         self.proposal = None
         self.mailbox = queue.Queue(maxsize=256)
         self.raw_preview = ""
-        self.vim_enabled = preferences.get("vim", True)
-        self.line_numbers = preferences.get("numbers", self.settings.editor.number)
+        self.vim_enabled = user_preferences.get("vim", preferences.get("vim", True))
+        self.line_numbers = user_preferences.get("numbers", preferences.get("numbers", self.settings.editor.number))
+        self.settings.editor.expandtab = not user_preferences.get("tabs", not self.settings.editor.expandtab)
+        self.settings.editor.tabstop = user_preferences.get("indent", self.settings.editor.tabstop)
         self._workspace_closing = False
         self.register_theme(
             Theme(
@@ -223,7 +242,10 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
             yield Button(
                 "≡", id="main-menu", tooltip="Files, sources, live options and view settings"
             )
+            yield HorizontalScroll(id="buffer-tabs")
             yield Static(" AIVim", id="masthead", markup=False)
+            yield ModeButton("EDIT", id="live-mode", tooltip="Click to rotate: Edit → Live review → Live auto-replace")
+            yield Static("", id="ai-activity", markup=False)
             yield Button("AI", id="ai-toggle", tooltip="Floating AI Workbench · Alt+A")
         with TabbedContent(initial="editor-tab", id="workspace-tabs"):
             with TabPane("01 EDITOR", id="editor-tab"):
@@ -283,6 +305,7 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
                         )
                     with VerticalScroll(id="ai-panel"):
                         with Horizontal(id="ai-panel-tools"):
+                            yield Button("⛶ Full screen", id="fullscreen-ai", tooltip="Full-screen AI response · Esc restores the previous view")
                             yield Button(
                                 "Pin", id="pin-ai", tooltip="Keep the sidebar open while editing"
                             )
@@ -308,7 +331,7 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
                             id="instruction",
                             soft_wrap=True,
                         )
-                        with Horizontal(classes="button-row"):
+                        with Horizontal(classes="button-row", id="ai-request-controls"):
                             yield Button(
                                 "Ask AI",
                                 id="submit",
@@ -328,7 +351,7 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
                             id="result",
                             show_cursor=False,
                         )
-                        with Horizontal(classes="button-row"):
+                        with Horizontal(classes="button-row", id="ai-review-controls"):
                             yield Button(
                                 "Accept [F8]", id="accept", variant="primary", disabled=True
                             )
@@ -389,7 +412,7 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
                     )
             with TabPane("03 HISTORY", id="history-tab"):
                 yield Static(
-                    " SESSION HISTORY // Prompts, context snapshots, proposals and decisions. Cleared on exit.",
+                    " HISTORY // Prompts, context snapshots and decisions · persistence follows Settings.",
                     classes="section-title",
                     markup=False,
                 )
@@ -402,6 +425,7 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
         yield Footer()
 
     async def on_mount(self):
+        self.query_one("#ai-activity").tooltip = "AI generation activity"
         recovered = await self.restore_workspace() if self.restore_session and not self.filename and not self.connect_on_start else False
         if recovered:
             pass
@@ -418,7 +442,9 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
         self.sidebar_pinned = bool((self.session_store.load() or {}).get("preferences", {}).get("pinned", False))
         self.sidebar_visible = self.sidebar_pinned
         self.update_sidebar()
-        if self.connect_on_start:
+        if self.show_startup and self.startup_effect == "matrix" and not self.reduce_motion:
+            self.call_after_refresh(lambda: self.push_screen(MatrixLoading(), lambda _: self.action_connect_model() if self.connect_on_start else None))
+        elif self.connect_on_start:
             self.call_after_refresh(self.action_connect_model)
 
     @property
@@ -451,16 +477,7 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
         name = name or f"untitled-{len(self.documents) + 1}.py"
         doc = Document(name, content, content if identity else "", identity)
         self.documents[doc.id] = doc
-        language = {
-            ".py": "python",
-            ".js": "javascript",
-            ".ts": "javascript",
-            ".md": "markdown",
-            ".json": "json",
-            ".sh": "bash",
-            ".css": "css",
-            ".html": "html",
-        }.get(Path(name).suffix)
+        language = highlight_language(infer_language(name, content, saved=bool(identity)), EditorArea().available_languages)
         area = EditorArea(
             content,
             language=language,
@@ -485,6 +502,7 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
     def switch_document(self, document_id):
         if document_id not in self.documents:
             return
+        if self.ai_fullscreen: self.action_leave_ai_fullscreen()
         self.current_id = document_id
         for key, area in self.areas.items():
             area.display = key == document_id
@@ -495,10 +513,13 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
         doc = self.document
         if self.query_one("#live", Checkbox).value and doc.live_from is None:
             doc.live_from = offset(doc.content, self.editor.cursor_location)
+        self.refresh_buffer_tabs()
+        self.call_after_refresh(self.scroll_active_tab)
         self.update_selection()
         self.editor.focus()
 
     def refresh_documents(self):
+        self.refresh_buffer_tabs()
         selector = self.query_one("#documents", Select)
         options = [(("* " if d.dirty else "") + d.name, d.id) for d in self.documents.values()]
         if getattr(self, "_document_options", None) != options:
@@ -528,10 +549,12 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
         for doc in self.documents.values():
             if doc.identity and doc.identity.target == result.identity.target:
                 self.switch_document(doc.id)
+                self.remember_file(result.identity.target)
                 self.say("File is already open; switched to its buffer.")
                 return True
         doc = await self.new_document(path.name, result.content, result.identity)
         if doc:
+            self.remember_file(result.identity.target)
             self.say("Opened " + path.name + ". Nothing sent to AI.")
         return bool(doc)
 
@@ -605,16 +628,15 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
             return
         row, col = self.editor.cursor_location
         mode = self.editor.mode if self.editor.vim_enabled else "TYPE"
-        flags = " · LIVE" if self.query_one("#live", Checkbox).value else ""
-        if self.query_one("#auto", Checkbox).value:
-            flags += "/AUTO"
+        self.update_live_button()
+        flags = ""
         if self.active:
             flags += " · AI…"
         elif self.proposal:
             flags += " · review F8"
         dirty = " *" if self.document.dirty else ""
         self.query_one("#masthead", Static).update(
-            f" AIVim · {self.document.name}{dirty}   {mode} {row+1}:{col+1}{flags}"
+            f" {mode} {row+1}:{col+1}{flags}"
         )
 
     def context_for(self, doc, start, end):
@@ -713,6 +735,8 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
     def get_system_commands(self, screen):
         yield from super().get_system_commands(screen)
         for title, help_text, callback in [
+            ("Settings", "Editing defaults, animation effects and history", self.action_settings),
+            ("Full-screen AI", "Expand responses; Esc restores the previous view", self.action_fullscreen_ai),
             ("Project checkpoints", "Review or recover interrupted project writes", self.action_project_checkpoints),
             ('Open project', 'Select project root', self.action_project_open),
             ('Search project', 'Find files, symbols and text; choose context', self.action_project_search),
@@ -770,18 +794,23 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
     def update_sidebar(self):
         workbench = self.query_one("#workbench")
         workbench.set_class(self.sidebar_visible, "show-ai")
-        workbench.set_class(self.sidebar_pinned, "pinned")
+        workbench.set_class(self.sidebar_pinned and not self.ai_fullscreen, "pinned")
+        workbench.set_class(self.ai_fullscreen, "fullscreen-ai")
         panel = self.query_one("#ai-panel")
-        panel.styles.offset = (0, 0) if self.sidebar_pinned else (max(0, self.size.width - 50), 1)
+        panel.styles.offset = (0, 0) if self.sidebar_pinned or self.ai_fullscreen else (max(0, self.size.width - 50), 1)
+        panel.styles.width = "100%" if self.ai_fullscreen else None
         panel.styles.height = (
-            "1fr" if self.sidebar_pinned else min(29, max(14, self.size.height - 4))
+            "100%" if self.ai_fullscreen else "1fr" if self.sidebar_pinned else min(29, max(14, self.size.height - 4))
         )
+        self.query_one("#fullscreen-ai", Button).label = "⛶ Restore" if self.ai_fullscreen else "⛶ Full screen"
+        self.refresh_fullscreen_controls()
         self.query_one("#pin-ai", Button).label = "Unpin" if self.sidebar_pinned else "Pin"
         self.query_one("#ai-toggle", Button).variant = (
             "primary" if self.sidebar_visible else "default"
         )
 
     def focus_ai_prompt(self):
+        if self.ai_fullscreen: self.action_leave_ai_fullscreen()
         self._ai_focus_requested = True
         self.query_one("#workspace-tabs", TabbedContent).active = "editor-tab"
         self.reveal_ai()
@@ -792,11 +821,14 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
         self.update_sidebar()
 
     def action_pin_ai(self):
+        if self.ai_fullscreen: self.action_leave_ai_fullscreen()
         self.sidebar_pinned = not self.sidebar_pinned
         self.sidebar_visible = True
         self.update_sidebar()
 
     def collapse_ai(self):
+        self.ai_fullscreen = False
+        self._ai_before_fullscreen = None
         self.sidebar_pinned = False
         self.sidebar_visible = False
         self.update_sidebar()
@@ -810,7 +842,7 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
             self.focus_ai_prompt()
 
     def auto_hide_sidebar(self):
-        if not self.sidebar_pinned and self.sidebar_visible:
+        if not self.ai_fullscreen and not self.sidebar_pinned and self.sidebar_visible:
             self.sidebar_visible = False
             self.update_sidebar()
 
@@ -821,6 +853,7 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
             return
         if (
             isinstance(event.widget, EditorArea)
+            and not self.ai_fullscreen
             and not self.sidebar_pinned
             and self.sidebar_visible
         ):
@@ -828,6 +861,7 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
             self.update_sidebar()
 
     def action_editor(self):
+        if self.ai_fullscreen: self.action_leave_ai_fullscreen()
         self._ai_focus_requested = False
         self.query_one("#workspace-tabs", TabbedContent).active = "editor-tab"
         if not self.sidebar_pinned:
@@ -897,7 +931,7 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
                 "Auto replace: " + ("on" if self.query_one("#auto", Checkbox).value else "off"),
             ),
             ("connect", "Connect HTTPS model…"),
-            ("view", "View & keys…"),
+            ("view", "Settings & view…"),
             ("help", "Help  [F1]"),
             ("quit", "Quit  [F10]"),
         ]
@@ -979,6 +1013,8 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
 
     def view_menu(self):
         choices = [
+            ("settings", "Settings…"),
+            ("full", "Full-screen AI responses"),
             ("pin", ("Unpin" if self.sidebar_pinned else "Pin") + " AI Workbench"),
             ("collapse", "Collapse AI"),
             ("numbers", "Toggle line numbers"),
@@ -987,7 +1023,11 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
         ]
 
         def chosen(value):
-            if value == "pin":
+            if value == "settings":
+                self.action_settings()
+            elif value == "full":
+                self.action_fullscreen_ai()
+            elif value == "pin":
                 self.action_pin_ai()
             elif value == "collapse":
                 self.collapse_ai()
@@ -1185,6 +1225,7 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
             self.service.models()[provider],
             live=live,
             auto=live and self.query_one("#auto", Checkbox).value,
+            language=self.inferred_language(doc, instruction),
         )
 
     def action_submit(self):
@@ -1284,7 +1325,7 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
                 )
                 instruction = request.instruction
                 if request.action == "generate":
-                    language = self.areas[doc.id].language or "plain text"
+                    language = request.language
                     instruction = "Requested output language: " + language + "\n" + instruction
                 if request.intent_id:
                     instruction += "\nReturn the complete replacement for current_block. Preserve its manual edits while fulfilling the instruction."
@@ -1312,6 +1353,7 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
     def drain_ai(self):
         if self._workspace_closing:
             return
+        self.tick_ai_activity()
         self.drain_language()
         for area in self.areas.values():
             if area.ink_request: area.advance_ink()
@@ -1335,7 +1377,7 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
                     if request.action in ("improve", "generate")
                     else self.raw_preview
                 )
-                self.query_one("#result", TextArea).load_text(preview)
+                self.update_ai_response(preview)
                 area = self.areas.get(request.document_id)
                 if area and request.live and self.writing_effect and not request.invalid:
                     area.ink_request, area.ink_text = request, preview
@@ -1354,7 +1396,7 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
                 try:
                     proposal = parse_proposal(request.job, value)
                     request.result = proposal.explanation + "\n\n" + "\n".join(proposal.diff())
-                    self.query_one("#result", TextArea).load_text(request.result)
+                    self.update_ai_response(request.result)
                     if request.invalid:
                         request.state = "Stale"
                         self.say(
@@ -1385,7 +1427,7 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
             else:
                 request.state = "Answered"
                 request.result = value.text
-                self.query_one("#result", TextArea).load_text(value.text)
+                self.update_ai_response(value.text)
                 self.say("Response ready. Document unchanged.")
             self.render_history()
             self.pump()
@@ -1434,6 +1476,7 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
             doc.intents.append({'id':request.intent_id or uuid.uuid4().hex,'start':request.start,
                 'end':request.start+len(generated),'instruction':request.instruction,'generated':generated,
                 'edited':False,'provider':request.provider,'model':request.model})
+        if request.action == "generate": self.refresh_language(doc)
         self.render_history()
         self.say("Accepted. Undo restores the original instruction or selection.")
         if not request.live and not self.sidebar_pinned:
@@ -1517,6 +1560,8 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
         doc.identity = result.identity
         doc.name = Path(path).name
         doc.saved = doc.content
+        self.remember_file(result.identity.target)
+        self.refresh_language(doc)
         self.refresh_documents()
         self.say("Saved " + doc.name)
         return True
@@ -1693,7 +1738,11 @@ class TerminalWorkspace(LanguageTools, ProjectTools, WorkspaceTools, App):
     @on(Button.Pressed)
     async def button_pressed(self, event: Button.Pressed):
         button = event.button.id
+        if button and button.startswith("buffer-"):
+            self.switch_document(button.removeprefix("buffer-")); return
         actions = {
+            "live-mode": self.action_cycle_live_mode,
+            "fullscreen-ai": self.action_fullscreen_ai,
             "main-menu": self.action_workspace_menu,
             "save": self.action_save,
             "open": self.action_open,

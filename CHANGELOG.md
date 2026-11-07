@@ -102,3 +102,12 @@ See GitHub releases for earlier versions.
 - Opt-in stdio language servers: UTF-16 text sync, diagnostics, plain-text completion, definition navigation and reviewed multi-file text rename.
 - Explicit command/test execution with confirmation, deadlines, bounded output, cancellation and output-as-context for proposed fixes.
 - Actual Olares1 multi-file recording and a separately evaluated clean Neovim RPC/grid/motion/undo prototype.
+
+## 2.1.0 — 2026-11-07
+
+- Wider five-line project prompt with scrolling, open/recent `@` file completion and Ctrl+Enter submission.
+- Clickable filename tabs and a top-bar Edit → Live review → Live auto-replace control.
+- Per-request language inference from explicit intent, shebang/extension, content and open project files.
+- Animated AI activity; full-screen response view with Esc/Restore, prior pin-state restoration and reading-position preservation.
+- Private user settings for editing defaults, spinner/pulse/Matrix activity, AIVIM Matrix startup, typing/instant/Matrix live ink, reduced motion and history persistence.
+- Startup input routing preserves the first keystrokes; decorative previews remain separate from document edits.

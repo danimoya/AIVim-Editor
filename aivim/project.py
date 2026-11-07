@@ -79,7 +79,9 @@ class Project:
     def snapshots(self, names):
         data={}
         for name in names:
-            loaded=self.store.load(self.path(name))
+            path=self.path(name)
+            if not path.is_file() or path.stat().st_size>50*1024: raise ValueError("Project context file is missing or exceeds 50 KiB: "+name)
+            loaded=self.store.load(path)
             if not loaded: raise ValueError(loaded.message)
             data[name]=loaded
         return data
